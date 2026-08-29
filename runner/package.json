@@ -1,0 +1,23 @@
+{
+  "name": "jackdaw-gecko-runner",
+  "description": "Electron-like execution runtime based on Gecko and node.js",
+  "private": true,
+  "version": "0.1.0",
+  "dependencies": {
+    "express": "^5.2.1",
+    "http-proxy": "^1.18.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://jackdaw.app"
+  },
+  "bugs": {
+    "url": "https://jackdaw.app"
+  },
+  "author": "Ben Bucksch and  Jackdaw (https://jackdaw.app)",
+  "copyright": "Ben Bucksch",
+  "homepage": "https://jackdaw.app",
+  "license": "EUPL-1.2",
+  "licenseText": "See LICENSE file at top level",
+  "type": "module"
+}

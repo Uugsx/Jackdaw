@@ -1,0 +1,104 @@
+import { SearchOnlyAddressbook } from "../Addressbook";
+import { EWSPerson } from "./EWSPerson";
+import type { EWSAccount } from "../../Mail/EWS/EWSAccount";
+import { addDirectoryCertificatesToPerson } from "../../Mail/Encryption/SMIME/SMIMEDirectory";
+import { ensureArray, NotReached } from "../../util/util";
+import type { ArrayColl } from "svelte-collections";
+
+export class EWSGAL extends SearchOnlyAddressbook {
+  readonly protocol: string = "gal-ews";
+  account: EWSAccount;
+
+  constructor(account: EWSAccount) {
+    super();
+    this.mainAccount = this.account = account;
+    this.errorCallback = account.errorCallback;
+  }
+
+  newPerson(): EWSPerson {
+    return new EWSPerson();
+  }
+  newGroup(): never {
+    throw new NotReached();
+  }
+
+  async quickSearchAsync(searchTerm: string, results: ArrayColl<EWSPerson>) {
+    await this.resolveNames(searchTerm, results);
+    // A plain `ResolveNames` matches only the primary address, so people whose
+    // alias is a secondary address would be missing. `resolveNames()` dedups.
+    if (!/[\s:]/.test(searchTerm)) {
+      await this.resolveNames("smtp:" + searchTerm, results);
+    }
+  }
+
+  /** Searches the Global Address List (GAL) and adds the persons found to `results`.
+   * @param searchTerm Exchange matches the start of
+   *   first name, last name, display name, alias, office, and primary email address.
+   *   With an `smtp:` prefix, it matches the start of email addresses instead. */
+  protected async resolveNames(searchTerm: string, results: ArrayColl<EWSPerson>) {
+    let query = {
+      m$ResolveNames: {
+        m$UnresolvedEntry: searchTerm,
+        ReturnFullContactData: true,
+        // The S/MIME certificates are not in the default property set
+        ContactDataShape: "AllProperties",
+      },
+    };
+    try {
+      let response = await this.account.callEWS(query);
+      for (let resolution of ensureArray(response.ResolutionSet?.Resolution)) {
+        if (!resolution.Contact) {
+          continue;
+        }
+        resolution.Contact.EmailAddresses = { Entry: convertEmailAddresses(ensureArray(resolution.Contact.EmailAddresses?.Entry), resolution.Mailbox) };
+        let person = this.newPerson();
+        person.fromXML(resolution.Contact);
+        // Dedup
+        if (results.find(existing => existing.name == person.name &&
+            existing.emailAddresses.first?.value == person.emailAddresses.first?.value)) {
+          continue;
+        }
+        // `UserSMIMECertificate` and `MSExchangeCertificate` are the AD
+        // attributes `userSMIMECertificate` and `userCertificate`, resp.
+        await addDirectoryCertificatesToPerson(person,
+          ensureArray(resolution.Contact.UserSMIMECertificate?.Base64Binary),
+          ensureArray(resolution.Contact.MSExchangeCertificate?.Base64Binary));
+        results.add(person);
+      }
+    } catch (ex) {
+      // This error is expected.
+      if (ex.type != "ErrorNameResolutionNoResults") {
+        throw ex;
+      }
+    }
+  }
+}
+
+interface EWSAddressEntry {
+  Name: string;
+  RoutingType :string;
+  Value: string;
+}
+
+interface EWSMailbox {
+  Name: string;
+  EmailAddress: string;
+  RoutingType: string;
+}
+
+function convertEmailAddresses(addresses: EWSAddressEntry[], mailbox?: EWSMailbox): EWSAddressEntry[] {
+  for (let address of addresses) {
+    // For some reason, GAL results don't separate out the routing type.
+    if (/^(\w+):/.test(address.Value)) {
+      address.RoutingType = RegExp.$1;
+      address.Value = RegExp.rightContext;
+    }
+    if (mailbox && address.RoutingType == mailbox.RoutingType && address.Value == mailbox.EmailAddress) {
+      mailbox = undefined;
+    }
+  }
+  if (mailbox) {
+    addresses.unshift({ Name: mailbox.Name, RoutingType: mailbox.RoutingType, Value: mailbox.EmailAddress });
+  }
+  return addresses;
+}

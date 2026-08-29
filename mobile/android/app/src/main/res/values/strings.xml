@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Jackdaw</string>
+    <string name="title_activity_main">Jackdaw</string>
+    <string name="package_name">app.jackdaw.client</string>
+    <string name="custom_url_scheme">app.jackdaw.client</string>
+</resources>

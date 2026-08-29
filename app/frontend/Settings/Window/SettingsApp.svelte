@@ -1,0 +1,73 @@
+<Splitter name="settings-categories" initialRightRatio={4}>
+  <SettingsCategoriesPane {categories} slot="left" />
+  <Scroll slot="right">
+    <hbox class="settings-title-bar">
+      <hbox flex class="spacer" />
+      <hbox class="buttons">
+        <RoundButton
+          label={$t`Close settings`}
+          icon={CloseIcon}
+          iconSize="16px"
+          padding="6px"
+          onClick={onClose}
+          />
+      </hbox>
+    </hbox>
+    <vbox flex class="right-page">
+      <MainContent category={$selectedCategory} />
+    </vbox>
+  </Scroll>
+</Splitter>
+
+<script lang="ts">
+  import { settingsCategories } from "../SettingsCategory";
+  import { globalSearchTerm, openApp } from "../../AppsBar/selectedApp";
+  import { selectedCategory } from "./selected";
+  import { openSettingsCategory } from "./CategoriesUtils";
+  import { mailApp } from "../../Mail/MailJackdawApp";
+  import SettingsCategoriesPane from "./CategoriesPane.svelte";
+  import MainContent from "./MainContent.svelte";
+  import Splitter from "../../Shared/Splitter.svelte";
+  import Scroll from "../../Shared/Scroll.svelte";
+  import RoundButton from "../../Shared/RoundButton.svelte";
+  import CloseIcon from "lucide-svelte/icons/x";
+  import { t } from "../../../l10n/l10n";
+
+  let categories = settingsCategories.filterObservable(cat =>
+    cat.id == "global" || cat.id == "mail" || cat.id == "about");
+
+  $: onSearch($globalSearchTerm)
+  function onSearch(searchTerm: string) {
+    for (let cat of categories) {
+      if (cat.searchMatchesDirect(searchTerm)) {
+        openSettingsCategory(cat);
+        return;
+      }
+      for (let subCat of cat.subCategories) {
+        if (subCat.searchMatchesDirect(searchTerm)) {
+          openSettingsCategory(subCat);
+          return;
+        }
+      }
+    }
+  }
+
+  function onClose() {
+    openApp($selectedCategory?.forApp ?? mailApp, {});
+  }
+</script>
+
+<style>
+  .right-page {
+    margin: 0px 32px 32px 32px;
+  }
+  .settings-title-bar {
+    margin: 16px 16px 0px 16px;
+  }
+  .right-page :global(.group) {
+    border-radius: 10px;
+  }
+  .right-page :global(input) {
+    font-size: 16px;
+  }
+</style>

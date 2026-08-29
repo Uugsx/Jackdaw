@@ -1,0 +1,17 @@
+.idea/
+node_modules/
+.vscode/
+*.map
+.DS_Store
+.sourcemaps
+dist/
+android/app/release/
+android/app/debug/
+!backend/prebuild.sh
+!build.sh
+!jackdaw-brand.sh
+NodeMobile.xcframework
+!setup.sh
+!xcode-embed-node-native.sh
+!variables.sh
+backend/nodejs-assets

@@ -1,0 +1,97 @@
+import { MeetingState, VideoConfMeeting } from "../../../logic/Meet/VideoConfMeeting";
+import { MeetAccount } from "../../../logic/Meet/MeetAccount";
+import { VideoStream } from "../../../logic/Meet/VideoStream";
+import { MeetingParticipant } from "../../../logic/Meet/Participant";
+import type { Person } from "../../../logic/Abstract/Person";
+import { Event } from "../../../logic/Calendar/Event";
+import { joinConferenceByURL } from "../../../logic/Meet/StartCall";
+import { appGlobal } from "../../../logic/app";
+import { LocalMediaDeviceStreams } from "../../../logic/Meet/LocalMediaDeviceStreams";
+import { gt } from "../../../l10n/l10n";
+import { UserError, type URLString } from "../../../logic/util/util";
+
+export async function startAdHocMeeting(): Promise<VideoConfMeeting> {
+  let meeting = getMeetAccount().newMeeting();
+  await meeting.createNewConference();
+  appGlobal.meetings.add(meeting);
+  return meeting;
+}
+
+export function getMeetAccount(): MeetAccount {
+  let account = appGlobal.meetAccounts.find(acc => acc.canVideo && acc.canMultipleParticipants);
+  if (!account) {
+    throw new UserError(gt`Please configure a matching meeting account first`);
+  }
+  return account;
+}
+
+export async function startFakeMeeting() {
+  const { FakeMeeting } = await import("../../../logic/Meet/FakeMeeting");
+  let meeting = new FakeMeeting();
+  await meeting.createNewConference();
+  appGlobal.meetings.add(meeting);
+}
+
+class FakeIncomingCall extends VideoConfMeeting {
+  constructor() {
+    super();
+    this.account = new MeetAccount();
+    this.mediaDeviceStreams = new LocalMediaDeviceStreams();
+    this.listenStreamChanges();
+    this.state = MeetingState.IncomingCall;
+  }
+  async answer(): Promise<void> {
+    await super.answer();
+    this.myParticipant = new MeetingParticipant();
+    this.state = MeetingState.Ongoing;
+  }
+}
+
+export async function testIncoming(person: Person) {
+  const { faker } = await import("@faker-js/faker");
+  let fakeMeeting = new Event();
+  fakeMeeting.startTime = faker.date.soon({ days: 1/24/4 });
+  fakeMeeting.endTime = faker.date.soon({ days: 1/24 });
+  fakeMeeting.title = faker.word.words();
+  fakeMeeting.descriptionText = faker.hacker.phrase();
+  appGlobal.calendars.first.events.add(fakeMeeting);
+
+  let caller = new MeetingParticipant();
+  caller.name = person.name;
+  caller.picture = person.picture;
+  let meeting = new FakeIncomingCall();
+  meeting.participants.add(caller);
+  appGlobal.meetings.add(meeting);
+}
+
+export async function callSelected(person: Person): Promise<VideoConfMeeting> {
+  let callee = new MeetingParticipant();
+  callee.name = person.name;
+  callee.picture = person.picture;
+
+  let event = new Event();
+  event.startTime = new Date();
+  let endTime = new Date();
+  endTime.setHours(endTime.getHours() + 2)
+  event.endTime = endTime;
+  event.title = gt`Called ${callee.name} *=> Called person by phone or video conference`;
+
+  // TODO Figure out the best account to call this person
+  let meeting = getMeetAccount().newMeeting();
+  await meeting.createNewConference();
+  meeting.state = MeetingState.OutgoingCallConfirm;
+  meeting.event = event;
+  meeting.participants.add(callee);
+  appGlobal.meetings.add(meeting);
+  meeting.videos.add(new VideoStream(new MediaStream(), callee));
+  let self = new VideoStream(new MediaStream());
+  self.isMe = true;
+  meeting.videos.add(self);
+  // meeting.myParticipant.role = ParticipantRole.Moderator;
+  return meeting;
+}
+
+export async function joinByURL(url: URLString, account?: MeetAccount) {
+  let meeting = await joinConferenceByURL(url, account);
+  appGlobal.meetings.add(meeting);
+}

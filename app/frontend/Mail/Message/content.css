@@ -1,0 +1,39 @@
+body {
+  max-width: 50em;
+}
+
+/* Preserve common Outlook / Word HTML email layout */
+table {
+  border-collapse: collapse;
+  mso-table-lspace: 0;
+  mso-table-rspace: 0;
+}
+td,
+th {
+  vertical-align: top;
+}
+img {
+  max-width: 100%;
+  height: auto;
+}
+a {
+  color: #0563c1;
+  text-decoration: underline;
+}
+
+blockquote {
+  border-inline-start: 3px solid #0078d4;
+  padding-inline-start: 20px;
+  margin-inline-start: 0px;
+}
+
+img[src=""] {
+  visibility: hidden;
+  max-height: 0px;
+}
+
+/* Outlook signature block in replies */
+footer.signature,
+.signature {
+  margin-block-start: 1em;
+}

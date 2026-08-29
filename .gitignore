@@ -1,0 +1,17 @@
+*~
+*.kate-swp
+*.sh
+.DS_Store
+.project
+.settings/
+.env
+.env.*
+node_modules/
+yarn.lock
+package-lock.json
+app/dist/
+*.acebase/
+claude/
+.claude/
+.devcontainer/
+app/logic/Auth/OAuth2Secrets.user.ts

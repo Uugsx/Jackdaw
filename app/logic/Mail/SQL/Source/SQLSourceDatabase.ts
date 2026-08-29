@@ -1,0 +1,21 @@
+import { appGlobal } from "../../../app";
+import type { Database } from "../../../../../lib/rs-sqlite/index";
+import { mailSourceDatabaseSchema } from "./createSourceDatabase";
+import { addUNIQUEEMailID } from "./SQLSourceEMailMigrate";
+import { getConfigDir, getSQLiteDatabase } from "../../../util/backend-wrapper";
+
+let mailSourceDatabase: Database;
+
+export async function getDatabase(): Promise<Database> {
+  if (mailSourceDatabase) {
+    return mailSourceDatabase;
+  }
+  let dir = await appGlobal.remoteApp.path.join(
+    await getConfigDir(), "backup");
+  await appGlobal.remoteApp.fs.mkdir(dir, { recursive: true, mode: 0o700 });
+  let file = await appGlobal.remoteApp.path.join("backup", "mail-backup.db");
+  mailSourceDatabase = await getSQLiteDatabase(file);
+  await mailSourceDatabase.migrate(mailSourceDatabaseSchema, addUNIQUEEMailID);
+  await mailSourceDatabase.pragma('journal_mode = WAL');
+  return mailSourceDatabase;
+}

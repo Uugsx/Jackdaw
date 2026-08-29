@@ -1,0 +1,53 @@
+body {
+  height: calc(100% - 2*16px);
+  margin: 16px;
+
+  font-family:
+    -apple-system, BlinkMacSystemFont,
+    "Segoe UI", system-ui,
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  line-height: 1.45;
+  font-weight: 400;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    color: #e5e7eb;
+    background-color: #1a1a1c;
+  }
+}
+
+*::selection,
+*::-moz-selection {
+  background-color: #0078d4;
+  color: #ffffff;
+}
+
+/* <copied from="app.css"> */
+::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+::-webkit-scrollbar:hover {
+  background-color: #00000008;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #828282;
+  border-radius: 3px;
+}
+
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar:hover {
+    background-color: #ffffff05;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #5a5959;
+    border-radius: 3px;
+  }
+}
