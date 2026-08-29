@@ -1,0 +1,92 @@
+import type { JackdawApp } from "./JackdawApp";
+import { createHashHistory } from "../Util/hashHistory";
+import type AnyObject from "svelte-navigator/types/AnyObject";
+import { appGlobal } from "../../logic/app";
+import { backgroundError } from "../Util/error";
+import { ArrayColl, MapColl } from "svelte-collections";
+import { writable, get, type Writable } from "svelte/store";
+import type RawLocation from "svelte-navigator/types/RawLocation";
+
+export const selectedApp: Writable<JackdawApp> = writable(null);
+export const sidebarApp: Writable<JackdawApp> = writable(null);
+export const apps = new ArrayColl<JackdawApp>;
+
+/** Search bar in the window title, applies to all apps */
+export const globalSearchTerm: Writable<string> = writable(null);
+
+export const history = createHashHistory();
+
+export type PageParams = Record<string, any>;
+export function openApp(app: JackdawApp, params: PageParams) {
+  selectedApp.set(app);
+  goTo(app.appURL, params);
+}
+
+export function goTo(pageURL: string, params: PageParams) {
+  let location = window.location.hash.slice(1);
+  let replace = pageURL == location;
+  console.log("Go to", pageURL, replace ? "replace" : "", "from", location, "with params", params);
+  history.navigate(pageURL, {
+    replace,
+    state: addParams(params),
+  });
+}
+
+export function goBack() {
+  history.navigate(-1);
+}
+
+/** When `goTo()` is called, we need to update `selectedApp` accordingly */
+function syncSelectedApp(params: { location: RawLocation }) {
+  let url = params.location.pathname as string;
+  let matchingLength = 0;
+  let selectedAppURL = get(selectedApp)?.appURL;
+  if (selectedAppURL &&
+      url.startsWith(selectedAppURL)) {
+    matchingLength = selectedAppURL.length;
+  }
+  for (let app of apps) {
+    if (url.startsWith(app.appURL) &&
+        app.appURL.length > matchingLength) {
+      selectedApp.set(app);
+      return;
+    }
+  }
+}
+history.listen(syncSelectedApp);
+
+export function bringAppToFront() {
+  window.focus();
+  (appGlobal.remoteApp.focusMainWindow ?? appGlobal.remoteApp.unminimizeMainWindow)()
+    .catch(backgroundError);
+}
+
+
+/** History params
+ * history state clones our objects, which fails. We need to keep the actual object around.
+ * So, store the object here, generate an ID for it, and then store the ID on the history stack. */
+const historyParams = new MapColl<number, any>();
+let lastID = 1;
+type HistoryIDObj = { id: number };
+
+/** @returns ID. Put this as `state` on the history stack. */
+function addParams(params: PageParams): HistoryIDObj {
+  let id = lastID++;
+  historyParams.set(id, params);
+  return { id };
+}
+export function getParams(id: HistoryIDObj | AnyObject): PageParams {
+  if (!id?.id) {
+    return {};
+  }
+  return historyParams.get(id.id) ?? {};
+}
+/** TODO call this
+ * a) when the user goes back in history and then forward, remove the orphaned entries, or
+ * b) if the user goes forward, delete all entries > 20 pages back. */
+function deletePage(id: HistoryIDObj | AnyObject): void {
+  if (!id?.id) {
+    return;
+  }
+  historyParams.delete(id.id);
+}

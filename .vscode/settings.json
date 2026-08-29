@@ -1,0 +1,6 @@
+{
+  // Which compiler warnings are silenced is configured in `app/svelte.config.js`
+  "files.trimTrailingWhitespace": true,
+  "css.lint.emptyRules": "ignore",
+  "java.configuration.updateBuildConfiguration": "interactive"
+}

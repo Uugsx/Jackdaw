@@ -1,0 +1,31 @@
+/* Dark canvas for HTML emails. Inline colors are adapted in emailDarkMode.ts. */
+
+body.jackdaw-email-dark {
+  color: #e5e7eb;
+  background-color: #1a1a1c;
+  color-scheme: dark;
+}
+
+body.jackdaw-email-dark a {
+  color: #6cb4ff;
+}
+
+body.jackdaw-email-dark blockquote {
+  border-inline-start-color: #6cb4ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  body:not(.jackdaw-email-light) {
+    color: #e5e7eb;
+    background-color: #1a1a1c;
+    color-scheme: dark;
+  }
+
+  body:not(.jackdaw-email-light) a {
+    color: #6cb4ff;
+  }
+
+  body:not(.jackdaw-email-light) blockquote {
+    border-inline-start-color: #6cb4ff;
+  }
+}

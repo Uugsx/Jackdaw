@@ -1,0 +1,139 @@
+<vbox class="account-general">
+  <HeaderGroupBox>
+    <hbox slot="header">{$account.name}</hbox>
+    <svelte:fragment slot="buttons-top-right">
+      <RoundButton
+        label={$t`Delete account`}
+        onClick={onDelete}
+        icon={DeleteIcon}
+        />
+    </svelte:fragment>
+    <vbox class="content">
+      <grid>
+        {#if account.isDependentAccount}
+          <label for="mainaccount">{$t`Part of account`}</label>
+          <hbox class="account-button" name="mainaccount">
+            <Button
+              label={account.mainAccount.name}
+              icon={AccountIcon}
+              onClick={() => openSettingsCategoryForAccount(account.mainAccount)}
+              plain={true}
+              />
+          </hbox>
+          <hbox />
+          <hbox />
+        {/if}
+        <label for="name">{$t`Account name`}</label>
+        <input type="text" bind:value={account.name} name="name" on:change={onChange} />
+        <input type="color" bind:value={account.color} name="color" on:change={onChange} list="proposed-colors" />
+        {#if account.icon && typeof(account.icon) == "string"}
+          <img src={account.icon} width="24px" height="24px" alt="" />
+        {:else}
+          <hbox class="icon placeholder" />
+        {/if}
+
+        <label for="workspace">{$t`Workspace`}</label>
+        <select bind:value={account.workspace} name="workspace" on:change={onChange}>
+          {#each appGlobal.workspaces.each as workspace}
+            <option value={workspace}>{workspace.name}</option>
+          {/each}
+        </select>
+        <hbox />
+        <hbox />
+
+        {#if account instanceof MailAccount || account instanceof ChatAccount || account instanceof MeetAccount}
+          <label for="realname" title={$t`Your real name, as shown to other people when you are sending messages`}>{$t`Your name`}</label>
+          <input type="text" bind:value={account.realname} name="realname" on:change={onChange}
+            title={$t`Your real name, as shown to other people when you are sending messages`} />
+          <hbox />
+          <hbox />
+        {/if}
+      </grid>
+    </vbox>
+  </HeaderGroupBox>
+</vbox>
+
+<vbox class="extra-settings" flex>
+  {#each extraSettings.each as category}
+    <svelte:component this={category.windowContent} {account} />
+  {/each}
+</vbox>
+
+<!-- <copied to="WorkspaceBlock.svelte" /> -->
+<datalist id="proposed-colors">
+  {#each accountColors as color}
+    <option value={color}></option>
+  {/each}
+</datalist>
+
+<script lang="ts">
+  import type { Account } from "../../logic/Abstract/Account";
+  import { accountSettings, settingsCategories } from "./SettingsCategory";
+  import { selectedAccount as selectedMailAccount, selectedFolder, selectedMessage, selectedMessages } from "../Mail/Selected";
+  import { openSettingsCategory, openSettingsCategoryForAccount } from "./Window/CategoriesUtils";
+  import { accountColors } from "../../logic/Abstract/Workspace";
+  import { MailAccount } from "../../logic/Mail/MailAccount";
+  import { ChatAccount } from "../../logic/Chat/ChatAccount";
+  import { MeetAccount } from "../../logic/Meet/MeetAccount";
+  import { appGlobal } from "../../logic/app";
+  import { appName } from "../../logic/build";
+  import { catchErrors } from "../Util/error";
+  import HeaderGroupBox from "../Shared/HeaderGroupBox.svelte";
+  import RoundButton from "../Shared/RoundButton.svelte";
+  import Button from "../Shared/Button.svelte";
+  import DeleteIcon from "lucide-svelte/icons/trash-2";
+  import AccountIcon from "lucide-svelte/icons/server";
+  import debounce from "lodash/debounce";
+  import { t } from "../../l10n/l10n";
+
+  export let account: Account;
+
+  $: extraSettings = accountSettings.filterObservable(cat => account instanceof cat.type && cat.isMain && cat.id != "acc-general");
+
+  const onChange = debounce(() => catchErrors(onSave), 500);
+  async function onSave() {
+    await account.save();
+  }
+
+  async function onDelete() {
+    let confirmed = confirm($t`Are you sure that you want to the delete account ${account.name} from ${appName} and all related data?`);
+    if (!confirmed) {
+      return;
+    }
+    await account.deleteIt();
+
+    // Reset selected
+    if (account.mainAccount) {
+      openSettingsCategoryForAccount(account.mainAccount);
+    } else {
+      openSettingsCategory(settingsCategories.first);
+    }
+    if ($selectedMailAccount == account) {
+      $selectedMailAccount = appGlobal.emailAccounts.first;
+      $selectedFolder = $selectedMailAccount?.inbox;
+      $selectedMessage = null;
+      $selectedMessages?.clear();
+    }
+  }
+</script>
+
+<style>
+  .account-general,
+  .extra-settings {
+    max-width: 40em;
+  }
+
+  grid {
+    grid-template-columns: max-content auto max-content max-content;
+    gap: 8px 24px;
+  }
+
+  .icon.placeholder {
+    width: 24px;
+    height: 24px;
+  }
+
+  input[name] {
+    margin-block-end: 24px;
+  }
+</style>

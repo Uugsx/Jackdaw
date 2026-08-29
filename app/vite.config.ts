@@ -1,0 +1,59 @@
+import { sentryVitePlugin } from "@sentry/vite-plugin";
+import { defineConfig, defaultClientConditions } from 'vite'
+import { nodePolyfills } from "vite-plugin-node-polyfills";
+import { svelte } from '@sveltejs/vite-plugin-svelte';
+import wasm from 'vite-plugin-wasm';
+import conditionalCompile from "vite-plugin-conditional-compile";
+import { webMail, isMobile, includeProprietary, production } from './logic/build';
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  server: {
+    port: 5454,
+    strictPort: true,
+  },
+
+  plugins: [
+    conditionalCompile({
+      // <https://github.com/LZS911/vite-plugin-conditional-compile/blob/master/README.md>
+      env: {
+        // For conditional `// #if [FOO]` statements in the code
+        WEBMAIL: !!webMail && includeProprietary ? !!webMail : undefined,
+        MOBILE: isMobile,
+        PROPRIETARY: includeProprietary ? true : undefined,
+        PRODUCTION: production ? true : undefined,
+      },
+    }),
+    nodePolyfills({ include: ['buffer'], globals: { global: true, process: !!webMail } }),
+    svelte(),
+    wasm(),
+    sentryVitePlugin({
+      url: "https://errorlog.jackdaw.app/",
+      org: "bugsink-has-no-orgs",
+      project: "jackdaw",
+        disable: !production,
+    })
+  ],
+  resolve: {
+    // Explicitly set the resolve conditions for Vite 7+
+    conditions: [...defaultClientConditions],
+  },
+  optimizeDeps: {
+    exclude: ['@matrix-org/matrix-sdk-crypto-wasm'],
+  },
+  test: {
+    // Calendar tests build local-time dates and compare against UTC iCal
+    // strings, so they only pass when the machine runs in UTC.
+    env: { TZ: "UTC" },
+    server: {
+      deps: {
+        // Workaround for app/logic/Abstract/Workspace.ts
+        inline: [/lucide-svelte/],
+      },
+    },
+  },
+  build: {
+    sourcemap: true
+  },
+  base: './',
+});

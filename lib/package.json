@@ -1,0 +1,39 @@
+{
+  "name": "jackdaw-lib",
+  "version": "0.5.0",
+  "description": "Jackdaw - Mail, calendar and contacts full-featured email application for everybody - Logic",
+  "dependencies": {
+    "bufferutil": "^4.1.0",
+    "html-to-text": "^9.0.5",
+    "i18n": "^0.15.3",
+    "iocane": "^5.2.0",
+    "lodash": "^4.17.21",
+    "r2": "^2.0.1",
+    "svelte-collections": "^1.2.12",
+    "vite-plugin-node-polyfills": "^0.24.0",
+    "ws": "^8.19.0"
+  },
+  "scripts": {
+    "test": "node test.js"
+  },
+  "keywords": [
+    "email",
+    "mail",
+    "imap",
+    "desktop",
+    "mobile"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://jackdaw.app"
+  },
+  "bugs": {
+    "url": "https://jackdaw.app"
+  },
+  "author": "Ben Bucksch and  Jackdaw (https://jackdaw.app)",
+  "copyright": "Ben Bucksch",
+  "homepage": "https://jackdaw.app",
+  "license": "EUPL-1.2",
+  "licenseText": "See LICENSE file at top level",
+  "type": "module"
+}

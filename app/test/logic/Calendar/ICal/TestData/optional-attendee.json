@@ -1,0 +1,30 @@
+[
+  4,
+  {
+    "title": "Sprint review",
+    "startTime": "2008-07-01T16:00:00.000Z",
+    "endTime": "2008-07-01T16:30:00.000Z",
+    "allDay": false,
+    "calUID": "calsvr.example.com-optional-attendee",
+    "participants": [
+      {
+        "emailAddress": "boss@example.com",
+        "name": "boss@example.com",
+        "response": 1,
+        "isOptional": false
+      },
+      {
+        "emailAddress": "required@example.com",
+        "name": "required@example.com",
+        "response": 0,
+        "isOptional": false
+      },
+      {
+        "emailAddress": "optional@example.com",
+        "name": "optional@example.com",
+        "response": 0,
+        "isOptional": true
+      }
+    ]
+  }
+]

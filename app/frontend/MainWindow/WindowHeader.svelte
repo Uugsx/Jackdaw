@@ -1,0 +1,181 @@
+<hbox class="window-header" class:os-rtl={osRTL} class:mac
+  style="--workspace-color: {$selectedWorkspace?.color ?? "var(--windowheader-bg)"}">
+  <vbox class="traffic-spacer" />
+  <hbox class="workspace">
+    <WorkspaceHeader {selectedApp} />
+  </hbox>
+  <hbox class="app-title value">
+    {$titleStore ?? selectedApp?.name ?? appName}
+  </hbox>
+  <vbox flex class="free" />
+  {#if !hideHeaderSearch}
+    <hbox class="search-box">
+      <SearchField bind:searchTerm={$globalSearchTerm} />
+    </hbox>
+  {/if}
+  {#if !webMail}
+    <hbox class="right">
+      <Button label={$t`Minimize`}
+        icon={MinimizeIcon} iconSize="16px" plain iconOnly classes="minimize"
+        onClick={onMinimize}
+        />
+      <Button label={$t`Maximize`} tooltip={canMaximize ? $t`Maximize` : $t`Restore window`}
+        icon={canMaximize ? MaximizeIcon : UnmaximizeIcon}
+        iconSize="12px" plain iconOnly classes="restore-window"
+        onClick={onMaximizeOrRestore}
+        />
+      <Button label={$t`Close entire app`}
+        icon={XIcon} iconSize="16px" plain iconOnly classes="close"
+        onClick={onCloseApp}
+        />
+    </hbox>
+  {/if}
+</hbox>
+
+<script lang="ts">
+  import type { JackdawApp } from "../AppsBar/JackdawApp";
+  import { globalSearchTerm } from "../AppsBar/selectedApp";
+  import { appGlobal } from "../../logic/app";
+  import { appName, webMail } from "../../logic/build";
+  import WorkspaceHeader from "./WorkspaceHeader.svelte";
+  import SearchField from "../Shared/SearchField.svelte";
+  import Button from "../Shared/Button.svelte";
+  import MinimizeIcon from 'lucide-svelte/icons/minus';
+  import MaximizeIcon from 'lucide-svelte/icons/square';
+  import UnmaximizeIcon from 'lucide-svelte/icons/copy';
+  import XIcon from 'lucide-svelte/icons/x';
+  import { getOSName } from "../Util/util";
+  import { t } from "../../l10n/l10n";
+  import { rtlLocales } from "../../l10n/list";
+  import { selectedWorkspace } from "./Selected";
+
+  export let selectedApp: JackdawApp;
+
+  // Enable Mac Styles
+  const mac = (!webMail && getOSName() == "macintosh") ? true : false;
+  // Check mac system text direction
+  const osRTL = (rtlLocales.includes(navigator.language) && mac) ? true : false;
+
+  function onMinimize() {
+    appGlobal.remoteApp.minimizeMainWindow();
+  }
+
+  let canMaximize = true;
+  function onMaximizeOrRestore() {
+    if (canMaximize) {
+      appGlobal.remoteApp.maximizeMainWindow();
+    } else {
+      appGlobal.remoteApp.unminimizeMainWindow();
+    }
+    canMaximize = !canMaximize;
+  }
+
+  function onCloseApp() {
+    window.close();
+  }
+
+  $: titleStore = selectedApp?.title;
+  $: hideHeaderSearch = selectedApp?.id == "mail" || selectedApp?.id == "mail-write";
+</script>
+
+<style>
+  .window-header {
+    position: relative;
+    z-index: 10;
+    align-items: center;
+    min-height: 48px;
+    box-sizing: border-box;
+    app-region: drag;
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    border-block-end: 1px solid var(--glass-border-subtle);
+    box-shadow: var(--glass-highlight);
+    color: var(--windowheader-fg);
+  }
+  .traffic-spacer {
+    width: 12px;
+    flex-shrink: 0;
+  }
+  .workspace,
+  .search-box,
+  .right,
+  .window-header :global(.workspace),
+  .window-header :global(.search),
+  .window-header :global(button),
+  .window-header :global(input),
+  .window-header :global(a) {
+    app-region: no-drag;
+  }
+  .app-title {
+    font-size: 18px;
+    align-items: center;
+    margin-inline-start: 4px;
+  }
+  .right {
+    padding-inline-end: 8px;
+  }
+  .right :global(button) {
+    color: var(--windowheader-fg);
+    padding-inline-start: 8px;
+    padding-inline-end: 8px;
+  }
+  .right :global(.maximize) {
+    padding-inline-start: 10px;
+    padding-inline-end: 10px;
+  }
+  .right :global(.minimize svg) {
+    margin-block-start: 8px; /* Find better icon */
+  }
+  .free {
+    min-width: 0;
+  }
+
+  .window-header :global(.search) {
+    margin: 6px 12px;
+    outline: 1px solid color-mix(in srgb, var(--windowheader-fg) 10%, transparent);
+    border: none;
+  }
+  .window-header :global(.search:not(.has-search)) {
+    background-color: var(--windowheader-bg);
+  }
+  .window-header :global(.search :has(input:focus)) {
+    background-color: var(--inverted-bg);
+  }
+  .window-header :global(.search:not(.has-search) input) {
+    background-color: transparent;
+    color: var(--windowheader-fg);
+  }
+
+  .search-box {
+    --gradient-direction: 135deg;
+    background-image: linear-gradient(var(--gradient-direction), var(--windowheader-bg) 10%, var(--workspace-color) 85%);
+  }
+  :global([dir="rtl"]) .search-box {
+    --gradient-direction: 225deg;
+  }
+  .right {
+    background-color: var(--workspace-color);
+  }
+
+  /* Styles for Mac */
+  .mac .right {
+    display: none;
+  }
+  .mac .traffic-spacer,
+  :global([dir="rtl"]) .mac.os-rtl .traffic-spacer {
+    margin-inline-start: var(--appbar-column-width, 104px);
+    width: 0;
+  }
+  :global([dir="rtl"]) .mac:not(.os-rtl) .traffic-spacer,
+  .mac.os-rtl .traffic-spacer {
+    margin-inline-start: 0px;
+  }
+  :global([dir="rtl"]) .mac:not(.os-rtl) .search-box,
+  .mac.os-rtl .search-box {
+    padding-inline-end: var(--appbar-column-width, 104px);
+  }
+  :global([dir="rtl"]) .mac .search-box {
+    padding-inline-end: 0px;
+  }
+</style>

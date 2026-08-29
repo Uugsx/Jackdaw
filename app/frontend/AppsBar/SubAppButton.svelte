@@ -1,0 +1,70 @@
+<hbox class="sub-app-button" class:selected class:minimized on:click title={$title}>
+  <hbox class="icon">
+    <slot name="icon" />
+  </hbox>
+</hbox>
+
+<script lang="ts">
+  import type { JackdawApp } from "./JackdawApp";
+
+  export let selected = false;
+  export let minimized = false;
+  export let app: JackdawApp;
+
+  $: title = app.title;
+</script>
+
+<style>
+  .sub-app-button {
+    align-items: center;
+    padding: 2px;
+    border-radius: var(--border-radius);
+    border: 1px solid transparent;
+    transition:
+      background-color 0.18s ease,
+      border-color 0.18s ease,
+      box-shadow 0.18s ease;
+  }
+  .sub-app-button:hover:not(.selected) {
+    background: var(--glass-hover-bg);
+    border-color: var(--glass-border-subtle);
+  }
+  .sub-app-button.selected {
+    background: var(--glass-selected-bg);
+    border-color: var(--glass-selected-border);
+    box-shadow:
+      var(--glass-highlight),
+      0 1px 4px rgba(var(--shadow-color), 0.08);
+  }
+  .icon {
+    padding: 2px;
+    color: color-mix(in srgb, var(--appbar-fg) 84%, transparent);
+    align-items: center;
+    justify-content: center;
+  }
+  .icon :global(svg) {
+    stroke: currentColor;
+    fill: none;
+  }
+  .icon :global(.cls-1),
+  .icon :global(.cls-2),
+  .icon :global(.cls-3) {
+    stroke: currentColor;
+  }
+  .sub-app-button.selected .icon {
+    color: var(--icon-primary);
+  }
+  .sub-app-button.minimized:not(.selected) {
+    opacity: 0.58;
+  }
+  .sub-app-button.minimized:not(.selected) .icon {
+    transform: scale(0.92);
+  }
+  .sub-app-button.selected .icon :global(.date-calendar-icon) {
+    fill: currentColor;
+  }
+
+  :global(.sub-app-bar[app="webapps"]) .icon {
+    filter: grayscale(0.7);
+  }
+</style>

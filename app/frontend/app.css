@@ -1,0 +1,626 @@
+:root {
+  height: 100%;
+
+  /* Native OS UI font (SF Pro on macOS) — tighter/laconic than Karla for Cyrillic labels */
+  font-family:
+    -apple-system, BlinkMacSystemFont,
+    "Segoe UI", system-ui,
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  line-height: 1.45;
+  font-weight: 400;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  color-scheme: light dark;
+}
+
+:root {
+  /* Jackdaw brand: charcoal #1F2933 / #0B0F14, silver #C5CDD6, amber #F59E0B */
+  --bg: #F6F7F9;
+  --fg: #0B0F14;
+  --inverted-bg: #1F2933;
+  --inverted-fg: #F6F7F9;
+  --selected-bg: #F59E0B;
+  --selected-fg: #0B0F14;
+  --icon-primary: #F59E0B;
+  --hover-bg: #FDE7C2;
+  --hover-fg: #0B0F14;
+  --selected-hover-bg: #D97706;
+  --selected-hover-fg: #FFFFFF;
+  --main-bg: #FFFFFF;
+  --main-fg: var(--fg);
+  /** Encryption, Island Selected faint */
+  --offset-bg: #FEF3DC;
+  --offset-fg: #0B0F14;
+  --leftbar-bg: #EEF0F3;
+  --leftbar-fg: #0B0F14;
+  --headerbar-bg: #E8EAEE;
+  --headerbar-fg: #0B0F14;
+  --windowheader-bg: #E8EAEE;
+  --windowheader-fg: #0B0F14;
+  --appbar-bg: #E8EAEE;
+  --appbar-fg: #0B0F14;
+  --border: #D5DAE0;
+  --outstanding-bg: #8892A0;
+  --outstanding-fg: #FFFFFF;
+  --input-bg: field;
+  --input-fg: fieldtext;
+  --input-line: #D5DAE0;
+  --input-placeholder: #6B7280;
+  --input-focus: #F59E0B;
+  --link-fg: #B45309;
+  --link-hover-fg: #92400E;
+  --button-bg: #EEF0F3;
+  --button-fg: #0B0F14;
+  --button-border: #C5CDD6;
+  --button-secondary-line: #FBBF24;
+  --shadow-color: 11, 15, 20; /* #0B0F14 */
+  --border-radius: 12px;
+  --chat-bubble-incoming-bg: #FFFFFF;
+  --chat-bubble-incoming-fg: inherit;
+  --chat-bubble-outgoing-bg: #FEF3DC;
+  --chat-bubble-outgoing-fg: inherit;
+
+  /* Liquid glass surfaces (iOS / macOS style) */
+  --glass-blur: 24px;
+  --glass-saturate: 180%;
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-bg-elevated: rgba(255, 255, 255, 0.78);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.42);
+  --glass-border: rgba(255, 255, 255, 0.72);
+  --glass-border-subtle: rgba(255, 255, 255, 0.28);
+  --glass-shadow: 0 8px 32px rgba(var(--shadow-color), 0.10);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  --glass-hover-bg: rgba(255, 255, 255, 0.38);
+  --glass-selected-bg: rgba(255, 255, 255, 0.82);
+  --glass-selected-border: rgba(245, 158, 11, 0.42);
+
+  color: var(--fg);
+  background-color: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0B0F14;
+    --fg: #E5E7EB;
+    --inverted-bg: #E5E7EB;
+    --inverted-fg: #0B0F14;
+    --selected-bg: #F59E0B;
+    --selected-fg: #0B0F14;
+    --icon-primary: #F59E0B;
+    --hover-bg: #3D2E14;
+    --hover-fg: #E5E7EB;
+    --selected-hover-bg: #D97706;
+    --selected-hover-fg: #FFFFFF;
+    --main-bg: #141A22;
+    --main-fg: var(--fg);
+    --offset-bg: #2A2112;
+    --offset-fg: #E5E7EB;
+    --leftbar-bg: #121820;
+    --leftbar-fg: #C5CDD6;
+    --windowheader-bg: #1F2933;
+    --windowheader-fg: #E5E7EB;
+    --headerbar-bg: #1A222C;
+    --headerbar-fg: #C5CDD6;
+    --appbar-bg: #1F2933;
+    --appbar-fg: #F6F7F9;
+    --border: #2A3441;
+    --outstanding-bg: #6B7280;
+    --outstanding-fg: #E5E7EB;
+    --input-bg: transparent;
+    --input-fg: fieldtext;
+    --input-line: #2A3441;
+    --input-placeholder: #9CA3AF;
+    --input-focus: #F59E0B;
+    --link-fg: #FBBF24;
+    --link-hover-fg: #F59E0B;
+    --button-bg: transparent;
+    --button-fg: #C5CDD6;
+    --button-border: #C5CDD6;
+    --button-secondary-line: #F59E0B99;
+    --shadow-color: 0, 0, 0;
+    --chat-bubble-incoming-bg: #1A222C;
+    --chat-bubble-incoming-fg: #E5E7EB;
+    --chat-bubble-outgoing-bg: #3D2E14;
+    --chat-bubble-outgoing-fg: #E5E7EB;
+
+    --glass-bg: rgba(22, 28, 36, 0.72);
+    --glass-bg-elevated: rgba(28, 34, 44, 0.84);
+    --glass-bg-subtle: rgba(18, 24, 32, 0.52);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-border-subtle: rgba(255, 255, 255, 0.08);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.32);
+    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    --glass-hover-bg: rgba(255, 255, 255, 0.08);
+    --glass-selected-bg: rgba(255, 255, 255, 0.14);
+    --glass-selected-border: rgba(245, 158, 11, 0.48);
+
+    color: var(--fg);
+    background-color: var(--bg);
+  }
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+}
+
+/* <copied from="content-body.css"> */
+::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+::-webkit-scrollbar:hover {
+  background-color: #00000008;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #828282;
+  border-radius: 3px;
+}
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar:hover {
+    background-color: #FFFFFF05;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #5a5959;
+    border-radius: 3px;
+  }
+}
+
+*::selection {
+  background-color: var(--selected-bg);
+  color: var(--selected-fg);
+}
+
+input,
+button {
+  font-family: inherit;
+}
+
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+}
+
+vbox {
+  display: flex;
+  flex-direction: column;
+}
+
+hbox {
+  display: flex;
+  flex-direction: row;
+}
+
+grid {
+  display: grid;
+}
+
+hbox.flex,
+vbox.flex,
+grid.flex,
+hbox[flex],
+vbox[flex],
+grid[flex] {
+  flex: 1 0 0;
+}
+
+hbox.spacer,
+vbox.spacer,
+spacer {
+  flex: 1 0 0;
+}
+
+value {
+  display: flex;
+  flex-direction: row;
+}
+
+* {
+  user-select: none;
+}
+
+input,
+textarea,
+value,
+.value,
+.value *,
+.selectable {
+  user-select: text;
+}
+value,
+.value {
+  overflow-wrap: anywhere;
+}
+
+.font-smallest {
+  font-size: 11px;
+  letter-spacing: -0.01em;
+}
+.font-small {
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+.font-normal {
+  font-size: 15px;
+}
+.font-large {
+  font-size: 24px;
+}
+.mobile .font-smallest {
+  font-size: 14px;
+}
+.mobile .font-small {
+  font-size: 16px;
+}
+.mobile .font-normal {
+  font-size: 18px;
+}
+
+/** Unified unread/new counters in the mail sidebar and toolbars */
+.mail-folder-count {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 999px;
+  min-height: 18px;
+  min-width: 18px;
+  padding: 1px 7px;
+  background-color: color-mix(in srgb, var(--icon-primary) 20%, transparent);
+  color: var(--icon-primary);
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="number"],
+input[type="password"],
+input[type="email"],
+input[type="url"],
+input[type="date"],
+input[type="time"],
+input[type="tel"],
+input[type="search"],
+input[type="text"] {
+  background-color: var(--input-bg);
+  color: var(--input-fg);
+  border: none;
+  border-bottom: 1px solid var(--input-line);
+  width: 100%;
+  font-size: 14px;
+}
+input:focus {
+  outline: none;
+  border-bottom: 1px solid var(--input-focus);
+}
+input::placeholder {
+  color: var(--input-placeholder);
+}
+
+input[type="color"] {
+  border: none;
+  background-color: inherit;
+  color: inherit;
+}
+input[type="radio"],
+input[type="checkbox"] {
+  accent-color: var(--fg);
+}
+input[type="radio"],
+input[type="checkbox"] {
+  accent-color: var(--fg);
+}
+input[type="date"],
+input[type="time"] {
+  background: url('/icon/chevron-down.svg') no-repeat right center;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0;
+}
+input[type="number"]::-webkit-inner-spin-button {
+  margin-left: 8px;
+}
+select {
+  border: none;
+  background-color: var(--leftbar-bg);
+  color: var(--leftbar-fg);
+  font-size: 14px;
+  border-bottom: 1px solid var(--input-line);
+}
+select:focus {
+  outline: none;
+  border-bottom: 1px solid var(--input-focus);
+}
+select option {
+  background-color: var(--leftbar-bg);
+  color: var(--leftbar-fg);
+}
+select option:hover {
+  /* not working, see <https://stackoverflow.com/a/15627759/7154362> */
+  background-color: var(--hover-bg);
+  color: var(--hover-fg);
+}
+/*
+select option:checked {
+  background-color: var(--selected-bg);
+  color: var(--selected-fg);
+}
+select option:checked:hover {
+  background-color: var(--selected-hover-bg);
+  color: var(--selected-hover-fg);
+}*/
+/* most of these classes are for specificity. ditto below. */
+.autocomplete.select.is-fullwidth .autocomplete-list .autocomplete-list-item,
+.autocomplete-list-item-create {
+  background-color: var(--main-bg);
+  color: var(--main-fg);
+}
+.autocomplete.select .autocomplete-list .autocomplete-list-item.selected {
+  background-color: var(--selected-bg);
+  color: var(--selected-fg);
+}
+.autocomplete.select.is-fullwidth .autocomplete-list {
+  padding: 0px;
+}
+.svelteui-NativeSelect-root select.svelteui-Input-input {
+  background-color: transparent;
+  color: inherit;
+  border-color: var(--border);
+}
+
+a[href] {
+  text-decoration: none;
+}
+hbox.page-link,
+a {
+  font-weight: 500;
+  color: var(--link-fg);
+  text-decoration: inherit;
+}
+hbox.page-link:hover,
+a:hover {
+  color: var(--link-hover-fg);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 2px solid var(--selected-bg);
+}
+
+/* Fastlist */
+
+.fast-list .row.selected > * {
+  background-color: var(--selected-bg);
+  color: var(--selected-fg);
+}
+
+.main-window:not(.mobile) .fast-list .row:not(.selected):hover > * {
+  background-color: var(--hover-bg);
+  color: var(--hover-fg);
+}
+.main-window:not(.mobile) .fast-list .row.selected:hover > * {
+  background-color: var(--selected-hover-bg);
+  color: var(--selected-hover-fg);
+}
+
+/* Mail reading pane — no decorative watermark */
+.mail-backdrop {
+  position: relative;
+}
+
+/* Other empty panes: subtle glass surface */
+.background-pattern {
+  position: relative;
+  background: var(--main-bg);
+}
+
+/* Jackdaw desktop: warm surfaces + liquid glass (all apps) */
+.main-window:not(.mobile) {
+  --bg: #F6F5F2;
+  --fg: #1B1C1D;
+  --inverted-bg: #17191A;
+  --inverted-fg: #F5F1E9;
+  --selected-bg: #F2E3C8;
+  --selected-fg: #4C3216;
+  --icon-primary: #B97616;
+  --hover-bg: #F4EDDF;
+  --hover-fg: #261F17;
+  --selected-hover-bg: #E5C58E;
+  --selected-hover-fg: #3A2815;
+  --main-bg: rgba(252, 251, 249, 0.72);
+  --main-fg: #1B1C1D;
+  --offset-bg: #F0EDE7;
+  --offset-fg: #26221D;
+  --leftbar-bg: rgba(245, 244, 241, 0.68);
+  --leftbar-fg: #1B1C1D;
+  --headerbar-bg: rgba(252, 251, 249, 0.75);
+  --headerbar-fg: #1B1C1D;
+  --windowheader-bg: rgba(252, 251, 249, 0.75);
+  --windowheader-fg: #1B1C1D;
+  --appbar-bg: rgba(245, 244, 241, 0.68);
+  --appbar-fg: #1B1C1D;
+  --border: rgba(227, 224, 217, 0.85);
+  --input-bg: rgba(247, 246, 243, 0.82);
+  --input-fg: #1B1C1D;
+  --input-line: #D9D5CD;
+  --input-placeholder: #77736C;
+  --input-focus: #D28A1B;
+  --link-fg: #B36C12;
+  --link-hover-fg: #8B500D;
+  --button-bg: rgba(252, 251, 249, 0.82);
+  --button-fg: #1B1C1D;
+  --button-border: #D8D4CC;
+  --button-secondary-line: #D39A3B;
+  --shadow-color: 27, 28, 29;
+  --border-radius: 12px;
+  --radius-pill: 999px;
+  --toolbar-control-bg: rgba(247, 246, 243, 0.82);
+  --toolbar-control-border: #DDD9D1;
+  --toolbar-control-fg: #26231F;
+  --danger-fg: #B84E3B;
+  --glass-bg: rgba(252, 251, 249, 0.58);
+  --glass-bg-elevated: rgba(255, 255, 255, 0.76);
+  --glass-bg-subtle: rgba(245, 244, 241, 0.42);
+  --glass-border: rgba(255, 255, 255, 0.68);
+  --glass-border-subtle: rgba(255, 255, 255, 0.32);
+  --glass-hover-bg: rgba(255, 255, 255, 0.42);
+  --glass-selected-bg: rgba(255, 255, 255, 0.86);
+  --glass-selected-border: rgba(185, 118, 22, 0.38);
+  background:
+    radial-gradient(1200px 640px at -8% -18%, rgba(210, 138, 27, 0.14), transparent 58%),
+    radial-gradient(900px 520px at 108% 108%, rgba(180, 170, 150, 0.16), transparent 52%),
+    var(--bg);
+  color: var(--fg);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  .main-window:not(.mobile) {
+    --bg: #111314;
+    --fg: #EEEAE3;
+    --inverted-bg: #EEEAE3;
+    --inverted-fg: #151718;
+    --selected-bg: #4A351D;
+    --selected-fg: #F3E8D4;
+    --icon-primary: #D79A31;
+    --hover-bg: #28231D;
+    --hover-fg: #F2ECE2;
+    --selected-hover-bg: #65471F;
+    --selected-hover-fg: #FFF3DE;
+    --main-bg: rgba(21, 23, 24, 0.74);
+    --main-fg: #EEEAE3;
+    --offset-bg: #27231E;
+    --offset-fg: #F0E7D8;
+    --leftbar-bg: rgba(26, 28, 30, 0.72);
+    --leftbar-fg: #E9E5DE;
+    --headerbar-bg: rgba(21, 23, 24, 0.76);
+    --headerbar-fg: #EEEAE3;
+    --windowheader-bg: rgba(21, 23, 24, 0.76);
+    --windowheader-fg: #EEEAE3;
+    --appbar-bg: rgba(26, 28, 30, 0.72);
+    --appbar-fg: #EEEAE3;
+    --border: rgba(44, 47, 48, 0.88);
+    --input-bg: rgba(27, 29, 30, 0.82);
+    --input-fg: #EEEAE3;
+    --input-line: #373939;
+    --input-placeholder: #9B9891;
+    --input-focus: #D79A31;
+    --link-fg: #E2A842;
+    --link-hover-fg: #F0BD62;
+    --button-bg: rgba(26, 28, 30, 0.82);
+    --button-fg: #EEEAE3;
+    --button-border: #3A3B3A;
+    --button-secondary-line: #9F7029;
+    --shadow-color: 0, 0, 0;
+    --toolbar-control-bg: rgba(26, 28, 30, 0.82);
+    --toolbar-control-border: #353737;
+    --toolbar-control-fg: #EEEAE3;
+    --danger-fg: #E17B65;
+    --glass-bg: rgba(26, 28, 30, 0.68);
+    --glass-bg-elevated: rgba(32, 34, 36, 0.82);
+    --glass-bg-subtle: rgba(18, 20, 22, 0.52);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-border-subtle: rgba(255, 255, 255, 0.06);
+    --glass-hover-bg: rgba(255, 255, 255, 0.08);
+    --glass-selected-bg: rgba(255, 255, 255, 0.16);
+    --glass-selected-border: rgba(215, 154, 49, 0.44);
+    background:
+      radial-gradient(1100px 600px at -10% -15%, rgba(215, 154, 49, 0.12), transparent 58%),
+      radial-gradient(860px 480px at 105% 105%, rgba(80, 90, 100, 0.18), transparent 52%),
+      var(--bg);
+    color-scheme: dark;
+  }
+}
+
+
+/* Liquid glass panels */
+.main-window:not(.mobile) .app-bar,
+.main-window:not(.mobile) .window-header {
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+.main-window:not(.mobile) .content-shell {
+  /* Solid surface: nested backdrop-filter caused blur/focus glitches on macOS */
+  background: var(--glass-bg-elevated);
+}
+.main-window:not(.mobile) .body-row,
+.main-window:not(.mobile) .content-shell,
+.main-window:not(.mobile) .app-bar-shell,
+.main-window:not(.mobile) .compose-float,
+.main-window:not(.mobile) .widget-sidebar {
+  -webkit-app-region: no-drag;
+}
+.main-window.mail-mode .folder-pane,
+.main-window.mail-mode .mail-toolbar {
+  background: var(--leftbar-bg);
+}
+
+.main-window:not(.mobile) .popup {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--border-radius);
+  background: var(--glass-bg-elevated);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow:
+    var(--glass-highlight),
+    0 0 0 1px rgba(var(--shadow-color), 0.06),
+    0 14px 30px rgba(var(--shadow-color), 0.22);
+}
+.main-window:not(.mobile) .menu {
+  min-width: 190px;
+  padding: 5px;
+  border-radius: var(--border-radius);
+}
+.main-window:not(.mobile) .menuitem {
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border-radius: var(--border-radius);
+  font-size: 12px;
+}
+.main-window:not(.mobile) .folder-pane :global(.folder),
+.main-window:not(.mobile) .folder-pane :global(.account-row),
+.main-window:not(.mobile) .folder-pane :global(.smart-view),
+.main-window:not(.mobile) .folder-pane :global(.quick-folder),
+.main-window:not(.mobile) .quick-filters :global(.pill),
+.main-window:not(.mobile) .mail-toolbar :global(.search-filters-btn),
+.main-window:not(.mobile) .search {
+  border-radius: var(--border-radius);
+}
+.main-window:not(.mobile) .search :global(input),
+.main-window:not(.mobile) .workspace,
+.main-window:not(.mobile) .app-button,
+.main-window:not(.mobile) .classic-ribbon :global(.ribbon-btn),
+.main-window:not(.mobile) .classic-ribbon :global(.ribbon-group) {
+  border-radius: var(--border-radius);
+}
+.main-window:not(.mobile) .menuitem:focus-visible {
+  outline: 2px solid var(--icon-primary);
+  outline-offset: -2px;
+}
+.main-window:not(.mobile) .menuitem.danger {
+  color: var(--danger-fg);
+}
+.main-window:not(.mobile) .menu .divider {
+  margin-inline: 5px;
+}
+
+/* Fix svelte-ui dropdown */
+
+.svelteui-NativeSelect-root select option:hover {
+  /* TODO not the right selector */
+  background-color: var(--hover-bg);
+  color: var(--hover-fg);
+}

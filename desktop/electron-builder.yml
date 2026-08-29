@@ -1,0 +1,86 @@
+appId: app.jackdaw.client
+productName: Jackdaw
+copyright: Copyright © 2026
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+asarUnpack:
+  - resources/**
+win:
+  target:
+    - nsis
+    - msi
+  executableName: jackdaw
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSCameraUsageDescription: Application requests access to the device's camera.
+    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: true
+  target:
+    - target: dmg
+      arch:
+        - universal
+    - target: zip
+      arch:
+        - universal
+    - target: pkg
+  x64ArchFiles: '**/{bufferutil,utf-8-validate}.node'
+dmg:
+  artifactName: ${name}-${version}.${ext}
+linux:
+  target:
+    - AppImage
+    - deb
+    - pacman
+    - rpm
+  maintainer: Jackdaw
+  category: Network
+  icon: build/icon.icns
+  mimeTypes:
+    - message/rfc822
+appImage:
+  artifactName: ${name}-${version}.${ext}
+deb:
+  packageName: jackdaw
+pacman:
+  depends:
+    - c-ares
+    - ffmpeg
+    - gtk3
+    - libevent
+    - libvpx
+    - libxslt
+    - libxss
+    - minizip
+    - nss
+    - re2
+    - snappy
+    - libnotify
+    - libappindicator-gtk3
+protocols:
+  name: Send mail
+  schemes:
+    - mailto
+npmRebuild: true
+extraMetadata:
+  productName: Jackdaw
+fileAssociations:
+  ext: eml
+  name: E-Mail Message
+  description: RFC 822 email message
+  role: Viewer
+  rank: Default

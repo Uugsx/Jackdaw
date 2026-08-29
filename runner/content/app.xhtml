@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+      scrolling="false"
+      width="1024"
+      height="768"
+      persist="width height screenX screenY sizemode">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+    <title>Jackdaw</title>
+    <link rel="stylesheet" href="chrome://jackdaw/content/app.css"/>
+    <script defer="defer" src="chrome://jackdaw/content/app.js"/>
+  </head>
+  <body>
+    <xul:tooltip id="aHTMLTooltip"/>
+    <xul:browser id="app-frame" flex="1" type="content" remote="true"/>
+  </body>
+</html>

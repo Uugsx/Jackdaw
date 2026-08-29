@@ -1,0 +1,55 @@
+import { Directory } from "../Directory";
+import type { File } from "../File";
+import { HarddriveFile } from "./HarddriveFile";
+import type { HarddriveAccount } from "./HarddriveAccount";
+import { appGlobal } from "../../app";
+import { Lock } from "../../util/flow/Lock";
+import type { ArrayColl } from "svelte-collections";
+
+export class HarddriveDirectory extends Directory {
+  declare account: HarddriveAccount;
+  readonly files: ArrayColl<File>;
+  readonly subDirs: ArrayColl<HarddriveDirectory>;
+  protected readonly listLock = new Lock();
+
+  newDirectory(name: string): HarddriveDirectory {
+    return super.newDirectory(name, new HarddriveDirectory()) as HarddriveDirectory;
+  }
+
+  newFile(name: string): HarddriveFile {
+    return super.newFile(name, new HarddriveFile()) as HarddriveFile;
+  }
+
+  async listContents() {
+    let lock = await this.listLock.lock();
+    try {
+      this.files.clear();
+      this.subDirs.clear();
+      let entries = await appGlobal.remoteApp.listDirectoryContents(this.path, true, false);
+      for (let entry of entries) {
+        if (await entry.isDirectory) {
+          let dir = this.newDirectory(entry.name);
+          dir.path = dir.filepathLocal = entry.path;
+          dir.lastMod = entry.lastMod;
+          this.subDirs.add(dir);
+        } else {
+          let file = this.newFile(entry.name);
+          file.path = file.filepathLocal = entry.path;
+          file.size = entry.size;
+          file.lastMod = entry.lastMod;
+          this.files.add(file);
+        }
+      }
+    } finally {
+      lock.release();
+    }
+  }
+
+  async createSubDirectory(name: string): Promise<Directory> {
+    let subDir = this.newDirectory(name);
+    this.subDirs.add(subDir);
+    await appGlobal.remoteApp.fs.mkdir(subDir.path, { mode: 0o700 });
+    await this.listContents();
+    return this.subDirs.find(d => d.path == subDir.path) ?? subDir;
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "include": [
+    "./*",
+    "../../lib/**/*",
+    "../../app/logic/*",
+    "../../app/logic/**/*"
+  ],
+  // <copied from="../tsconfig.json">
+  // <copied from="../tsconfig.node.json">
+  "compilerOptions": {
+    "useDefineForClassFields": true,
+    "strict": false,
+    "allowJs": true,
+    "checkJs": true,
+    "composite": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "esModuleInterop": true,
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable"
+    ]
+  },
+}
