@@ -1,6 +1,9 @@
 <vbox class="update">
   {#if phase === "checking"}
     <div class="status">{$t`Checking for updates…`}</div>
+    <div class="progress" role="progressbar" aria-busy="true">
+      <div class="progress-fill indeterminate"></div>
+    </div>
     {#if checkTimedOut}
       <Button label={$t`Check for update`} onClick={() => checkForUpdate(true)} errorCallback={showError} />
     {/if}
@@ -34,7 +37,7 @@
   {:else if phase === "available"}
     <div class="status">{$t`Update found`}{version ? `: ${version}` : ""}. {$t`Downloading…`}</div>
     <div class="progress" role="progressbar" aria-valuenow={progress} aria-valuemin="0" aria-valuemax="100">
-      <div class="progress-fill" style:width="{Math.max(progress, 2)}%"></div>
+      <div class="progress-fill" class:indeterminate={progress <= 0} style:width="{progress > 0 ? Math.max(progress, 2) : undefined}%"></div>
     </div>
     {#if isMac}
       <Button label={$t`Download .dmg manually`} onClick={openManualDownload} errorCallback={showError} />
@@ -61,9 +64,12 @@
   import { appGlobal } from "../../../logic/app";
   import ErrorMessageInline from "../../Shared/ErrorMessageInline.svelte";
   import Button from "../../Shared/Button.svelte";
+  import { consumeAboutUpdateFlow } from "./updateNavigation";
   import { t } from "../../../l10n/l10n";
 
   type UpdatePhase = "idle" | "checking" | "available" | "downloading" | "downloaded" | "uptodate" | "unsupported";
+
+  const kPollIntervalMs = 500;
 
   let phase: UpdatePhase = "idle";
   let progress = 0;
@@ -89,7 +95,14 @@
       syncFromBackend(status);
     }
     await refreshStatus();
-    if (phase === "idle") {
+    let fromNotification = consumeAboutUpdateFlow();
+    if (fromNotification) {
+      if (phase === "idle" || phase === "uptodate" || phase === "unsupported") {
+        await checkForUpdate(true);
+      } else if (phase === "downloaded" || readyToInstall) {
+        await installUpdate();
+      }
+    } else if (phase === "idle") {
       checkForUpdate(false);
     } else if (phase === "checking") {
       startCheckingWatchdog();
@@ -134,17 +147,27 @@
     clearWatchdog();
     pollTimer = setInterval(() => {
       refreshStatus().catch(showError);
-    }, 2000);
+    }, kPollIntervalMs);
   }
 
   function startCheckingWatchdog() {
     clearWatchdog();
     pollTimer = setInterval(() => {
       refreshStatus().catch(showError);
-    }, 2000);
+    }, kPollIntervalMs);
     watchdog = setTimeout(() => {
       checkTimedOut = true;
     }, 50_000);
+  }
+
+  function syncWatchdogForPhase() {
+    if (phase === "checking") {
+      startCheckingWatchdog();
+    } else if (phase === "available" || phase === "downloading") {
+      startDownloadWatchdog();
+    } else if (phase === "downloaded" || phase === "uptodate" || phase === "unsupported" || phase === "idle") {
+      clearWatchdog();
+    }
   }
 
   function syncFromBackend(obj: {
@@ -158,9 +181,6 @@
       phase = obj.phase;
       if (phase === "downloading" || phase === "available") {
         installingUpdate = false;
-      }
-      if (phase === "downloading") {
-        startDownloadWatchdog();
       }
       if (isMac && phase === "downloaded") {
         installingUpdate = true;
@@ -180,9 +200,7 @@
     } else if (obj.error === null) {
       errorEx = undefined;
     }
-    if (phase === "downloaded" || phase === "uptodate" || phase === "unsupported" || phase === "idle") {
-      clearWatchdog();
-    }
+    syncWatchdogForPhase();
   }
 
   onDestroy(() => {
@@ -261,5 +279,13 @@
     border-radius: inherit;
     background: var(--icon-primary, var(--accent, #2563eb));
     transition: width 0.2s ease;
+  }
+  .progress-fill.indeterminate {
+    width: 35%;
+    animation: update-progress-slide 1.1s ease-in-out infinite;
+  }
+  @keyframes update-progress-slide {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(320%); }
   }
 </style>
