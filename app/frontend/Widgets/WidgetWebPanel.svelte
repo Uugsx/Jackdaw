@@ -1,19 +1,42 @@
 <vbox flex class="widget-web-panel" class:suspended class:frozen>
   {#if url && !frozen}
-    {#key `${reloadKey}-${mobileVersion}`}
-      <WebView
-        {url}
-        {title}
-        sessionID={sessionID}
-        containNavigation={true}
-        userAgent={mobileVersion ? MOBILE_WEBVIEW_USER_AGENT : null}
-        on:webview={onWebviewReady} />
-    {/key}
+    <hbox class="widget-nav">
+      <button type="button" class="nav-btn" title={$t`Back`}
+        disabled={!canGoBack}
+        on:click={goBack}>
+        <ArrowLeftIcon size="14px" />
+      </button>
+      <button type="button" class="nav-btn" title={$t`Forward`}
+        disabled={!canGoForward}
+        on:click={goForward}>
+        <ArrowRightIcon size="14px" />
+      </button>
+      <button type="button" class="nav-btn" title={$t`Reload`}
+        on:click={reloadPage}>
+        <RotateCwIcon size="14px" />
+      </button>
+      <button type="button" class="nav-btn" title={$t`Home`}
+        disabled={!url}
+        on:click={goHome}>
+        <HouseIcon size="14px" />
+      </button>
+    </hbox>
+    <vbox flex class="webview-slot">
+      {#key `${reloadKey}-${mobileVersion}`}
+        <WebView
+          {url}
+          {title}
+          sessionID={sessionID}
+          containNavigation={true}
+          userAgent={mobileVersion ? MOBILE_WEBVIEW_USER_AGENT : null}
+          on:webview={onWebviewReady} />
+      {/key}
+    </vbox>
   {/if}
 
-  {#if !suspended && loading}
+  {#if !suspended && !loadSettled}
     <vbox flex class="state-panel state-overlay">
-      <JackdawChaseLoader label={$t`Loading website…`} />
+      <JackdawChaseLoader compact label={$t`Loading website…`} />
     </vbox>
   {:else if !suspended && loadFailed}
     <vbox flex class="state-panel state-overlay">
@@ -48,6 +71,10 @@
   import JackdawChaseLoader from "../Shared/JackdawChaseLoader.svelte";
   import Button from "../Shared/Button.svelte";
   import AlertCircleIcon from "lucide-svelte/icons/circle-alert";
+  import ArrowLeftIcon from "lucide-svelte/icons/arrow-left";
+  import ArrowRightIcon from "lucide-svelte/icons/arrow-right";
+  import RotateCwIcon from "lucide-svelte/icons/rotate-cw";
+  import HouseIcon from "lucide-svelte/icons/house";
   import { openExternalURL } from "../../logic/util/os-integration";
   import {
     focusWidgetPopout,
@@ -74,24 +101,42 @@
   let webviewElement: HTMLElement | null = null;
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-  let loading = true;
+  /** Bird animation until load succeeds or failure is confirmed */
+  let loadSettled = false;
   let loadFailed = false;
   let embedBlocked = false;
   let signInBusy = false;
   let popoutOpen = false;
   let reloadKey = 0;
   let loadTimer: ReturnType<typeof setTimeout> | null = null;
+  let failDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let lastReloadTick = 0;
   let activeUrl = "";
+  let loadAttempt = 0;
+  let canGoBack = false;
+  let canGoForward = false;
+
+  type NavigableWebview = HTMLElement & {
+    goBack?: () => void;
+    goForward?: () => void;
+    reload?: () => void;
+    canGoBack?: () => boolean;
+    canGoForward?: () => boolean;
+    loadURL?: (targetUrl: string) => void;
+  };
+
+  const LOAD_TIMEOUT_MS = 45000;
+  const FAIL_DEBOUNCE_MS = 1800;
 
   $: if (url && url !== activeUrl) {
     activeUrl = url;
     popoutOpen = false;
-    startLoadTimer();
+    beginLoad();
   }
 
   onDestroy(() => {
     clearLoadTimer();
+    clearFailDebounce();
     clearRefreshTimer();
   });
 
@@ -107,6 +152,13 @@
     if (loadTimer) {
       clearTimeout(loadTimer);
       loadTimer = null;
+    }
+  }
+
+  function clearFailDebounce() {
+    if (failDebounceTimer) {
+      clearTimeout(failDebounceTimer);
+      failDebounceTimer = null;
     }
   }
 
@@ -129,33 +181,72 @@
     }, minutes * 60 * 1000);
   }
 
-  function startLoadTimer() {
+  function beginLoad() {
+    loadAttempt += 1;
+    let attempt = loadAttempt;
     clearLoadTimer();
-    loading = true;
+    clearFailDebounce();
+    loadSettled = false;
     loadFailed = false;
     embedBlocked = false;
     loadTimer = setTimeout(() => {
-      if (loading) {
-        loading = false;
-        loadFailed = true;
+      if (attempt === loadAttempt && !loadSettled) {
+        settleFailed(embedBlocked);
       }
-    }, 30000);
+    }, LOAD_TIMEOUT_MS);
+  }
+
+  function settleSuccess() {
+    clearLoadTimer();
+    clearFailDebounce();
+    loadSettled = true;
+    loadFailed = false;
+    embedBlocked = false;
+  }
+
+  function settleFailed(blocked: boolean) {
+    clearLoadTimer();
+    clearFailDebounce();
+    loadSettled = true;
+    loadFailed = true;
+    embedBlocked = blocked;
+  }
+
+  function isIgnorableLoadError(detail: Record<string, unknown>, errorDescription: string): boolean {
+    let errorCode = detail?.errorCode as number | undefined;
+    if (detail?.isMainFrame === false) {
+      return true;
+    }
+    if (errorCode === -3 || errorDescription.includes("ERR_ABORTED")) {
+      return true;
+    }
+    return false;
+  }
+
+  function scheduleLoadFailure(event: Event | undefined, blocked: boolean) {
+    let attempt = loadAttempt;
+    clearFailDebounce();
+    failDebounceTimer = setTimeout(() => {
+      if (attempt !== loadAttempt || loadSettled) {
+        return;
+      }
+      embedBlocked = blocked;
+      settleFailed(blocked);
+    }, FAIL_DEBOUNCE_MS);
   }
 
   function markLoadFailed(event?: Event) {
     let detail = (event as CustomEvent | undefined)?.detail ?? {};
     let errorCode = detail?.errorCode ?? (event as any)?.errorCode;
     let errorDescription = String(detail?.errorDescription ?? (event as any)?.errorDescription ?? "");
-    if (detail?.isMainFrame === false || errorCode === -3) {
+    if (isIgnorableLoadError(detail as Record<string, unknown>, errorDescription)) {
       return;
     }
-    loading = false;
-    loadFailed = true;
-    clearLoadTimer();
-    embedBlocked = errorCode === -27
+    let blocked = errorCode === -27
       || errorDescription.includes("X-Frame-Options")
       || errorDescription.includes("frame")
       || errorDescription.includes("CSP");
+    scheduleLoadFailure(event, blocked);
   }
 
   async function pageLooksEmbedBlocked(element: HTMLElement): Promise<boolean> {
@@ -166,11 +257,15 @@
     try {
       return await webview.executeJavaScript(`
         (() => {
-          const text = (document.body?.innerText ?? "").toLowerCase();
-          return text.includes("cannot be shown")
-            || text.includes("can't be shown")
-            || text.includes("нельзя показать")
-            || text.includes("refused to connect");
+          const text = (document.body?.innerText ?? "").trim();
+          if (text.length > 500) {
+            return false;
+          }
+          const lower = text.toLowerCase();
+          return lower.includes("cannot be shown")
+            || lower.includes("can't be shown")
+            || lower.includes("нельзя показать")
+            || lower.includes("refused to connect");
         })()
       `) as boolean;
     } catch {
@@ -179,20 +274,26 @@
   }
 
   async function onLoadFinished(element: HTMLElement) {
-    clearLoadTimer();
-    if (await pageLooksEmbedBlocked(element)) {
-      embedBlocked = true;
-      loading = false;
-      loadFailed = true;
+    let attempt = loadAttempt;
+    clearFailDebounce();
+    if (attempt !== loadAttempt || loadSettled) {
       return;
     }
-    loading = false;
-    loadFailed = false;
-    embedBlocked = false;
+    await new Promise(resolve => setTimeout(resolve, 400));
+    if (attempt !== loadAttempt || loadSettled) {
+      return;
+    }
+    if (await pageLooksEmbedBlocked(element)) {
+      settleFailed(true);
+      return;
+    }
+    settleSuccess();
   }
 
   $: if (frozen) {
     webviewElement = null;
+    canGoBack = false;
+    canGoForward = false;
   }
 
   $: syncWebviewVisibility(webviewElement, suspended && !frozen);
@@ -204,15 +305,85 @@
     element.style.display = hide ? "none" : "";
   }
 
+  function syncNavigationState(element: HTMLElement | null) {
+    if (!element) {
+      canGoBack = false;
+      canGoForward = false;
+      return;
+    }
+    let webview = element as NavigableWebview;
+    canGoBack = webview.canGoBack?.() ?? false;
+    canGoForward = webview.canGoForward?.() ?? false;
+  }
+
+  function goBack() {
+    let webview = webviewElement as NavigableWebview | null;
+    if (webview?.goBack) {
+      webview.goBack();
+      return;
+    }
+    if (webview instanceof HTMLIFrameElement) {
+      webview.contentWindow?.history.back();
+    }
+  }
+
+  function goForward() {
+    let webview = webviewElement as NavigableWebview | null;
+    if (webview?.goForward) {
+      webview.goForward();
+      return;
+    }
+    if (webview instanceof HTMLIFrameElement) {
+      webview.contentWindow?.history.forward();
+    }
+  }
+
+  function reloadPage() {
+    let webview = webviewElement as NavigableWebview | null;
+    if (webview?.reload) {
+      beginLoad();
+      webview.reload();
+      return;
+    }
+    retryLoad();
+  }
+
+  function goHome() {
+    if (!url) {
+      return;
+    }
+    let webview = webviewElement as NavigableWebview | null;
+    beginLoad();
+    if (webview?.loadURL) {
+      webview.loadURL(url);
+    } else if (webview instanceof HTMLIFrameElement) {
+      webview.src = url;
+    } else {
+      retryLoad();
+    }
+  }
+
   function onWebviewReady(event: CustomEvent<HTMLElement>) {
     let element = event.detail;
     webviewElement = element;
     syncWebviewVisibility(webviewElement, suspended && !frozen);
 
+    element.addEventListener("did-start-loading", () => {
+      clearFailDebounce();
+      loadSettled = false;
+      loadFailed = false;
+    });
+    element.addEventListener("did-navigate", () => {
+      syncNavigationState(element);
+    });
+    element.addEventListener("did-navigate-in-page", () => {
+      syncNavigationState(element);
+    });
     element.addEventListener("did-fail-load", (evt) => {
       markLoadFailed(evt as Event);
     });
     element.addEventListener("did-finish-load", () => {
+      syncNavigationState(element);
       catchErrors(() => onLoadFinished(element));
     });
     if (element instanceof HTMLIFrameElement) {
@@ -220,8 +391,11 @@
         markLoadFailed();
       });
       element.addEventListener("load", () => {
+        syncNavigationState(element);
         catchErrors(() => onLoadFinished(element));
       });
+    } else {
+      syncNavigationState(element);
     }
   }
 
@@ -251,12 +425,47 @@
 
   function retryLoad() {
     reloadKey += 1;
-    startLoadTimer();
+    beginLoad();
   }
 </script>
 
 <style>
   .widget-web-panel {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .widget-nav {
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 6px;
+    border-block-end: 1px solid var(--border);
+    background: var(--headerbar-bg);
+  }
+  .nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--border-radius);
+    background: transparent;
+    color: color-mix(in srgb, var(--leftbar-fg) 78%, transparent);
+    cursor: default;
+  }
+  .nav-btn:hover:not(:disabled) {
+    background: var(--hover-bg);
+    color: var(--hover-fg);
+    border-color: var(--border);
+  }
+  .nav-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .webview-slot {
     position: relative;
     min-height: 0;
     overflow: hidden;
@@ -269,6 +478,8 @@
     width: 100%;
     height: 100%;
     border: none;
+    flex: 1 1 0;
+    min-height: 0;
   }
   .state-panel {
     align-items: center;

@@ -213,10 +213,24 @@
     max-height: calc(100vh - 24px);
     border: 1px solid var(--border);
     border-radius: var(--border-radius);
-    background: var(--main-bg, var(--bg));
+    /* Solid surface — no liquid-glass bleed-through from mail list behind */
+    --main-bg: #FCFBF9;
+    --input-bg: #F7F6F3;
+    --headerbar-bg: #F5F4F1;
+    background: var(--main-bg);
     color: var(--main-fg, var(--fg));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     box-shadow: 0 10px 28px rgba(var(--shadow-color), 0.16);
     overflow: hidden;
+  }
+  @media (prefers-color-scheme: dark) {
+    .compose-float {
+      --main-bg: #151718;
+      --input-bg: #1B1D1E;
+      --headerbar-bg: #181A1B;
+      background: var(--main-bg);
+    }
   }
   .compose-float.minimized {
     min-height: 0;
@@ -293,17 +307,29 @@
     border-inline-start: 1px solid var(--border);
   }
   .float-body {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    background: var(--main-bg);
+  }
+  .float-body :global(.container.flex) {
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+    align-self: stretch;
+  }
+  .float-body :global(.content.flex) {
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
   }
   .float-body :global(.mail-composer-window) {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
-    padding: 0 12px 8px;
-    box-sizing: border-box;
+    min-width: 0;
+    height: 100%;
   }
   .resize-handle {
     position: absolute;

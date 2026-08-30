@@ -8,8 +8,8 @@
       />
   </PageHeader>
 
-  {#each $identities.each as identity}
-    <IdentityBlock {identity}
+  {#each $identities.each as identity (identity.id)}
+    <IdentityBlock bind:this={identityBlocks[identity.id]} {identity}
       canRemove={$identities.length > 1}
       on:delete={event => catchErrors(() => onDelete(event.detail))}
       />
@@ -46,6 +46,7 @@
   export let account: MailAccount;
 
   $: identities = (account as MailAccount).identities;
+  let identityBlocks: Record<string, IdentityBlock> = {};
 
   function onAdd() {
     let id = new MailIdentity(account);
@@ -60,6 +61,7 @@
   async function onSave() {
     assert(identities.hasItems, $t`Need at least 1 identity`);
     for (let identity of identities) {
+      identityBlocks[identity.id]?.flushSignature();
       sanitize.emailAddress(identity.emailAddress.replace("*", "any"));
     }
     account.emailAddress = identities.first.emailAddress;

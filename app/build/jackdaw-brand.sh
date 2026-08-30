@@ -1,6 +1,11 @@
 # Run from app/build/ directory
 # Syncs version into build.ts and package metadata; branding is Jackdaw.
 VERSION=`grep "\"version\"" ../../app/package.json | sed -e "s|^.*\"version\": \"||" -e "s|\",$||"`
+if [ -n "${OTA_BUILD_SUFFIX:-}" ]; then
+  BASE=$(echo "$VERSION" | sed 's/-dev.*//')
+  VERSION="${BASE}-dev.${OTA_BUILD_SUFFIX}"
+  perl -p -i -e "s|\"version\": \".*\"|\"version\": \"$VERSION\"|;" ../package.json
+fi
 echo Building Jackdaw version $VERSION
 
 perl -p -i \

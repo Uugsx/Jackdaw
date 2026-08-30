@@ -107,6 +107,12 @@
   }
   .content {
     z-index: 0;
+    min-height: 0;
+    min-width: 0;
+  }
+  .container {
+    min-height: 0;
+    min-width: 0;
   }
   .content.dragging {
     opacity: 30%;

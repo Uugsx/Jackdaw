@@ -131,9 +131,9 @@
       {/if}
       <vbox flex class="editor-wrapper">
         <Paper>
-          <Scroll>
+          <Scroll visibleScrollbars={floating} allowHorizontalOverflow={floating}>
             <SMLComposer {mail} />
-            <vbox flex class="editor" spellcheck={$spellcheckEnabled.value}
+            <vbox class="editor" spellcheck={$spellcheckEnabled.value}
               style:zoom={editorZoom / 100}>
               <!-- The html in the mail passed in MUST already be sanitized HTML.
               Using `rawHTMLDangerous` avoids that we're sanitizing on every keypress. -->
@@ -189,9 +189,10 @@
   import FileSelector from "./Attachments/FileSelector.svelte";
   import FileDropTarget from "./Attachments/FileDropTarget.svelte";
   import HTMLEditor from "../../Shared/Editor/HTMLEditor.svelte";
-  import { composeEditorExtensions, composeDefaultFontFamily, composeDefaultFontSize } from "../../Shared/Editor/composeEditorExtensions";
+  import { composeEditorExtensions, composeDefaultFontFamily, composeDefaultFontSize, fontSizeToCSS } from "../../Shared/Editor/composeEditorExtensions";
   import { resolveComposeRecipients } from "../../../logic/Mail/composeResolveRecipients";
   import { closeFloatingCompose } from "./composeFloating";
+  import { focusComposeTypingArea } from "./composeCursor";
   import UserCheckIcon from "lucide-svelte/icons/user-check";
   import { createEventDispatcher } from "svelte";
   import ComposeRibbon from "./ComposeRibbon.svelte";
@@ -295,6 +296,7 @@
     // Use raw HTML so DOMPurify WHOLE_DOCUMENT wrapping does not break TipTap
     editor.commands.setContent(mail.rawHTMLDangerous || "<p></p>");
     applyDefaultComposeFormatting();
+    await tick();
     setCursorDefault();
   }
 
@@ -309,7 +311,7 @@
     editor.chain().focus()
       .selectAll()
       .setFontFamily(composeDefaultFontFamily)
-      .setFontSize(composeDefaultFontSize)
+      .setFontSize(fontSizeToCSS(composeDefaultFontSize))
       .run();
   }
 
@@ -404,9 +406,7 @@
       editor.commands.focus("start");
       return;
     }
-    let quoteSetting = getLocalStorage("mail.send.quote", "below").value;
-    let below = quoteSetting == "below";
-    editor.commands.focus(below ? "start" : "end");
+    focusComposeTypingArea(editor);
   }
 
   $: fromIdentity && setAuthor()
@@ -577,35 +577,46 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding: 0 0 8px;
+    padding: 0 12px 8px;
     min-height: 0;
+    flex: 1 1 0;
     height: 100%;
+    box-sizing: border-box;
   }
   .mail-composer-window.floating .ribbon-anchor {
     flex-shrink: 0;
     min-width: 0;
-    overflow-x: auto;
+    overflow: visible;
   }
   .mail-composer-window.floating .editor-and-attachments {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
+    min-width: 0;
     overflow: hidden;
   }
   .mail-composer-window.floating .editor-wrapper {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
+    min-width: 0;
     display: flex;
     flex-direction: column;
   }
   .mail-composer-window.floating .editor-wrapper :global(.paper) {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
+    min-width: 0;
     display: flex;
     flex-direction: column;
   }
   .mail-composer-window.floating .editor-wrapper :global(.scroll) {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
+    min-width: 0;
+  }
+  .mail-composer-window.floating .editor {
+    max-width: none;
+    width: max-content;
+    min-width: 100%;
   }
   .compose-header {
     gap: 2px;
@@ -727,6 +738,7 @@
   .editor {
     margin: 12px 12px;
     max-width: 50em;
+    flex-shrink: 0;
   }
   .editor-wrapper {
     flex: 3 0 0;

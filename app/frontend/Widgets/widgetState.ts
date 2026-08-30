@@ -28,6 +28,28 @@ export const WIDGET_REFRESH_MINUTES: WidgetRefreshMinutes[] = [0, 1, 2, 5, 10, 3
 
 export const WIDGET_PANEL_WIDTHS: Array<number | null> = [null, 280, 320, 360, 420, 480, 560];
 
+export const WIDGET_RAIL_WIDTH_PX = 44;
+export const WIDGET_DEFAULT_PANEL_WIDTH_PX = 320;
+
+/** Bump to remount the widgets splitter after a preset width is applied. */
+export const widgetSplitterResetKey = writable(0);
+
+/** Apply a panel width preset by updating the saved widgets splitter ratio. */
+export function applyWidgetPanelWidthPreset(panelWidthPx: number | null) {
+  let storageKey = "ui.splitter.widgets";
+  if (panelWidthPx == null) {
+    localStorage.removeItem(storageKey);
+  } else {
+    let barWidth = 2;
+    let chromeEstimate = 120;
+    let available = Math.max(600, window.innerWidth - chromeEstimate) - barWidth;
+    let rightWidth = WIDGET_RAIL_WIDTH_PX + panelWidthPx;
+    let leftWidth = Math.max(300, available - rightWidth);
+    localStorage.setItem(storageKey, JSON.stringify(rightWidth / leftWidth));
+  }
+  widgetSplitterResetKey.update(k => k + 1);
+}
+
 export const MOBILE_WEBVIEW_USER_AGENT =
   "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
 

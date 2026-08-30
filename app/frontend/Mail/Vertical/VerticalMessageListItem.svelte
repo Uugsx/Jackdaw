@@ -203,10 +203,19 @@
   .date {
     font-weight: 300;
   }
+  .subject {
+    color: color-mix(in srgb, var(--main-fg, var(--fg)) 76%, transparent);
+  }
   .unread .contact,
   .unread .subject,
   .unread .date {
     font-weight: 700;
+  }
+  .unread .subject {
+    color: var(--icon-primary);
+  }
+  :global(.row.selected) .subject {
+    color: inherit;
   }
   .date {
     min-width: 0;

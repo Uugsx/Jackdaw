@@ -48,8 +48,9 @@
       <vbox class="signature">
         {$t`Signature`}
         <vbox class="signature-editor-box">
-          <HTMLEditorToolbar {editor} />
-          <HTMLEditor bind:html={identity.signatureHTML} bind:editor />
+          <HTMLEditorToolbar {editor} showFontControls defaultFontSize="10" />
+          <HTMLEditor bind:this={signatureEditor} bind:html={signatureHTML} bind:editor
+            extraExtensions={signatureEditorExtensions} />
           {#if showSentBy}
             <hbox class="sentBy">
               <div>
@@ -93,6 +94,10 @@
   import SentByExplainer from "./SentByExplainer.svelte";
   import HTMLEditor from "../../../Shared/Editor/HTMLEditor.svelte";
   import HTMLEditorToolbar from "../../../Shared/Editor/HTMLEditorToolbar.svelte";
+  import {
+    normalizeSignatureHTML,
+    signatureEditorExtensions,
+  } from "../../../Shared/Editor/composeEditorExtensions";
   import Encryption from "./Encryption.svelte";
   import ExpanderButton from "../../../Shared/ExpanderButton.svelte";
   import ExpanderButtons from "../../../Shared/ExpanderButtons.svelte";
@@ -103,9 +108,11 @@
   import type { Editor } from "@tiptap/core";
   import { appName, siteRoot } from "../../../../logic/build";
   import { checkInputField } from "../../../Util/util";
+  import { catchErrors } from "../../../Util/error";
   import { sanitize } from "../../../../../lib/util/sanitizeDatatypes";
   import { t } from "../../../../l10n/l10n";
   import { createEventDispatcher } from 'svelte';
+  import { tick } from 'svelte';
   const dispatchEvent = createEventDispatcher();
 
   export let identity: MailIdentity;
@@ -113,14 +120,34 @@
 
   let showReplyTo = !!identity.replyTo;
   let showOrganisation = !!identity.organisation;
-  let showSignature = !!identity.signatureHTML;
+  let signatureHTML = normalizeSignatureHTML(identity.signatureHTML);
+  let showSignature = !!signatureHTML;
   let showSentBy = false;
   let showSentByExplainer = false;
   $: keys = identity.encryptionPrivateKeys;
   $: showEncryption = $keys.hasItems;
   let showEncryptionOverride = false;
   let editor: Editor;
+  let signatureEditor: HTMLEditor;
   let emailInput: HTMLInputElement;
+  let signatureContentPrepared = false;
+
+  $: if (editor && signatureHTML != null && !signatureContentPrepared) {
+    signatureContentPrepared = true;
+    catchErrors(async () => {
+      await tick();
+      let normalized = normalizeSignatureHTML(signatureHTML);
+      if (normalized && normalized !== editor.getHTML()) {
+        editor.commands.setContent(normalized, { emitUpdate: false });
+        signatureHTML = editor.getHTML();
+      }
+    });
+  }
+
+  export function flushSignature() {
+    signatureEditor?.syncContent();
+    identity.signatureHTML = signatureHTML;
+  }
   $: $identity.emailAddress && checkInputField(() => sanitize.emailAddress($identity.emailAddress.replace("*", "any")), emailInput);
 
   function addEcryption() {
@@ -131,9 +158,9 @@
     dispatchEvent("delete", identity);
   }
 
-  $: clearSig(identity.signatureHTML);
+  $: clearSig(signatureHTML);
   function clearSig(_dummy: any) {
-    let html = identity.signatureHTML;
+    let html = signatureHTML;
     if (html == null || html === "") {
       return;
     }
@@ -143,7 +170,7 @@
     }
     let text = html.replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").trim();
     if (!text && /^(<p><\/p>|<p><br\s*\/?><\/p>|<p>\s*<\/p>)$/i.test(html.trim())) {
-      identity.signatureHTML = null;
+      signatureHTML = null;
     }
   }
 </script>

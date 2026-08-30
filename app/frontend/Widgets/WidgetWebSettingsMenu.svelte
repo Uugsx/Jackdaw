@@ -44,7 +44,7 @@
       label={widthLabel(width)}
       selected={settings.customWidthPx === width}
       closeOnClick={false}
-      onClick={() => updateWidgetSettings(widget.id, { customWidthPx: width })} />
+      onClick={() => setPanelWidth(width)} />
   {/each}
 </SubMenu>
 <MenuDivider />
@@ -66,6 +66,7 @@
 <script lang="ts">
   import type { WidgetEntry, WidgetRefreshMinutes } from "./widgetState";
   import {
+    applyWidgetPanelWidthPreset,
     getWidgetWebSettings,
     normalizeWidgetList,
     reloadWebWidget,
@@ -119,6 +120,11 @@
 
   function setRefresh(minutes: WidgetRefreshMinutes) {
     updateWidgetSettings(widget.id, { refreshMinutes: minutes });
+  }
+
+  function setPanelWidth(width: number | null) {
+    updateWidgetSettings(widget.id, { customWidthPx: width });
+    applyWidgetPanelWidthPreset(width);
   }
 
   async function copyPanelUrl() {

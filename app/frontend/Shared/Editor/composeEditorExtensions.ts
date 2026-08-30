@@ -2,10 +2,12 @@ import { Extension } from "@tiptap/core";
 import Underline from "@tiptap/extension-underline";
 import { Color } from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
+import { getStyleProperty } from "@tiptap/core";
 import TextAlign from "@tiptap/extension-text-align";
 import FontFamily from "@tiptap/extension-font-family";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { Table, TableRow, TableCell, TableHeader } from "@tiptap/extension-table";
+import { gt } from "../../../l10n/l10n";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -13,10 +15,306 @@ declare module "@tiptap/core" {
       setFontSize: (fontSize: string) => ReturnType;
       unsetFontSize: () => ReturnType;
     };
+    lineHeight: {
+      setLineHeight: (lineHeight: string) => ReturnType;
+      unsetLineHeight: () => ReturnType;
+    };
   }
 }
 
-const FontSize = Extension.create({
+const PT_PER_PX = 72 / 96;
+
+/** Legacy HTML `<font size="1..7">` → pt (Outlook / Word). */
+const HTML_FONT_SIZE_TO_PT: Record<string, string> = {
+  "1": "8",
+  "2": "10",
+  "3": "12",
+  "4": "14",
+  "5": "18",
+  "6": "24",
+  "7": "36",
+};
+
+function trimFontSizeNumber(value: string): string {
+  let n = parseFloat(value);
+  if (Number.isNaN(n)) {
+    return value;
+  }
+  let rounded = Math.round(n * 100) / 100;
+  if (Number.isInteger(rounded)) {
+    return String(rounded);
+  }
+  return String(rounded).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+/** True when a unitless integer is an HTML `<font size>` index (1–7), not pt. */
+function isHtmlFontSizeIndex(value: string): boolean {
+  if (!/^[\d]+$/.test(value)) {
+    return false;
+  }
+  let n = parseInt(value, 10);
+  return n >= 1 && n <= 7;
+}
+
+function htmlFontSizeIndexToPt(index: string): string {
+  return HTML_FONT_SIZE_TO_PT[index] ?? "";
+}
+
+/** Parse CSS font-size to Outlook-style pt number (unitless string for UI/storage). */
+export function parseFontSizeFromHTML(size: string): string {
+  if (!size) {
+    return "";
+  }
+  size = size.replace(/['"]+/g, "").trim();
+  let ptMatch = size.match(/^([\d.]+)\s*pt$/i);
+  if (ptMatch) {
+    return trimFontSizeNumber(ptMatch[1]);
+  }
+  let pxMatch = size.match(/^([\d.]+)\s*px$/i);
+  if (pxMatch) {
+    return trimFontSizeNumber(String(parseFloat(pxMatch[1]) * PT_PER_PX));
+  }
+  if (/^[\d.]+$/.test(size)) {
+    if (isHtmlFontSizeIndex(size)) {
+      return htmlFontSizeIndexToPt(size);
+    }
+    let n = parseFloat(size);
+    // Legacy mistaken px numbers from an older build (e.g. 13.33 → 10pt)
+    if (n >= 12 && n !== Math.round(n)) {
+      let asPt = n * PT_PER_PX;
+      for (let candidate of composeFontSizes) {
+        if (Math.abs(parseFloat(candidate) - asPt) < 0.06) {
+          return candidate;
+        }
+      }
+    }
+    return trimFontSizeNumber(size);
+  }
+  return size.replace(/px$/i, "").replace(/pt$/i, "");
+}
+
+/** Read font size from a DOM node (inline style or legacy `<font size>`). */
+export function parseFontSizeFromHTMLElement(element: HTMLElement): string {
+  if (element.tagName === "FONT") {
+    let legacy = element.getAttribute("size");
+    if (legacy && HTML_FONT_SIZE_TO_PT[legacy]) {
+      return HTML_FONT_SIZE_TO_PT[legacy];
+    }
+  }
+  let fromStyle = element.style.fontSize ?? "";
+  if (!fromStyle && element.tagName !== "FONT") {
+    return "";
+  }
+  return parseFontSizeFromHTML(fromStyle);
+}
+
+function applyFontSizeToTextNodes(block: HTMLElement, doc: Document, cssPt: string) {
+  let walker = doc.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+  let textNodes: Text[] = [];
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    let text = node as Text;
+    if (!text.data.trim()) {
+      continue;
+    }
+    textNodes.push(text);
+  }
+  for (let text of textNodes) {
+    let parent = text.parentElement;
+    if (!parent) {
+      continue;
+    }
+    if (parent.tagName === "SPAN" && parent.childNodes.length === 1 && parent.style.fontSize) {
+      parent.style.fontSize = cssPt;
+      continue;
+    }
+    let span = doc.createElement("span");
+    span.style.fontSize = cssPt;
+    parent.insertBefore(span, text);
+    span.appendChild(text);
+  }
+}
+
+/** Normalize Outlook/Word signature HTML before TipTap parses it. */
+export function normalizeSignatureHTML(html: string | null | undefined): string | null {
+  if (!html?.trim()) {
+    return html ?? null;
+  }
+  if (typeof document === "undefined") {
+    return html;
+  }
+  let doc = new DOMParser().parseFromString(`<body><div id="sig-root">${html}</div></body>`, "text/html");
+  let root = doc.getElementById("sig-root");
+  if (!root) {
+    return html;
+  }
+  for (let font of root.querySelectorAll("font[size]")) {
+    let span = doc.createElement("span");
+    let pt = HTML_FONT_SIZE_TO_PT[font.getAttribute("size") ?? ""];
+    if (pt) {
+      span.style.fontSize = `${pt}pt`;
+    }
+    while (font.firstChild) {
+      span.appendChild(font.firstChild);
+    }
+    font.replaceWith(span);
+  }
+  for (let block of root.querySelectorAll("p, td, th, li")) {
+    let blockEl = block as HTMLElement;
+    let blockSize = blockEl.style.fontSize?.trim();
+    if (blockSize) {
+      let pt = parseFontSizeFromHTML(blockSize);
+      if (pt) {
+        applyFontSizeToTextNodes(blockEl, doc, `${pt}pt`);
+      }
+      blockEl.style.removeProperty("font-size");
+    }
+  }
+  return root.innerHTML;
+}
+
+/** CSS font-size for HTML output — Outlook uses pt. */
+export function fontSizeToCSS(stored: string): string {
+  if (!stored) {
+    return "";
+  }
+  if (/px|pt|em|rem|%$/i.test(stored)) {
+    return stored;
+  }
+  return `${stored}pt`;
+}
+
+/** @deprecated alias — returns pt number for UI, like Outlook */
+export function normalizeFontSizeValue(size: string): string {
+  return parseFontSizeFromHTML(size);
+}
+
+function renderFontSizeStyle(attributes: { fontSize?: string | null }) {
+  if (!attributes.fontSize) {
+    return {};
+  }
+  return {
+    style: `font-size: ${fontSizeToCSS(parseFontSizeFromHTML(String(attributes.fontSize)))}`,
+  };
+}
+
+function fontSizeMarkValue(fontSize: string): string {
+  let stored = parseFontSizeFromHTML(fontSizeToCSS(fontSize));
+  return stored ? fontSizeToCSS(stored) : "";
+}
+
+function mergeTextStyleAttrs(
+  existing: Record<string, unknown> | null | undefined,
+  patch: Record<string, unknown | null>,
+): Record<string, unknown> | null {
+  let attrs: Record<string, unknown> = { ...(existing ?? {}) };
+  for (let [key, value] of Object.entries(patch)) {
+    if (value == null || value === "") {
+      delete attrs[key];
+    } else {
+      attrs[key] = value;
+    }
+  }
+  return Object.keys(attrs).length ? attrs : null;
+}
+
+function selectionTextRange(state: import("@tiptap/pm/state").EditorState): { from: number; to: number } {
+  let { from, to, empty } = state.selection;
+  if (!empty) {
+    return { from, to };
+  }
+  let $from = state.selection.$from;
+  let depth = $from.depth;
+  while (depth > 0 && !$from.node(depth).isTextblock) {
+    depth--;
+  }
+  return { from: $from.start(depth), to: $from.end(depth) };
+}
+
+function applyTextStylePatchToRange(
+  state: import("@tiptap/pm/state").EditorState,
+  tr: import("@tiptap/pm/state").Transaction,
+  from: number,
+  to: number,
+  patch: Record<string, unknown | null>,
+) {
+  let markType = state.schema.marks.textStyle;
+  if (!markType || from >= to) {
+    return;
+  }
+  state.doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isText) {
+      return;
+    }
+    let markFrom = Math.max(from, pos);
+    let markTo = Math.min(to, pos + node.nodeSize);
+    if (markFrom >= markTo) {
+      return;
+    }
+    let existing = markType.isInSet(node.marks);
+    let attrs = mergeTextStyleAttrs(existing?.attrs, patch);
+    if (attrs) {
+      tr.addMark(markFrom, markTo, markType.create(attrs));
+    } else {
+      tr.removeMark(markFrom, markTo, markType);
+    }
+  });
+}
+
+/** Apply font size to every text node in the selection (works inside Outlook tables). */
+function fontSizeCommands() {
+  return {
+    setFontSize: (fontSize: string) => ({ state, dispatch }) => {
+      let cssValue = fontSizeMarkValue(fontSize);
+      if (!cssValue) {
+        return false;
+      }
+      let { from, to } = selectionTextRange(state);
+      let tr = state.tr;
+      if (from === to) {
+        let markType = state.schema.marks.textStyle;
+        if (!markType) {
+          return false;
+        }
+        let stored = markType.isInSet(state.storedMarks ?? state.selection.$from.marks());
+        let attrs = mergeTextStyleAttrs(stored?.attrs, { fontSize: cssValue });
+        if (attrs) {
+          tr.addStoredMark(markType.create(attrs));
+        }
+        dispatch?.(tr);
+        return true;
+      }
+      applyTextStylePatchToRange(state, tr, from, to, { fontSize: cssValue });
+      dispatch?.(tr);
+      return true;
+    },
+    unsetFontSize: () => ({ state, dispatch }) => {
+      let { from, to } = selectionTextRange(state);
+      let tr = state.tr;
+      if (from === to) {
+        let markType = state.schema.marks.textStyle;
+        if (!markType) {
+          return false;
+        }
+        let stored = markType.isInSet(state.storedMarks ?? state.selection.$from.marks());
+        let attrs = mergeTextStyleAttrs(stored?.attrs, { fontSize: null });
+        if (attrs) {
+          tr.addStoredMark(markType.create(attrs));
+        } else {
+          tr.removeStoredMark(markType);
+        }
+        dispatch?.(tr);
+        return true;
+      }
+      applyTextStylePatchToRange(state, tr, from, to, { fontSize: null });
+      dispatch?.(tr);
+      return true;
+    },
+  };
+}
+
+/** Font size on inline textStyle marks only (Outlook-style pt in HTML output). */
+const FontSizeExtension = Extension.create({
   name: "fontSize",
   addOptions() {
     return {
@@ -30,13 +328,45 @@ const FontSize = Extension.create({
         attributes: {
           fontSize: {
             default: null,
-            parseHTML: element => element.style.fontSize?.replace(/['"]+/g, "") ?? null,
+            parseHTML: element => {
+              let parsed = parseFontSizeFromHTMLElement(element);
+              return parsed ? fontSizeToCSS(parsed) : null;
+            },
+            renderHTML: attributes => renderFontSizeStyle(attributes),
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return fontSizeCommands();
+  },
+});
+
+const lineHeightTypes = ["paragraph", "heading", "tableCell"];
+
+const LineHeight = Extension.create({
+  name: "lineHeight",
+  addOptions() {
+    return {
+      types: lineHeightTypes,
+    };
+  },
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types,
+        attributes: {
+          lineHeight: {
+            default: null,
+            parseHTML: element =>
+              normalizeLineHeightValue(element.style.lineHeight?.replace(/['"]+/g, "") ?? "") || null,
             renderHTML: attributes => {
-              if (!attributes.fontSize) {
+              if (!attributes.lineHeight) {
                 return {};
               }
               return {
-                style: `font-size: ${attributes.fontSize}`,
+                style: `line-height: ${attributes.lineHeight}`,
               };
             },
           },
@@ -46,10 +376,77 @@ const FontSize = Extension.create({
   },
   addCommands() {
     return {
-      setFontSize: (fontSize: string) => ({ chain }) =>
-        chain().setMark("textStyle", { fontSize }).run(),
-      unsetFontSize: () => ({ chain }) =>
-        chain().setMark("textStyle", { fontSize: null }).removeEmptyTextStyle().run(),
+      setLineHeight: (lineHeight: string) => ({ chain, editor }) => {
+        let value = normalizeLineHeightValue(lineHeight);
+        for (let type of lineHeightTypes) {
+          if (editor.isActive(type)) {
+            if (value) {
+              return chain().focus().updateAttributes(type, { lineHeight: value }).run();
+            }
+            return chain().focus().resetAttributes(type, "lineHeight").run();
+          }
+        }
+        if (value) {
+          return chain().focus().updateAttributes("paragraph", { lineHeight: value }).run();
+        }
+        return chain().focus().resetAttributes("paragraph", "lineHeight").run();
+      },
+      unsetLineHeight: () => ({ chain, editor }) => {
+        for (let type of lineHeightTypes) {
+          if (editor.isActive(type)) {
+            return chain().focus().resetAttributes(type, "lineHeight").run();
+          }
+        }
+        return chain().focus().resetAttributes("paragraph", "lineHeight").run();
+      },
+    };
+  },
+});
+
+function parseHexColor(hex: string): { r: number; g: number; b: number } | null {
+  let match = hex.trim().match(/^#?([0-9a-f]{6})$/i);
+  if (!match) {
+    return null;
+  }
+  let value = parseInt(match[1], 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+  };
+}
+
+/** Pick readable text on Outlook-style highlight fills. */
+export function textColorForHighlight(background: string): string {
+  let rgb = parseHexColor(background);
+  if (!rgb) {
+    return "#000000";
+  }
+  let luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+  return luminance > 0.55 ? "#000000" : "#FFFFFF";
+}
+
+/** Background fill only — no underline artifacts, readable foreground. */
+const ComposeHighlight = Highlight.extend({
+  addAttributes() {
+    return {
+      color: {
+        default: null,
+        parseHTML: (element) =>
+          element.getAttribute("data-color") ||
+          getStyleProperty(element, "background-color") ||
+          element.style.backgroundColor,
+        renderHTML: (attributes) => {
+          if (!attributes.color) {
+            return {};
+          }
+          let fg = textColorForHighlight(attributes.color);
+          return {
+            "data-color": attributes.color,
+            style: `background-color: ${attributes.color}; color: ${fg}`,
+          };
+        },
+      },
     };
   },
 });
@@ -60,11 +457,11 @@ export const composeEditorExtensions = [
   FontFamily.configure({
     types: ["textStyle"],
   }),
-  FontSize,
+  FontSizeExtension,
   Color.configure({
     types: ["textStyle"],
   }),
-  Highlight.configure({
+  ComposeHighlight.configure({
     multicolor: true,
   }),
   Underline,
@@ -83,11 +480,39 @@ export const composeEditorExtensions = [
   TableCell,
 ];
 
-import { gt } from "../../../l10n/l10n";
+/** Signature editor in settings — inline font size and block line spacing. */
+export const signatureEditorExtensions = [
+  TextStyle,
+  FontFamily.configure({
+    types: ["textStyle"],
+  }),
+  FontSizeExtension,
+  LineHeight,
+  Color.configure({
+    types: ["textStyle"],
+  }),
+  ComposeHighlight.configure({
+    multicolor: true,
+  }),
+  Underline,
+  TextAlign.configure({
+    types: ["heading", "paragraph"],
+    alignments: ["left", "center", "right", "justify"],
+  }),
+  Table.configure({
+    resizable: false,
+    HTMLAttributes: {
+      style: "border-collapse: collapse; width: 100%;",
+    },
+  }),
+  TableRow,
+  TableHeader,
+  TableCell,
+];
 
 /** Outlook-style defaults for new compose messages. */
 export const composeDefaultFontFamily = "Aptos, Calibri, Arial, sans-serif";
-export const composeDefaultFontSize = "11px";
+export const composeDefaultFontSize = "11";
 
 export const composeFontFamilies = [
   { label: () => gt`System`, value: "" },
@@ -99,23 +524,68 @@ export const composeFontFamilies = [
   { label: () => "Courier New", value: "\"Courier New\", Courier, monospace" },
 ];
 
-export const composeFontSizes = ["10", "11", "12", "14", "16", "18", "20", "24"];
-
-export const composeTextColors = [
-  "#0B0F14",
-  "#B45309",
-  "#DC2626",
-  "#2563EB",
-  "#059669",
-  "#7C3AED",
+export const composeFontSizes = [
+  "5", "5.5", "6.5", "7.5", "8", "9", "10", "10.5", "11", "12",
+  "14", "16", "18", "20", "22", "24", "26", "28", "36", "48", "72",
 ];
 
+/** Outlook line spacing multipliers; empty value = single (default). */
+export const composeLineHeights = [
+  { value: "", label: "1" },
+  { value: "1.15", label: "1,15" },
+  { value: "1.5", label: "1,5" },
+  { value: "2", label: "2" },
+  { value: "2.5", label: "2,5" },
+  { value: "3", label: "3" },
+];
+
+/** Display font size like Outlook (7.5 → 7,5 in ru locales). */
+export function formatFontSizeLabel(size: string): string {
+  return size.replace(".", ",");
+}
+
+export function normalizeLineHeightValue(value: string): string {
+  if (!value) {
+    return "";
+  }
+  value = value.trim().replace(",", ".");
+  if (value === "normal" || value === "1" || value === "1.0") {
+    return "";
+  }
+  if (value.endsWith("%")) {
+    let percent = parseFloat(value);
+    if (!Number.isNaN(percent)) {
+      return String(percent / 100);
+    }
+  }
+  return value;
+}
+
+export function formatLineHeightLabel(value: string): string {
+  if (!value) {
+    return "1";
+  }
+  return value.replace(".", ",");
+}
+
+export const composeTextColors = [
+  "#000000", "#C00000", "#FF0000", "#FFC000", "#FFFF00",
+  "#92D050", "#00B050", "#00B0F0", "#0070C0", "#002060",
+  "#7030A0", "#FFFFFF", "#808080", "#C0C0C0", "#EEEAE3",
+];
+
+export const composeDefaultHighlightColor = "#FFFF00";
+
+/** Outlook text highlight palette (5×3). */
 export const composeHighlightColors = [
-  "#FEF08A",
-  "#BBF7D0",
-  "#BFDBFE",
-  "#FBCFE8",
-  "#E5E7EB",
+  "#FFFF00", "#00FF00", "#00FFFF", "#FF00FF", "#0000FF",
+  "#FF0000", "#000080", "#008080", "#008000", "#800080",
+  "#800000", "#808000", "#808080", "#C0C0C0", "#000000",
+];
+
+export const composeHighlightColorsHighContrast = [
+  "#FF0000", "#000080", "#008080", "#008000", "#800080",
+  "#800000", "#808000", "#808080", "#000000",
 ];
 
 export function currentTextStyle(editor: import("@tiptap/core").Editor) {
@@ -127,8 +597,16 @@ export function currentFontFamily(editor: import("@tiptap/core").Editor): string
 }
 
 export function currentFontSize(editor: import("@tiptap/core").Editor): string {
-  let size = currentTextStyle(editor).fontSize ?? "";
-  return size.replace(/px$/i, "");
+  return parseFontSizeFromHTML(currentTextStyle(editor).fontSize ?? "");
+}
+
+export function currentLineHeight(editor: import("@tiptap/core").Editor): string {
+  for (let type of lineHeightTypes) {
+    if (editor.isActive(type)) {
+      return normalizeLineHeightValue(editor.getAttributes(type).lineHeight ?? "");
+    }
+  }
+  return normalizeLineHeightValue(editor.getAttributes("paragraph").lineHeight ?? "");
 }
 
 export function currentTextColor(editor: import("@tiptap/core").Editor): string {
@@ -136,5 +614,12 @@ export function currentTextColor(editor: import("@tiptap/core").Editor): string 
 }
 
 export function currentHighlightColor(editor: import("@tiptap/core").Editor): string {
-  return editor.getAttributes("highlight").color ?? composeHighlightColors[0];
+  return editor.getAttributes("highlight").color ?? composeDefaultHighlightColor;
+}
+
+export function highlightPreviewColor(editor: import("@tiptap/core").Editor): string {
+  if (editor.isActive("highlight")) {
+    return editor.getAttributes("highlight").color ?? composeDefaultHighlightColor;
+  }
+  return composeDefaultHighlightColor;
 }

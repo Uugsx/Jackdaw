@@ -22,8 +22,9 @@
         class:other-month={!isSameMonth(day, visibleMonth)}
         class:today={isSameDay(day, today)}
         class:selected={isSameDay(day, $selectedDate)}
+        class:has-events={eventDayStamps.has(startOfDay(day).getTime())}
         on:click={() => selectDay(day)}>
-        {#if day.getDate() === 1 && !isSameMonth(day, visibleMonth)}
+        {#if !isSameMonth(day, visibleMonth)}
           <span class="day-num with-month">{formatDayWithMonth(day)}</span>
         {:else}
           <span class="day-num">{day.getDate()}</span>
@@ -47,8 +48,9 @@
   import ChevronRightIcon from "lucide-svelte/icons/chevron-right";
   import ChevronDownIcon from "lucide-svelte/icons/chevron-down";
   import ChevronUpIcon from "lucide-svelte/icons/chevron-up";
-  import { getToday, getWeekStart, kAllWeekdays, weekdayLabel } from "../Util/date";
-  import { selectedDate } from "../Calendar/selected";
+  import { getToday, getWeekDays, getWeekStart, kAllWeekdays, weekdayLabel } from "../Util/date";
+  import { selectedDate, shownCalendarEvents } from "../Calendar/selected";
+  import type { Event } from "../../logic/Calendar/Event";
   import { getDateTimeLocale, t } from "../../l10n/l10n";
   import { onMount } from "svelte";
 
@@ -77,6 +79,7 @@
 
   $: weekdayLabels = kAllWeekdays.map(day => weekdayLabel(day, "narrow"));
   $: visibleDays = expanded ? buildMonthGrid(visibleMonth) : buildCompactGrid(visibleMonth);
+  $: eventDayStamps = buildEventDayStamps([...shownCalendarEvents], visibleDays);
   $: monthTitle = visibleMonth.toLocaleDateString(getDateTimeLocale(), { month: "long", year: "numeric" });
 
   function startOfMonth(date: Date): Date {
@@ -103,12 +106,47 @@
     return buildDayRange(getWeekStart(pivot), 14);
   }
 
+  function startOfDay(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
   function buildMonthGrid(anchor: Date): Date[] {
-    let start = getWeekStart(anchor);
-    while (start.getMonth() !== anchor.getMonth() && start.getDate() > 7) {
+    let monthStart = startOfMonth(anchor);
+    let weekDays = getWeekDays(monthStart);
+    let start = new Date(weekDays[0]);
+    while (weekDays[6].getDate() > 7) {
       start.setDate(start.getDate() - 7);
+      weekDays = getWeekDays(start);
     }
     return buildDayRange(start, 42);
+  }
+
+  function buildEventDayStamps(events: Event[], days: Date[]): Set<number> {
+    if (days.length === 0) {
+      return new Set();
+    }
+    let rangeStart = startOfDay(days[0]);
+    let rangeEnd = startOfDay(days[days.length - 1]);
+    rangeEnd.setDate(rangeEnd.getDate() + 1);
+    let stamps = new Set<number>();
+    for (let event of events) {
+      if (!event.startTime || !event.endTime) {
+        continue;
+      }
+      if (event.endTime < rangeStart || event.startTime >= rangeEnd) {
+        continue;
+      }
+      let day = startOfDay(event.startTime);
+      let lastDay = startOfDay(event.endTime);
+      while (day < rangeEnd && day <= lastDay) {
+        if (day >= rangeStart) {
+          stamps.add(day.getTime());
+        }
+        day = new Date(day);
+        day.setDate(day.getDate() + 1);
+      }
+    }
+    return stamps;
   }
 
   function buildDayRange(start: Date, count: number): Date[] {
@@ -127,7 +165,9 @@
 
   function selectDay(day: Date) {
     $selectedDate = day;
-    visibleMonth = startOfMonth(day);
+    if (!isSameMonth(day, visibleMonth)) {
+      visibleMonth = startOfMonth(day);
+    }
   }
 
   function previousMonth() {
@@ -203,9 +243,11 @@
   }
   .day-cell {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 30px;
+    gap: 1px;
+    min-height: 32px;
     padding: 0;
     border: 1px solid transparent;
     border-radius: 999px;
@@ -223,6 +265,32 @@
     min-width: 1.75rem;
     min-height: 1.75rem;
     line-height: 1;
+    position: relative;
+  }
+  .day-cell.has-events:not(.today) .day-num::after {
+    content: "";
+    position: absolute;
+    bottom: 1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--icon-primary);
+  }
+  .day-cell.other-month.has-events:not(.today) .day-num::after {
+    opacity: 0.5;
+  }
+  .day-cell.today.has-events .day-num::after {
+    content: "";
+    position: absolute;
+    bottom: 1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--selected-fg, #fff);
   }
   .day-num.with-month {
     font-size: 10px;
