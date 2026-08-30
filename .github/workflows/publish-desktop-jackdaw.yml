@@ -24,6 +24,8 @@ jobs:
       - run: bash jackdaw-brand.sh
         working-directory: app/build
         shell: bash
+        env:
+          JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
       - run: sudo -H pip install setuptools
       - run: cd app; yarn install
       - run: cd lib; yarn install
@@ -69,6 +71,8 @@ jobs:
       - run: bash jackdaw-brand.sh
         working-directory: app/build
         shell: bash
+        env:
+          JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
       - run: cd app; yarn install
       - run: cd lib; yarn install
       - run: cd desktop; yarn install

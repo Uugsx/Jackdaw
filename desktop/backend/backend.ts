@@ -27,7 +27,6 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import crypto from "node:crypto";
 import { RunOnce } from '../../app/logic/util/flow/RunOnce';
-import { builtInGhUpdateToken } from './updateAuth';
 const { autoUpdater } = electronUpdater;
 
 let jpc: JPCWebSocket | null = null;
@@ -431,12 +430,26 @@ export const updateState = new UpdateState();
 
 const checkForUpdateRunOnce = new RunOnce<boolean>();
 
-function resolveGhUpdateToken(): string | null {
-  let token = builtInGhUpdateToken?.trim() || "";
-  if (token && token !== "__JACKDAW_GH_UPDATE_TOKEN__") {
-    return token;
+function readGhUpdateTokenFile(filePath: string): string | null {
+  try {
+    let token = fs.readFileSync(filePath, "utf8").trim();
+    return token || null;
+  } catch {
+    return null;
   }
-  token = process.env.JACKDAW_GH_UPDATE_TOKEN?.trim() || "";
+}
+
+function resolveGhUpdateToken(): string | null {
+  for (let candidate of [
+    path.join(import.meta.dirname, "../build/gh-update-token.txt"),
+    path.join(process.resourcesPath, "gh-update-token.txt"),
+  ]) {
+    let token = readGhUpdateTokenFile(candidate);
+    if (token) {
+      return token;
+    }
+  }
+  let token = process.env.JACKDAW_GH_UPDATE_TOKEN?.trim() || "";
   if (token) {
     return token;
   }

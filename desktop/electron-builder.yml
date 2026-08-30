@@ -76,6 +76,9 @@ protocols:
   schemes:
     - mailto
 npmRebuild: true
+extraResources:
+  - from: build/gh-update-token.txt
+    to: gh-update-token.txt
 extraMetadata:
   productName: Jackdaw
 fileAssociations:
