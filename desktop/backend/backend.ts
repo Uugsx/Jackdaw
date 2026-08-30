@@ -434,6 +434,9 @@ class UpdateState extends Observable {
   @notifyChangedProperty
   error: string | null = null;
 
+  @notifyChangedProperty
+  errorCode: string | null = null;
+
   get haveUpdate(): boolean {
     return !!this.update?.isUpdateAvailable;
   }
@@ -448,20 +451,23 @@ class UpdateState extends Observable {
     this.progress = 0;
     this.version = null;
     this.error = null;
+    this.errorCode = null;
   }
 
   beginCheck() {
     this.error = null;
+    this.errorCode = null;
     this.phase = "checking";
   }
 
-  markUnsupported(reason?: string) {
+  markUnsupported(code?: string) {
     this.update = null;
     this.phase = "unsupported";
     this.progress = 0;
     this.version = null;
-    if (reason) {
-      this.error = reason;
+    this.error = null;
+    if (code) {
+      this.errorCode = code;
     }
   }
 
@@ -618,9 +624,7 @@ function configureAutoUpdater() {
     }
     if (/ENOENT|404|401|Cannot find .*yml/i.test(msg)) {
       if (updateState.phase === "checking") {
-        updateState.markUnsupported(
-          "Could not read update metadata from GitHub Releases. Install the latest build from GitHub Releases.",
-        );
+        updateState.markUnsupported("ota-metadata");
       } else {
         updateState.error = msg;
         updateState.phase = "idle";
@@ -825,22 +829,19 @@ function trackUpdateDownload(result: UpdateCheckResult | null) {
     });
 }
 
-function markUpdateUnavailable(reason: string) {
-  updateState.error = reason;
-  updateState.markUnsupported(reason);
+function markUpdateUnavailable(code: string) {
+  updateState.errorCode = code;
+  updateState.error = null;
+  updateState.markUnsupported(code);
 }
 
 async function runUpdateCheck(check: () => Promise<UpdateCheckResult | null>): Promise<boolean> {
   if (!hasAppUpdateConfig()) {
-    markUpdateUnavailable(
-      "Install the release build from GitHub Releases to enable automatic updates.",
-    );
+    markUpdateUnavailable("ota-not-configured");
     return false;
   }
   if (!ensureGhUpdateAuth()) {
-    markUpdateUnavailable(
-      "Install the release build from GitHub Releases to enable automatic updates.",
-    );
+    markUpdateUnavailable("ota-no-token");
     return false;
   }
   updateState.beginCheck();
@@ -856,9 +857,7 @@ async function runUpdateCheck(check: () => Promise<UpdateCheckResult | null>): P
   }
   if (!updateState.update) {
     if (updateState.phase === "checking") {
-      markUpdateUnavailable(
-        "Could not reach the update server. Install the latest build from GitHub Releases.",
-      );
+      markUpdateUnavailable("ota-server");
     }
     return false;
   }
@@ -973,6 +972,7 @@ export async function getUpdateStatus() {
     version: updateState.version,
     readyToInstall: updateState.readyToInstall || (process.platform === "darwin" && !!macDmgPendingPath),
     error: updateState.error,
+    errorCode: updateState.errorCode,
     appVersion: app.getVersion(),
     otaConfigured: hasAppUpdateConfig(),
     otaTokenPresent: !!resolveGhUpdateToken(),

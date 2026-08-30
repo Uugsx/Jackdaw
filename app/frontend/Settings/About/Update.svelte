@@ -44,7 +44,7 @@
     {/if}
   {:else if phase === "unsupported"}
     <div class="status">
-      {errorEx?.message || $t`Automatic updates are not configured in this build.`}
+      {errorEx?.message ?? updateUnsupportedMessage()}
     </div>
     <Button label={$t`Check for update`} onClick={() => checkForUpdate(true)} errorCallback={showError} />
   {:else if phase === "uptodate"}
@@ -64,6 +64,11 @@
   import { appGlobal } from "../../../logic/app";
   import ErrorMessageInline from "../../Shared/ErrorMessageInline.svelte";
   import Button from "../../Shared/Button.svelte";
+  import {
+    messageForUpdateError,
+    messageForUpdateErrorCode,
+    updateUnsupportedMessage,
+  } from "./updateMessages";
   import { consumeAboutUpdateFlow } from "./updateNavigation";
   import { t } from "../../../l10n/l10n";
 
@@ -116,19 +121,33 @@
       syncFromBackend(status);
       if (status.phase === "unsupported") {
         let installer = isMac ? ".dmg" : "setup.exe";
-        if (!status.otaConfigured) {
-          errorEx = new Error(
-            `This install is missing OTA config. Download and run the ${installer} from GitHub Releases.`,
-          );
-        } else if (!status.otaTokenPresent) {
-          errorEx = new Error(
-            `This install is missing the update token. Download and run the ${installer} from GitHub Releases.`,
-          );
-        } else if (status.error) {
-          errorEx = new Error(status.error);
+        let message = localizeUpdateStatusError(status, installer);
+        if (message) {
+          errorEx = new Error(message);
         }
       }
     }
+  }
+
+  function localizeUpdateStatusError(status: {
+    errorCode?: string | null;
+    error?: string | null;
+    otaConfigured?: boolean;
+    otaTokenPresent?: boolean;
+  }, installer: string): string | undefined {
+    if (status.errorCode) {
+      return messageForUpdateErrorCode(status.errorCode as import("./updateMessages").UpdateErrorCode, installer);
+    }
+    if (!status.otaConfigured) {
+      return messageForUpdateErrorCode("ota-not-configured", installer);
+    }
+    if (!status.otaTokenPresent) {
+      return messageForUpdateErrorCode("ota-no-token", installer);
+    }
+    if (status.error) {
+      return messageForUpdateError(status.error, installer) ?? status.error;
+    }
+    return updateUnsupportedMessage();
   }
 
   function clearWatchdog() {
@@ -196,7 +215,9 @@
       readyToInstall = obj.readyToInstall;
     }
     if (obj.error) {
-      errorEx = new Error(obj.error);
+      errorEx = new Error(
+        messageForUpdateError(obj.error, isMac ? ".dmg" : "setup.exe") ?? obj.error,
+      );
     } else if (obj.error === null) {
       errorEx = undefined;
     }
