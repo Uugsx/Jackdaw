@@ -24,29 +24,15 @@ Desktop-клиент для Exchange / OWA и связанных протоко�
 
 **Jackdaw** — почтовый клиент с календарём и адресной книгой для Exchange / OWA, EWS, ActiveSync, Graph, IMAP/JMAP и CardDAV/CalDAV.
 
-**Electron** (desktop) + **Capacitor** (mobile), UI на **Svelte + TypeScript**.
+Desktop на **Electron**, mobile на **Capacitor**, UI — **Svelte + TypeScript**. Разработка — **[uugsx](https://github.com/Uugsx)**.
 
-### Происхождение
+### Особенности
 
-Jackdaw — **продолжение и переработка** open-source почтового клиента под [EUPL-1.2](LICENSE).
-
-Исходная кодовая база — работа **Ben Bucksch**, **Beonex GmbH** и других участников. Проект **не писался с нуля**: взята существующая основа, исправлено то, что не работало, добавлены новые возможности.
-
-**Сейчас Jackdaw развивает [uugsx](https://github.com/Uugsx)** — ребрендинг, стабилизация, UI, протоколы OWA.
-
-> EUPL разрешает форк и доработку. При распространении нужно сохранять лицензию и указание авторов исходника — см. [LICENSE](LICENSE).
-
-### Что добавлено в Jackdaw
-
-Доработки поверх исходного клиента — **активная разработка**, список растёт:
-
-- **OWA shared mailboxes** — синхронизация дополнительных ящиков: письма, категории, уведомления *(ключевая фича)*
-- **Боковая панель** — виджеты, календарь, встроенные web-панели (Gemini и др.)
-- **Переработанный UI** — брендинг Jackdaw, почтовые layout'ы (широкий табличный / 3-pane), лента, ribbon, плавающий композер
-- **Почта** — тёмная тема HTML-писем, комбинации категорий OWA, undo удаления, дерево папок, quick filters
-- **Стабилизация** — исправления OWA sync, стартовые папки, splitter'ы, то, что в upstream работало криво
-
-**В планах:** OTA-обновления из Git, сайт [jackdaw.app](https://jackdaw.app), полировка панелей и тулбара, дальнейшие OWA-фичи.
+- **OWA shared mailboxes** — синхронизация дополнительных ящиков: письма, категории, уведомления
+- **Боковая панель** — виджеты, календарь, встроенные web-панели
+- **Обновлённый UI** — layout'ы почты, ribbon, плавающий композер, тема Jackdaw
+- **Почта** — тёмная тема HTML-писем, категории OWA, undo удаления, дерево папок
+- **В планах** — OTA-обновления, [jackdaw.app](https://jackdaw.app), дальнейшие OWA-фичи
 
 ### Возможности
 
@@ -103,7 +89,7 @@ lib/        — общие библиотеки (JPC protocol)
 
 ### Лицензия
 
-[EUPL-1.2](LICENSE) — форк и доработка разрешены. Копирайт исходных авторов (Ben Bucksch, Beonex GmbH) сохранён. Отдельные модули (Exchange, WebMail, Meet) — proprietary, см. LICENSE.
+[EUPL-1.2](LICENSE). Отдельные модули (Exchange, WebMail, Meet) — proprietary, см. LICENSE.
 
 ### Контакты
 
@@ -119,29 +105,15 @@ lib/        — общие библиотеки (JPC protocol)
 
 **Jackdaw** is a mail client with calendar and contacts for Exchange / OWA, EWS, ActiveSync, Graph, IMAP/JMAP, and CardDAV/CalDAV.
 
-**Electron** (desktop) + **Capacitor** (mobile), **Svelte + TypeScript** UI.
+**Electron** desktop, **Capacitor** mobile, **Svelte + TypeScript** UI. Maintained by **[uugsx](https://github.com/Uugsx)**.
 
-### Origin
+### Highlights
 
-Jackdaw is a **continued fork and rework** of an open-source mail client under [EUPL-1.2](LICENSE).
-
-The original codebase is the work of **Ben Bucksch**, **Beonex GmbH**, and other contributors. Jackdaw was **not written from scratch** — the existing foundation was taken forward, broken parts were fixed, and new features were added.
-
-**Jackdaw is now maintained by [uugsx](https://github.com/Uugsx)** — rebranding, stabilization, UI, and OWA protocol work.
-
-> EUPL allows forking and modification. Distribution requires keeping the license and upstream attribution — see [LICENSE](LICENSE).
-
-### What's new in Jackdaw
-
-Work on top of the original client — **active development**, list keeps growing:
-
-- **OWA shared mailboxes** — sync delegated mailboxes: messages, categories, notifications *(flagship feature)*
-- **Sidebar panel** — widgets, mini-calendar, embedded web panels (Gemini, etc.)
-- **Redesigned UI** — Jackdaw branding, mail layouts (wide table / 3-pane), ribbon, floating composer
-- **Mail** — dark-mode HTML rendering, OWA category combinations, delete undo, folder tree, quick filters
-- **Stabilization** — OWA sync fixes, startup folders, splitters, broken upstream behaviour fixed
-
-**Roadmap:** OTA updates from Git, [jackdaw.app](https://jackdaw.app) website, sidebar/toolbar polish, more OWA features.
+- **OWA shared mailboxes** — delegated inboxes: messages, categories, notifications
+- **Sidebar** — widgets, mini-calendar, embedded web panels
+- **Updated UI** — mail layouts, ribbon, floating composer, Jackdaw theme
+- **Mail** — dark-mode HTML, OWA categories, delete undo, folder tree
+- **Roadmap** — OTA updates, [jackdaw.app](https://jackdaw.app), more OWA work
 
 ### Features
 
@@ -198,7 +170,7 @@ lib/        — shared libraries (JPC protocol)
 
 ### License
 
-[EUPL-1.2](LICENSE) — forking and modification allowed. Original authors' copyright (Ben Bucksch, Beonex GmbH) retained. Some modules (Exchange, WebMail, Meet) are proprietary — see LICENSE.
+[EUPL-1.2](LICENSE). Some modules (Exchange, WebMail, Meet) are proprietary — see LICENSE.
 
 ### Links
 
@@ -210,6 +182,7 @@ lib/        — shared libraries (JPC protocol)
 
 <div align="center">
 
-<sub>Jackdaw · EUPL fork, maintained by <a href="https://github.com/Uugsx">uugsx</a> · Private repository</sub>
+<sub>Jackdaw · <a href="https://github.com/Uugsx">uugsx</a> · <a href="LICENSE">EUPL-1.2</a></sub><br>
+<sub>Based on prior open-source work by Ben Bucksch, Beonex GmbH and contributors.</sub>
 
 </div>
