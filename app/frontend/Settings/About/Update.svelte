@@ -1,7 +1,5 @@
 <vbox class="update">
-  {#if checking && phase === "idle"}
-    <div class="status">{$t`Checking for updates…`}</div>
-  {:else if phase === "checking"}
+  {#if phase === "checking"}
     <div class="status">{$t`Checking for updates…`}</div>
   {:else if phase === "downloading"}
     <div class="status">
@@ -44,7 +42,6 @@
   let progress = 0;
   let version: string | null = null;
   let readyToInstall = false;
-  let checking = true;
   let installingUpdate = false;
   let errorEx: Error | undefined;
   let unsub: (() => void) | undefined;
@@ -54,6 +51,7 @@
     progress?: number;
     version?: string | null;
     readyToInstall?: boolean;
+    error?: string | null;
   }) {
     if (obj.phase != null) {
       phase = obj.phase;
@@ -67,6 +65,9 @@
     if (obj.readyToInstall != null) {
       readyToInstall = obj.readyToInstall;
     }
+    if (obj.error) {
+      errorEx = new Error(obj.error);
+    }
   }
 
   onMount(() => {
@@ -75,7 +76,9 @@
       unsub = status.subscribe((obj: typeof status) => syncFromBackend(obj));
       syncFromBackend(status);
     }
-    checkForUpdate(false);
+    if (phase === "idle") {
+      checkForUpdate(false);
+    }
   });
 
   onDestroy(() => {
@@ -83,15 +86,13 @@
   });
 
   async function checkForUpdate(force: boolean) {
-    checking = true;
     errorEx = undefined;
     try {
       await appGlobal.remoteApp.checkForUpdate(force);
       syncFromBackend(appGlobal.remoteApp.updateStatus ?? {});
     } catch (ex) {
       errorEx = ex as Error;
-    } finally {
-      checking = false;
+      syncFromBackend(appGlobal.remoteApp.updateStatus ?? {});
     }
   }
 
