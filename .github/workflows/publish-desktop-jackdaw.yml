@@ -23,7 +23,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      ota_build_suffix: ${{ steps.ota_suffix.outputs.value }}
+    steps:
+      - name: OTA dev version suffix
+        id: ota_suffix
+        if: github.event_name == 'push' || inputs.release_type == 'prerelease'
+        run: echo "value=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+
   mac:
+    needs: prepare
     runs-on: macos-15
     permissions:
       contents: write
@@ -32,15 +43,12 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24.x
-      - name: OTA dev version suffix
-        if: github.event_name == 'push' || inputs.release_type == 'prerelease'
-        run: echo "OTA_BUILD_SUFFIX=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_ENV"
       - run: bash jackdaw-brand.sh
         working-directory: app/build
         shell: bash
         env:
           JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
-          OTA_BUILD_SUFFIX: ${{ env.OTA_BUILD_SUFFIX }}
+          OTA_BUILD_SUFFIX: ${{ needs.prepare.outputs.ota_build_suffix }}
       - run: sudo -H pip install setuptools
       - run: cd app; yarn install
       - run: cd lib; yarn install
@@ -77,6 +85,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
   windows:
+    needs: prepare
     runs-on: windows-2022
     permissions:
       contents: write
@@ -85,10 +94,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24.x
-      - name: OTA dev version suffix
-        if: github.event_name == 'push' || inputs.release_type == 'prerelease'
-        shell: bash
-        run: echo "OTA_BUILD_SUFFIX=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_ENV"
       - run: bash fix-installer-filenames.sh
         working-directory: app/build
         shell: bash
@@ -97,7 +102,7 @@ jobs:
         shell: bash
         env:
           JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
-          OTA_BUILD_SUFFIX: ${{ env.OTA_BUILD_SUFFIX }}
+          OTA_BUILD_SUFFIX: ${{ needs.prepare.outputs.ota_build_suffix }}
       - run: cd app; yarn install
       - run: cd lib; yarn install
       - run: cd desktop; yarn install
