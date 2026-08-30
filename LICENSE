@@ -3,6 +3,11 @@ Beonex GmbH and others, and is licensed under the EUPL 1.2 only,
 unless specific subdirectories or files specify another license.
 For such subdirectories or files, the given license applies.
 
+Jackdaw is an independent continuation of the open-source mail client
+codebase, maintained by uugsx (https://github.com/Uugsx).
+Jackdaw-specific development includes fixes, rebranding, UI improvements,
+and OWA shared mailbox (delegated inbox) synchronization.
+
 The following features are proprietary:
 * Exchange support (because Microsoft is also proprietary)
   `app/logic/Mail/EWS/`, `OWA/`, `ActiveSync/`, `Graph/`
