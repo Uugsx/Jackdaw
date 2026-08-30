@@ -46,6 +46,13 @@ fi
 
 echo Jackdaw brand sync done.
 
+mkdir -p ../../desktop/build
+if [ -n "${JACKDAW_GH_UPDATE_TOKEN:-}" ]; then
+  printf '%s' "$JACKDAW_GH_UPDATE_TOKEN" > ../../desktop/build/gh-update-token.txt
+else
+  : > ../../desktop/build/gh-update-token.txt
+fi
+
 if command -v rg >/dev/null 2>&1; then
   if rg -i "parula|mustang" ../.. --glob '!**/node_modules/**' --glob '!**/.git/**' --glob '!**/package-lock.json' --glob '!**/yarn.lock' -q; then
     echo "ERROR: forbidden legacy brand name found in the repository (Parula/Mustang)"

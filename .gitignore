@@ -16,3 +16,4 @@ claude/
 .claude/
 .devcontainer/
 app/logic/Auth/OAuth2Secrets.user.ts
+desktop/build/gh-update-token.txt
