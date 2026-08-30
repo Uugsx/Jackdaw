@@ -200,21 +200,24 @@ async function whenReady() {
     }
   })
 
+const kBackgroundUpdateCheckMs = 4 * 60 * 60 * 1000; // every 4 hours
+
   try {
     await prepareUpdaterAuth();
     await checkForUpdateAndNotify();
     setInterval(async () => {
       try {
         if (updateState.haveUpdate) {
-          console.log(`Already have update waiting.`);
-          return; // `checkForUpdates()` downloads the update on every call
+          return;
         }
-        console.log("Routinely checking for app updates...");
+        if (updateState.phase === "available" || updateState.phase === "downloading" || updateState.phase === "downloaded") {
+          return;
+        }
         await checkForUpdateAndNotify();
       } catch (ex) {
         console.error(ex);
       }
-    }, 60 * 60 * 1000); // once per hour - TODO Change to once per day, when we make less frequent releases
+    }, kBackgroundUpdateCheckMs);
   } catch (ex) {
     console.error(ex);
   }
