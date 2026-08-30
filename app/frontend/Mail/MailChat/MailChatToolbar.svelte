@@ -85,15 +85,17 @@
   import { t } from "../../../l10n/l10n";
   import { catchErrors } from "../../Util/error";
 
+  import { computeCanReplyAll, subscribeCanReplyAll } from "../canReplyAll";
+
   export let message: EMail;
 
-  $: _replyAllRecipientsRev = message ? [
-    message.to?.length ?? 0,
-    message.cc?.length ?? 0,
-    message.bcc?.length ?? 0,
-    message.outgoing,
-  ] : [];
-  $: canReplyAll = message?.compose.canReplyAll() ?? false;
+  let replyAllRev = 0;
+  let replyAllUnsub: (() => void) | null = null;
+  $: {
+    replyAllUnsub?.();
+    replyAllUnsub = subscribeCanReplyAll(message, () => replyAllRev++);
+  }
+  $: canReplyAll = (replyAllRev, computeCanReplyAll(message));
 
   async function toggleRead() {
     await message.markRead(!message.isRead);

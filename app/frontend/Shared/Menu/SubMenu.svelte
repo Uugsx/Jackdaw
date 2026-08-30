@@ -27,6 +27,8 @@
   <!-- Portal to body: parent menu popup uses transform, which would clip fixed children -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <vbox class="submenu-flyout"
+    class:opens-left={opensLeft}
+    class:opens-right={!opensLeft}
     bind:this={flyoutE}
     use:portalToBody
     style="top: {flyoutTop}px; left: {flyoutLeft}px"
@@ -58,7 +60,10 @@
   let flyoutE: HTMLElement;
   let flyoutTop = 0;
   let flyoutLeft = 0;
+  let opensLeft = false;
   let closeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const FLYOUT_OVERLAP_PX = 12;
 
   type SubmenuRegistry = { register: (fn: () => void) => () => void };
   let submenuRegistry = getContext<SubmenuRegistry | undefined>("submenuRegistry");
@@ -83,20 +88,33 @@
     }
   }
 
+  function measureFlyoutWidth(): number {
+    if (flyoutE?.offsetWidth) {
+      return flyoutE.offsetWidth;
+    }
+    let menuEl = anchorE?.closest(".menu") as HTMLElement | null;
+    if (menuEl?.offsetWidth) {
+      return menuEl.offsetWidth;
+    }
+    return 220;
+  }
+
   function positionFlyout() {
     if (!anchorE) {
       return;
     }
     let rect = anchorE.getBoundingClientRect();
-    let width = 220;
-    // Overlap the trigger by 6px so the pointer never crosses a dead gap.
-    let left = rect.right - 6;
-    if (left + width > window.innerWidth - 8) {
-      left = Math.max(8, rect.left - width + 6);
-    }
+    let width = measureFlyoutWidth();
     let maxH = Math.min(window.innerHeight * 0.5, 360);
     flyoutTop = Math.min(Math.max(8, rect.top), window.innerHeight - maxH - 8);
-    flyoutLeft = left;
+
+    opensLeft = rect.right + width - FLYOUT_OVERLAP_PX > window.innerWidth - 8;
+    if (opensLeft) {
+      flyoutLeft = rect.left - width + FLYOUT_OVERLAP_PX;
+    } else {
+      flyoutLeft = rect.right - FLYOUT_OVERLAP_PX;
+    }
+    flyoutLeft = Math.max(8, Math.min(flyoutLeft, window.innerWidth - width - 8));
   }
 
   async function open() {
@@ -241,10 +259,26 @@
       0 12px 28px rgba(var(--shadow-color), 0.22);
     padding: 4px 0;
     pointer-events: auto;
-    overflow: hidden;
+    overflow: visible;
+  }
+  /* Invisible bridge so the pointer can reach the flyout without closing the menu. */
+  .submenu-flyout.opens-left::after,
+  .submenu-flyout.opens-right::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 14px;
+  }
+  .submenu-flyout.opens-left::after {
+    inset-inline-end: -14px;
+  }
+  .submenu-flyout.opens-right::before {
+    inset-inline-start: -14px;
   }
   .submenu-scroll {
     max-height: min(50vh, 360px);
     overflow-y: auto;
+    border-radius: inherit;
   }
 </style>

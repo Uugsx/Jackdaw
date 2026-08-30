@@ -1,4 +1,4 @@
-<Menu bind:isMenuOpen anchor={contextMenuAnchor} placement="bottom-start" dismissOnPointerLeave>
+<Menu bind:isMenuOpen anchor={contextMenuAnchor} placement="bottom-start" dismissOnPointerLeave dismissDelayMs={600}>
   <slot />
 </Menu>
 

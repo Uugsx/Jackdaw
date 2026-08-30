@@ -1,4 +1,4 @@
-<hbox flex class="widget-sidebar" bind:this={sidebarE} style={panelWidthStyle}>
+<hbox flex class="widget-sidebar" bind:this={sidebarE}>
   <vbox flex class="widget-panel" class:collapsed={!$widgetsExpanded.value}>
     {#if activeWidget && $widgetsExpanded.value}
       <hbox class="widget-header">
@@ -161,11 +161,6 @@
 
   $: widgets = normalizeWidgetList($widgetsListSetting.value);
   $: activeWidget = widgets.find(w => w.id === $activeWidgetIdSetting.value) ?? widgets[0] ?? null;
-  $: activeWebSettings = activeWidget ? getWidgetWebSettings(activeWidget) : null;
-  $: panelWidthStyle = activeWebSettings?.customWidthPx
-    ? `--widget-panel-width: ${activeWebSettings.customWidthPx}px;`
-    : "";
-
   let addOpen = false;
   let addAnchor: HTMLButtonElement;
   let widgetContextMenu: ContextMenu;
@@ -212,9 +207,11 @@
 
 <style>
   .widget-sidebar {
+    width: 100%;
     min-width: 0;
     min-height: 0;
     height: 100%;
+    overflow: hidden;
     background: var(--leftbar-bg);
     color: var(--leftbar-fg);
     border-inline-start: 1px solid var(--glass-border-subtle);
@@ -223,11 +220,7 @@
     min-width: 0;
     min-height: 0;
     flex: 1 1 auto;
-  }
-  .widget-sidebar[style*="--widget-panel-width"] .widget-panel:not(.collapsed) {
-    flex: 0 0 var(--widget-panel-width);
-    width: var(--widget-panel-width);
-    max-width: var(--widget-panel-width);
+    max-width: calc(100% - 44px);
   }
   .widget-panel.collapsed {
     flex: 0 0 0;

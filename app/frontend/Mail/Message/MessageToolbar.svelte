@@ -162,17 +162,17 @@
   import { catchErrors } from "../../Util/error";
   import { deleteMessagesFromUI } from "../mailDeleteUndo";
   import { appGlobal } from "../../../logic/app";
+  import { computeCanReplyAll, subscribeCanReplyAll } from "../canReplyAll";
 
   export let message: EMail;
 
-  /* <copied to="MailChatToolbar.svelte" /> */
-  $: _replyAllRecipientsRev = message ? [
-    message.to?.length ?? 0,
-    message.cc?.length ?? 0,
-    message.bcc?.length ?? 0,
-    message.outgoing,
-  ] : [];
-  $: canReplyAll = message?.compose.canReplyAll() ?? false;
+  let replyAllRev = 0;
+  let replyAllUnsub: (() => void) | null = null;
+  $: {
+    replyAllUnsub?.();
+    replyAllUnsub = subscribeCanReplyAll(message, () => replyAllRev++);
+  }
+  $: canReplyAll = (replyAllRev, computeCanReplyAll(message));
 
   function reply() {
     catchErrors(async () => {

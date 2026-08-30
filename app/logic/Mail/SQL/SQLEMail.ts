@@ -50,6 +50,9 @@ export class SQLEMail {
       if (!email.sent) {
         email.sent = new Date();
       }
+      if (!email.received) {
+        email.received = email.sent;
+      }
       let contact = email.contact as PersonUID;
       // Index HTML-only bodies so global search can find them
       let plaintext = email.rawText

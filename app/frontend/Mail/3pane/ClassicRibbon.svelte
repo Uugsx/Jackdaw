@@ -216,6 +216,7 @@
   import { get } from "svelte/store";
   import { selectedMessages as selectedMessagesStore } from "../Selected";
   import { t, gt } from "../../../l10n/l10n";
+  import { computeCanReplyAll, subscribeCanReplyAll } from "../canReplyAll";
 
   export let account: MailAccount;
   export let folder: Folder;
@@ -230,13 +231,13 @@
   // stale enabled state after a selection change. It stays in the click
   // handlers below, where a point-in-time snapshot is what we want.
   $: hasSelection = !!(message || selectedMessages?.hasItems || $selectedMessagesStore?.hasItems);
-  $: _replyAllRecipientsRev = message ? [
-    message.to?.length ?? 0,
-    message.cc?.length ?? 0,
-    message.bcc?.length ?? 0,
-    message.outgoing,
-  ] : [];
-  $: canReplyAll = !!(message && message.compose.canReplyAll());
+  let replyAllRev = 0;
+  let replyAllUnsub: (() => void) | null = null;
+  $: {
+    replyAllUnsub?.();
+    replyAllUnsub = subscribeCanReplyAll(message, () => replyAllRev++);
+  }
+  $: canReplyAll = (replyAllRev, computeCanReplyAll(message));
   // Bump after mutations so labels refresh without $message store sub (null-safe)
   let flagsEpoch = 0;
   $: messageSpam = flagsEpoch >= 0 && message?.isSpam;

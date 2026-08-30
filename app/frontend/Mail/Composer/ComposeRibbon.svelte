@@ -12,6 +12,7 @@
     </hbox>
 
     {#if activeTab === "message"}
+      <HorizontalScroll edgeButtons>
       <hbox class="ribbon-row">
         <vbox class="group">
           <hbox class="group-row send-row">
@@ -64,17 +65,21 @@
           <hbox class="group-row font-row">
             <select class="ribbon-select font-family" title={$t`Font`}
               value={selectedFontFamily}
+              on:mousedown={rememberEditorSelection}
               on:change={onFontFamilyChange}>
               {#each composeFontFamilies as font}
                 <option value={font.value}>{font.label()}</option>
               {/each}
             </select>
             <select class="ribbon-select font-size" title={$t`Font size`}
-              value={selectedFontSize}
+              value={displayFontSize}
+              on:mousedown={rememberEditorSelection}
               on:change={onFontSizeChange}>
-              <option value="">{$t`Size`}</option>
+              {#if selectedFontSize && !composeFontSizes.includes(selectedFontSize)}
+                <option value={selectedFontSize}>{formatFontSizeLabel(selectedFontSize)}</option>
+              {/if}
               {#each composeFontSizes as size}
-                <option value={size}>{size}</option>
+                <option value={size}>{formatFontSizeLabel(size)}</option>
               {/each}
             </select>
           </hbox>
@@ -99,17 +104,24 @@
               on:click={() => editor.chain().focus().toggleStrike().run()}>
               <StrikethroughIcon size="18px" />
             </button>
-            <span class="color-swatch-wrap" title={$t`Font color`}>
-              <input type="color" class="color-swatch" bind:value={textColor}
-                on:input={onTextColorChange} />
-            </span>
-            {#each composeHighlightColors as color}
-              <button type="button" class="ribbon-btn highlight-swatch"
-                class:on={editor.isActive("highlight", { color })}
-                title={$t`Text highlight color`}
-                style:--swatch-color={color}
-                on:click={() => editor.chain().focus().toggleHighlight({ color }).run()} />
-            {/each}
+            <button type="button" class="ribbon-btn color-tool"
+              class:on={!!selectedTextColor}
+              bind:this={textColorMenuAnchor}
+              title={$t`Font color`}
+              on:mousedown={rememberEditorSelection}
+              on:click|stopPropagation={toggleTextColorMenu}>
+              <span class="font-color-glyph">A</span>
+              <span class="color-tool-bar" style:background={textColorBar} />
+            </button>
+            <button type="button" class="ribbon-btn color-tool"
+              class:on={editor.isActive("highlight")}
+              bind:this={highlightMenuAnchor}
+              title={$t`Text highlight color`}
+              on:mousedown={rememberEditorSelection}
+              on:click|stopPropagation={toggleHighlightMenu}>
+              <HighlighterIcon size="18px" />
+              <span class="color-tool-bar" style:background={highlightBarColor} />
+            </button>
           </hbox>
           <span class="group-label">{$t`Basic Text`}</span>
         </vbox>
@@ -241,7 +253,9 @@
           <span class="group-label">{$t`Tags`}</span>
         </vbox>
       </hbox>
+      </HorizontalScroll>
     {:else}
+      <HorizontalScroll edgeButtons>
       <hbox class="ribbon-row options-row">
         <vbox class="group">
           <hbox class="group-row">
@@ -296,6 +310,7 @@
           <span class="group-label">{$t`Zoom`}</span>
         </vbox>
       </hbox>
+      </HorizontalScroll>
     {/if}
 
     {#if isEditingLink}
@@ -326,6 +341,50 @@
     </Menu>
   {/if}
 
+  {#if textColorMenuAnchor}
+    <Menu bind:isMenuOpen={textColorMenuOpen} anchor={textColorMenuAnchor}
+      boundaryElSel="body" placement="bottom-start" disableReferenceHide={true}>
+      <vbox class="color-picker-popup">
+        <button type="button" class="color-picker-action"
+          on:click={() => applyTextColor(null)}>
+          {$t`Automatic`}
+        </button>
+        <div class="color-grid">
+          {#each composeTextColors as color}
+            <button type="button" class="color-cell" style:background={color}
+              class:selected={selectedTextColor === color}
+              title={color}
+              on:click={() => applyTextColor(color)} />
+          {/each}
+        </div>
+      </vbox>
+    </Menu>
+  {/if}
+
+  {#if highlightMenuAnchor}
+    <Menu bind:isMenuOpen={highlightMenuOpen} anchor={highlightMenuAnchor}
+      boundaryElSel="body" placement="bottom-start" disableReferenceHide={true}>
+      <vbox class="color-picker-popup">
+        <label class="color-picker-toggle">
+          <input type="checkbox" bind:checked={highlightHighContrastOnly} />
+          {$t`High contrast only`}
+        </label>
+        <button type="button" class="color-picker-action"
+          on:click={() => applyHighlight(null)}>
+          {$t`No color`}
+        </button>
+        <div class="color-grid">
+          {#each visibleHighlightColors as color}
+            <button type="button" class="color-cell" style:background={color}
+              class:selected={editor?.isActive("highlight", { color })}
+              title={color}
+              on:click={() => applyHighlight(color)} />
+          {/each}
+        </div>
+      </vbox>
+    </Menu>
+  {/if}
+
   <input type="file"
     class="image-file-input"
     accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
@@ -341,10 +400,18 @@
     composeFontFamilies,
     composeFontSizes,
     composeHighlightColors,
+    composeHighlightColorsHighContrast,
+    composeTextColors,
+    composeDefaultFontSize,
+    composeDefaultHighlightColor,
     currentFontFamily,
     currentFontSize,
-    currentTextColor,
+    highlightPreviewColor,
+    formatFontSizeLabel,
+    fontSizeToCSS,
+    normalizeFontSizeValue,
   } from "../../Shared/Editor/composeEditorExtensions";
+  import { onDestroy } from "svelte";
   import { t } from "../../../l10n/l10n";
   import SendIcon from "lucide-svelte/icons/send";
   import ClipboardPasteIcon from "lucide-svelte/icons/clipboard-paste";
@@ -379,11 +446,13 @@
   import MailCheckIcon from "lucide-svelte/icons/mail-check";
   import MailOpenIcon from "lucide-svelte/icons/mail-open";
   import ChevronDownIcon from "lucide-svelte/icons/chevron-down";
+  import HighlighterIcon from "lucide-svelte/icons/highlighter";
   import CheckIcon from "lucide-svelte/icons/check";
   import ListChecksIcon from "lucide-svelte/icons/list-checks";
   import FlagIcon from "lucide-svelte/icons/flag";
   import Menu from "../../Shared/Menu/Menu.svelte";
   import MenuItem from "../../Shared/Menu/MenuItem.svelte";
+  import HorizontalScroll from "../../Shared/HorizontalScroll.svelte";
   import type { MailImportanceLevel } from "../../../logic/Mail/EMail";
 
   export let editor: Editor;
@@ -421,44 +490,127 @@
   let pasteMenuAnchor: HTMLButtonElement;
   let sendMenuOpen = false;
   let sendMenuAnchor: HTMLButtonElement;
+  let textColorMenuOpen = false;
+  let textColorMenuAnchor: HTMLButtonElement;
+  let highlightMenuOpen = false;
+  let highlightMenuAnchor: HTMLButtonElement;
+  let highlightHighContrastOnly = false;
 
   type PasteMode = "default" | "source" | "merge" | "text";
 
   let isEditingLink = false;
   let linkTargetURL = "";
   let imageFileEl: HTMLInputElement;
-  let textColor = "#0B0F14";
+  let styleTick = 0;
+  let styleListenerCleanup: (() => void) | null = null;
+  let subscribedEditor: Editor | null = null;
 
-  $: selectedFontFamily = editor ? currentFontFamily(editor) : "";
-  $: selectedFontSize = editor ? currentFontSize(editor) : "";
-  $: if (editor) {
-    textColor = currentTextColor(editor);
+  $: if (editor && editor !== subscribedEditor) {
+    styleListenerCleanup?.();
+    subscribedEditor = editor;
+    let bump = () => styleTick++;
+    editor.on("selectionUpdate", bump);
+    editor.on("transaction", bump);
+    styleListenerCleanup = () => {
+      editor.off("selectionUpdate", bump);
+      editor.off("transaction", bump);
+    };
+  } else if (!editor) {
+    styleListenerCleanup?.();
+    styleListenerCleanup = null;
+    subscribedEditor = null;
   }
+
+  onDestroy(() => {
+    styleListenerCleanup?.();
+    styleListenerCleanup = null;
+    subscribedEditor = null;
+  });
+
+  $: selectedFontFamily = editor ? (styleTick, currentFontFamily(editor)) : "";
+  $: selectedFontSize = editor ? (styleTick, currentFontSize(editor)) : "";
+  $: displayFontSize = selectedFontSize || normalizeFontSizeValue(composeDefaultFontSize);
+  $: selectedTextColor = editor ? (styleTick, editor.getAttributes("textStyle").color ?? "") : "";
+  $: textColorBar = selectedTextColor || "var(--headerbar-fg)";
+  $: highlightBarColor = editor ? (styleTick, highlightPreviewColor(editor)) : composeDefaultHighlightColor;
+  $: visibleHighlightColors = highlightHighContrastOnly
+    ? composeHighlightColorsHighContrast
+    : composeHighlightColors;
   $: if (openLinkDialog && editor) {
     openLinkDialog = false;
     onLinkOpen();
   }
 
+  let savedSelection: { from: number; to: number } | null = null;
+
+  function rememberEditorSelection() {
+    if (!editor) {
+      return;
+    }
+    let { from, to } = editor.state.selection;
+    savedSelection = { from, to };
+  }
+
+  function chainWithSavedSelection() {
+    let chain = editor.chain().focus();
+    if (savedSelection) {
+      chain = chain.setTextSelection(savedSelection);
+    }
+    return chain;
+  }
+
+  function clearSavedSelection() {
+    savedSelection = null;
+  }
+
   function onFontFamilyChange(event: Event) {
     let value = (event.currentTarget as HTMLSelectElement).value;
     if (value) {
-      editor.chain().focus().setFontFamily(value).run();
+      chainWithSavedSelection().setFontFamily(value).run();
     } else {
-      editor.chain().focus().unsetFontFamily().run();
+      chainWithSavedSelection().unsetFontFamily().run();
     }
+    clearSavedSelection();
   }
 
   function onFontSizeChange(event: Event) {
     let value = (event.currentTarget as HTMLSelectElement).value;
     if (value) {
-      editor.chain().focus().setFontSize(`${value}px`).run();
+      chainWithSavedSelection().setFontSize(value).run();
     } else {
-      editor.chain().focus().unsetFontSize().run();
+      chainWithSavedSelection().unsetFontSize().run();
     }
+    clearSavedSelection();
   }
 
-  function onTextColorChange() {
-    editor.chain().focus().setColor(textColor).run();
+  function applyTextColor(color: string | null) {
+    if (color) {
+      chainWithSavedSelection().setColor(color).run();
+    } else {
+      chainWithSavedSelection().unsetColor().run();
+    }
+    clearSavedSelection();
+    textColorMenuOpen = false;
+  }
+
+  function toggleTextColorMenu() {
+    highlightMenuOpen = false;
+    textColorMenuOpen = !textColorMenuOpen;
+  }
+
+  function toggleHighlightMenu() {
+    textColorMenuOpen = false;
+    highlightMenuOpen = !highlightMenuOpen;
+  }
+
+  function applyHighlight(color: string | null) {
+    if (color) {
+      chainWithSavedSelection().setHighlight({ color }).run();
+    } else {
+      chainWithSavedSelection().unsetHighlight().run();
+    }
+    clearSavedSelection();
+    highlightMenuOpen = false;
   }
 
   function insertTable() {
@@ -608,11 +760,6 @@
     align-items: stretch;
     gap: 2px;
     padding: 6px 8px 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .ribbon-row::-webkit-scrollbar {
-    display: none;
   }
   .group {
     align-items: center;
@@ -651,32 +798,75 @@
     min-width: 3.5em;
     max-width: 4em;
   }
-  .color-swatch-wrap {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
+  .color-tool {
+    position: relative;
+    gap: 0;
+    padding-block: 2px 1px;
   }
-  .color-swatch {
-    width: 18px;
-    height: 18px;
-    padding: 0;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: transparent;
+  .font-color-glyph {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--headerbar-fg);
+  }
+  .color-tool-bar {
+    display: block;
+    width: 16px;
+    height: 3px;
+    border-radius: 1px;
+    margin-block-start: 1px;
+    border: 1px solid color-mix(in srgb, var(--toolbar-control-border) 80%, transparent);
+  }
+  .color-picker-popup {
+    gap: 8px;
+    padding: 8px;
+    min-width: 168px;
+  }
+  .color-picker-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--fg);
+    cursor: default;
+    user-select: none;
+  }
+  .color-picker-action {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 28px;
+    padding: 4px 8px;
+    border: 1px solid var(--toolbar-control-border);
+    border-radius: 6px;
+    background: var(--toolbar-control-bg);
+    color: var(--fg);
+    font: inherit;
+    font-size: 11px;
+    text-align: start;
     cursor: default;
   }
-  .highlight-swatch {
-    width: 18px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0;
-    border-radius: 4px;
-    background: var(--swatch-color);
-    border: 1px solid color-mix(in srgb, var(--swatch-color) 70%, var(--border));
+  .color-picker-action:hover {
+    background: var(--hover-bg);
+    color: var(--hover-fg);
   }
-  .highlight-swatch.on {
+  .color-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 28px);
+    gap: 4px;
+  }
+  .color-cell {
+    width: 28px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--toolbar-control-border);
+    border-radius: 2px;
+    cursor: default;
+  }
+  .color-cell:hover {
+    outline: 2px solid var(--icon-primary);
+    outline-offset: 1px;
+  }
+  .color-cell.selected {
     outline: 2px solid var(--icon-primary);
     outline-offset: 1px;
   }
@@ -738,6 +928,9 @@
   }
   .ribbon-btn:hover:not(:disabled) {
     background: var(--hover-bg);
+    color: var(--hover-fg);
+  }
+  .ribbon-btn.color-tool:hover:not(:disabled) .font-color-glyph {
     color: var(--hover-fg);
   }
   .ribbon-btn:disabled {

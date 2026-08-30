@@ -26,7 +26,7 @@
   /** Under/above which element the popup window should appear.
    * The popup will not cover this element, but be just above/below it.
    * in */
-  export let popupAnchor: HTMLElement;
+  export let popupAnchor: HTMLElement | { getBoundingClientRect(): DOMRect };
   /** Where the popup should appear in relation to the anchor.
    * above/below ("top"/"bottom") and left/right ("start"/"end")
    * in */
@@ -42,6 +42,8 @@
    * in */
   export let boundaryElSel: string;
   export let autoClose: boolean = true;
+  /** Popper hides the popup when the anchor sits in overflow:auto (ribbon scroll). */
+  export let disableReferenceHide = false;
   /** Close when the pointer leaves the popup, anchor, and any open submenu flyout. */
   export let dismissOnPointerLeave = false;
   export let dismissDelayMs = 350;
@@ -65,14 +67,13 @@
           boundary: document.querySelector(boundaryElSel),
         },
       },
-      {
-        name: 'hide',
-      },
+      disableReferenceHide ? { name: 'hide', enabled: false } : { name: 'hide' },
     ],
   };
   let contentObserver: ResizeObserver;
   let leaveTimer: ReturnType<typeof setTimeout> | null = null;
   let anchorLeaveHook: { destroy?(): void } | null = null;
+  let anchorElement: HTMLElement | null = null;
 
   function clearLeaveTimer() {
     if (leaveTimer) {
@@ -91,10 +92,21 @@
     if (popupAnchor instanceof Node && popupAnchor.contains(target)) {
       return true;
     }
+    if (anchorElement?.contains(target)) {
+      return true;
+    }
     if (target instanceof Element && target.closest(".submenu-flyout")) {
       return true;
     }
     return false;
+  }
+
+  function hasOpenSubmenuFlyout(): boolean {
+    return !!document.querySelector(".submenu-flyout");
+  }
+
+  function hasOpenSubmenuTrigger(): boolean {
+    return !!document.querySelector(".submenu-item.open");
   }
 
   function scheduleDismissOnLeave() {
@@ -102,10 +114,14 @@
       return;
     }
     clearLeaveTimer();
+    let delay = hasOpenSubmenuFlyout() || hasOpenSubmenuTrigger() ? 800 : dismissDelayMs;
     leaveTimer = setTimeout(() => {
       leaveTimer = null;
+      if (hasOpenSubmenuFlyout() || hasOpenSubmenuTrigger()) {
+        return;
+      }
       popupOpen = false;
-    }, dismissDelayMs);
+    }, delay);
   }
 
   function onPointerEnterSurface() {
@@ -113,9 +129,10 @@
   }
 
   function onPointerLeaveSurface(event: PointerEvent) {
-    if (!isInsideMenuSurface(event.relatedTarget)) {
-      scheduleDismissOnLeave();
+    if (isInsideMenuSurface(event.relatedTarget)) {
+      return;
     }
+    scheduleDismissOnLeave();
   }
 
   function onAnchorPointerEnter() {
@@ -126,6 +143,11 @@
     if (!isInsideMenuSurface(event.relatedTarget)) {
       scheduleDismissOnLeave();
     }
+  }
+
+  function isPopperReference(anchor: unknown): anchor is HTMLElement | { getBoundingClientRect(): DOMRect } {
+    return anchor instanceof HTMLElement ||
+      (!!anchor && typeof (anchor as { getBoundingClientRect?: unknown }).getBoundingClientRect === "function");
   }
 
   function isDomAnchor(anchor: unknown): anchor is HTMLElement {
@@ -153,11 +175,16 @@
 
   // popupRef is not yet defined when use: hook in parent is invoked, so do it manually
   let popupHook: { destroy?(); };
-  if (popupAnchor) {
-    popupHook = popupRef(popupAnchor);
-    popupAnchor = null;
+  $: if (isPopperReference(popupAnchor)) {
+    anchorElement = popupAnchor instanceof HTMLElement ? popupAnchor : null;
+    if (popupRef) {
+      popupHook?.destroy?.();
+      popupHook = popupRef(popupAnchor);
+    }
   }
-  $: popupAnchor && popupRef && (popupHook = popupRef(popupAnchor));
+  $: if (popupOpen && popupHook && isPopperReference(popupAnchor)) {
+    void getInstance()?.update();
+  }
   onDestroy(() => {
     popupHook?.destroy();
     anchorLeaveHook?.destroy?.();
@@ -167,6 +194,9 @@
 
   function onClickOutside(event: Event) {
     if (!autoClose || !popupOpen) {
+      return;
+    }
+    if (anchorElement && event.target instanceof Node && anchorElement.contains(event.target)) {
       return;
     }
     if (isDomAnchor(popupAnchor) && event.target instanceof Node && popupAnchor.contains(event.target)) {

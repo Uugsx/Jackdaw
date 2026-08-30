@@ -183,17 +183,19 @@
   import { t } from "../../../l10n/l10n";
   import { sanitize } from "../../../../lib/util/sanitizeDatatypes";
 
+  import { computeCanReplyAll, subscribeCanReplyAll } from "../canReplyAll";
+
   export let message: EMail;
   export let printE: Print | null = null;
   export let onMove: (() => void) | null = null;
 
-  $: _replyAllRecipientsRev = message ? [
-    message.to?.length ?? 0,
-    message.cc?.length ?? 0,
-    message.bcc?.length ?? 0,
-    message.outgoing,
-  ] : [];
-  $: canReplyAllMenu = message?.compose.canReplyAll() ?? false;
+  let replyAllRev = 0;
+  let replyAllUnsub: (() => void) | null = null;
+  $: {
+    replyAllUnsub?.();
+    replyAllUnsub = subscribeCanReplyAll(message, () => replyAllRev++);
+  }
+  $: canReplyAllMenu = (replyAllRev, computeCanReplyAll(message));
 
   function actionTargets(): EMail[] {
     return ($selectedMessages?.hasItems && $selectedMessages.contains(message)

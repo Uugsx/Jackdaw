@@ -107,12 +107,12 @@
     --headerbar-fg: #C5CDD6;
     --appbar-bg: #1F2933;
     --appbar-fg: #F6F7F9;
-    --border: #2A3441;
+    --border: #323D4A;
     --outstanding-bg: #6B7280;
     --outstanding-fg: #E5E7EB;
     --input-bg: transparent;
     --input-fg: fieldtext;
-    --input-line: #2A3441;
+    --input-line: #384552;
     --input-placeholder: #9CA3AF;
     --input-focus: #F59E0B;
     --link-fg: #FBBF24;
@@ -130,10 +130,10 @@
     --glass-bg: rgba(22, 28, 36, 0.72);
     --glass-bg-elevated: rgba(28, 34, 44, 0.84);
     --glass-bg-subtle: rgba(18, 24, 32, 0.52);
-    --glass-border: rgba(255, 255, 255, 0.14);
-    --glass-border-subtle: rgba(255, 255, 255, 0.08);
+    --glass-border: rgba(255, 255, 255, 0.16);
+    --glass-border-subtle: rgba(255, 255, 255, 0.10);
     --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.32);
-    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.12);
     --glass-hover-bg: rgba(255, 255, 255, 0.08);
     --glass-selected-bg: rgba(255, 255, 255, 0.14);
     --glass-selected-border: rgba(245, 158, 11, 0.48);
@@ -511,31 +511,32 @@ a:hover {
     --windowheader-fg: #EEEAE3;
     --appbar-bg: rgba(26, 28, 30, 0.72);
     --appbar-fg: #EEEAE3;
-    --border: rgba(44, 47, 48, 0.88);
+    --border: rgba(58, 61, 63, 0.92);
     --input-bg: rgba(27, 29, 30, 0.82);
     --input-fg: #EEEAE3;
-    --input-line: #373939;
+    --input-line: #434546;
     --input-placeholder: #9B9891;
     --input-focus: #D79A31;
     --link-fg: #E2A842;
     --link-hover-fg: #F0BD62;
     --button-bg: rgba(26, 28, 30, 0.82);
     --button-fg: #EEEAE3;
-    --button-border: #3A3B3A;
+    --button-border: #454847;
     --button-secondary-line: #9F7029;
     --shadow-color: 0, 0, 0;
     --toolbar-control-bg: rgba(26, 28, 30, 0.82);
-    --toolbar-control-border: #353737;
+    --toolbar-control-border: #434546;
     --toolbar-control-fg: #EEEAE3;
     --danger-fg: #E17B65;
     --glass-bg: rgba(26, 28, 30, 0.68);
     --glass-bg-elevated: rgba(32, 34, 36, 0.82);
     --glass-bg-subtle: rgba(18, 20, 22, 0.52);
-    --glass-border: rgba(255, 255, 255, 0.12);
-    --glass-border-subtle: rgba(255, 255, 255, 0.06);
+    --glass-border: rgba(255, 255, 255, 0.15);
+    --glass-border-subtle: rgba(255, 255, 255, 0.095);
     --glass-hover-bg: rgba(255, 255, 255, 0.08);
     --glass-selected-bg: rgba(255, 255, 255, 0.16);
     --glass-selected-border: rgba(215, 154, 49, 0.44);
+    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.12);
     background:
       radial-gradient(1100px 600px at -10% -15%, rgba(215, 154, 49, 0.12), transparent 58%),
       radial-gradient(860px 480px at 105% 105%, rgba(80, 90, 100, 0.18), transparent 52%),
@@ -615,6 +616,18 @@ a:hover {
 }
 .main-window:not(.mobile) .menu .divider {
   margin-inline: 5px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .main-window:not(.mobile) .splitter-bar {
+    background-color: var(--glass-border-subtle);
+  }
+  .main-window:not(.mobile) .popup {
+    box-shadow:
+      var(--glass-highlight),
+      0 0 0 1px rgba(255, 255, 255, 0.07),
+      0 14px 30px rgba(var(--shadow-color), 0.28);
+  }
 }
 
 /* Fix svelte-ui dropdown */

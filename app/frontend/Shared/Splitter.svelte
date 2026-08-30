@@ -13,7 +13,7 @@
       />
     <hbox class="right" style={
       rightFixedWidth
-      ? `width: ${rightFixedWidth}px;`
+      ? `flex: 0 0 ${rightFixedWidth}px; width: ${rightFixedWidth}px; min-width: ${rightFixedWidth}px; max-width: ${rightFixedWidth}px;`
       : `flex: ${rightRatio} 0 0; min-width: ${rightMinWidth}px;`
       }>
       <ErrorBoundary>
@@ -62,6 +62,8 @@
   export let rightFixedWidth: number | null = null;
   /** If set, will save the ratio in localStorage as preference and restore it */
   export let name: string = null;
+  /** Called after the user finishes dragging the splitter bar. */
+  export let onResize: (() => void) | null = null;
 
 	const barWidth = appGlobal.isMobile ? 6 : 2;
   let rightRatio = JSON.parse(sanitize.nonemptystring(localStorage?.getItem("ui.splitter." + name), null)) ?? initialRightRatio;
@@ -126,6 +128,9 @@
       captureEl.releasePointerCapture(event.pointerId);
     }
     captureEl = null;
+    if (name) {
+      onResize?.();
+    }
   }
 
   /** Copied to <SplitterHorizontal> */
@@ -158,6 +163,13 @@
 
   .left {
     flex: 1 0 0; /* by definition, see leftRatio above */
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .right {
+    min-width: 0;
+    overflow: hidden;
   }
 
   .left :global(> *:first-child),

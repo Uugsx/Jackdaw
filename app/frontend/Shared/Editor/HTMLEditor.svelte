@@ -79,7 +79,8 @@
         dispatchEvent("change", html);
       },
     });
-    lastHTML = html;
+    lastHTML = editor.getHTML();
+    html = lastHTML;
   }
 
   export function forceReload() {
@@ -89,8 +90,13 @@
     createEditor();
   }
 
-  // html changed by caller, not editor
-  $: html != lastHTML && forceReload();
+  /** Push latest editor HTML into the bound `html` prop (call before save). */
+  export function syncContent() {
+    if (!editor) {
+      return;
+    }
+    html = lastHTML = editor.getHTML();
+  }
 
   onDestroy(() => {
     if (editor) {
@@ -119,18 +125,28 @@
     user-select: text;
   }
   .html-editor {
-    height: 100%;
+    min-height: 100%;
   }
   .html-editor :global(.ProseMirror) {
-    height: 100%;
+    min-height: 100%;
+    height: auto;
   }
   .html-editor :global(.ProseMirror:focus-visible) {
     outline: none;
+  }
+  .html-editor :global(mark) {
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    text-decoration: inherit;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
   }
 
 
   /* Content styles
      TODO @import url(../Message/content.css); into iframe */
+  @import url(../../Mail/Message/content.css);
 
   .html-editor :global(blockquote) {
     border-left: 3px solid var(--selected-bg);
@@ -144,6 +160,11 @@
     border-collapse: collapse;
     width: 100%;
   }
+  .html-editor :global(footer.signature table),
+  .html-editor :global(footer table) {
+    width: auto;
+    max-width: none;
+  }
   .html-editor :global(td),
   .html-editor :global(th) {
     border: 1px solid var(--border);
@@ -155,5 +176,8 @@
   .html-editor :global(.tiptap) {
     margin-top: -1em;
     margin-bottom: -1em;
+  }
+  .html-editor :global(.ProseMirror span[style*="font-size"]) {
+    line-height: inherit;
   }
 </style>

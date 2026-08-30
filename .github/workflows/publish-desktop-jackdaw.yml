@@ -10,6 +10,17 @@ on:
           - prerelease
           - release
         default: prerelease
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'lib/**'
+      - 'desktop/**'
+      - '.github/workflows/publish-desktop-jackdaw.yml'
+
+concurrency:
+  group: publish-desktop-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   mac:
@@ -21,11 +32,15 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24.x
+      - name: OTA dev version suffix
+        if: github.event_name == 'push' || inputs.release_type == 'prerelease'
+        run: echo "OTA_BUILD_SUFFIX=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_ENV"
       - run: bash jackdaw-brand.sh
         working-directory: app/build
         shell: bash
         env:
           JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
+          OTA_BUILD_SUFFIX: ${{ env.OTA_BUILD_SUFFIX }}
       - run: sudo -H pip install setuptools
       - run: cd app; yarn install
       - run: cd lib; yarn install
@@ -39,7 +54,7 @@ jobs:
         working-directory: app/logic/Auth
         shell: bash
       - run: cd desktop; yarn run build:release:mac
-        if: inputs.release_type == 'release'
+        if: github.event_name == 'workflow_dispatch' && inputs.release_type == 'release'
         env: &mac_env
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
@@ -53,7 +68,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           NODE_OPTIONS: '--max-old-space-size=32768'
       - run: cd desktop; yarn run build:publish:prerelease:mac
-        if: inputs.release_type == 'prerelease'
+        if: github.event_name == 'push' || inputs.release_type == 'prerelease'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
@@ -70,6 +85,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24.x
+      - name: OTA dev version suffix
+        if: github.event_name == 'push' || inputs.release_type == 'prerelease'
+        shell: bash
+        run: echo "OTA_BUILD_SUFFIX=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_ENV"
       - run: bash fix-installer-filenames.sh
         working-directory: app/build
         shell: bash
@@ -78,6 +97,7 @@ jobs:
         shell: bash
         env:
           JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
+          OTA_BUILD_SUFFIX: ${{ env.OTA_BUILD_SUFFIX }}
       - run: cd app; yarn install
       - run: cd lib; yarn install
       - run: cd desktop; yarn install
@@ -87,12 +107,12 @@ jobs:
         working-directory: app/logic/Auth
         shell: bash
       - run: cd desktop; yarn run build:release:win
-        if: inputs.release_type == 'release'
+        if: github.event_name == 'workflow_dispatch' && inputs.release_type == 'release'
         env: &win_env
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           NODE_OPTIONS: '--max-old-space-size=32768'
       - run: cd desktop; yarn run build:publish:prerelease:win
-        if: inputs.release_type == 'prerelease'
+        if: github.event_name == 'push' || inputs.release_type == 'prerelease'
         env: *win_env

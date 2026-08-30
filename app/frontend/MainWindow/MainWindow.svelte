@@ -36,11 +36,13 @@
         </Router>
       {:else if $selectedApp}
         <Router primary={false} {history}>
+          {#key $widgetSplitterResetKey}
           <Splitter name="widgets"
             initialRightRatio={0.24}
-            rightMinWidth={280}
+            rightMinWidth={WIDGET_RAIL_WIDTH_PX + 200}
             hasRight={$widgetsEnabled.value}
-            rightFixedWidth={$widgetsExpanded.value ? null : 44}>
+            rightFixedWidth={$widgetsEnabled.value && !$widgetsExpanded.value ? WIDGET_RAIL_WIDTH_PX : null}
+            onResize={onWidgetSplitterDragEnd}>
             <Splitter name="sidebar" initialRightRatio={0.25} hasRight={!!sidebar} slot="left">
               <AppContentRoutes slot="left"/>
               <vbox flex class="sidebar" slot="right">
@@ -49,13 +51,14 @@
             </Splitter>
             <WidgetSidebar slot="right" />
           </Splitter>
+          {/key}
         </Router>
       {/if}
     </vbox>
   </hbox>
+  <ComposeFloatingLayer />
 </vbox>
 <MeetBackground />
-<ComposeFloatingLayer />
 <MailInBackground />
 <CalendarInBackground />
 <WebAppsInBackground />
@@ -92,7 +95,17 @@
   import MeetBackground from "../Meet/MeetBackground.svelte";
   import WebAppsInBackground from "../WebApps/Runner/WebAppsInBackground.svelte";
   import WidgetSidebar from "../Widgets/WidgetSidebar.svelte";
-  import { widgetsEnabled, widgetsExpanded } from "../Widgets/widgetState";
+  import {
+    activeWidgetIdSetting,
+    getWidgetWebSettings,
+    normalizeWidgetList,
+    updateWidgetSettings,
+    widgetsEnabled,
+    widgetsExpanded,
+    widgetsListSetting,
+    WIDGET_RAIL_WIDTH_PX,
+    widgetSplitterResetKey,
+  } from "../Widgets/widgetState";
   import { catchErrors, backgroundError } from "../Util/error";
   import { assert } from "../../logic/util/util";
   import { getUILocale, t } from "../../l10n/l10n";
@@ -111,6 +124,17 @@
   $: mailMode = $selectedApp?.id == "mail" || $selectedApp?.id == "mail-write" || $selectedApp?.id == "settings";
   $: rtl = rtlLocales.includes(getUILocale()) ? 'rtl' : null;
   categoriesLoaded; /* make sure to import the file, so that that categories load */
+
+  function onWidgetSplitterDragEnd() {
+    let id = activeWidgetIdSetting.value;
+    if (!id) {
+      return;
+    }
+    let entry = normalizeWidgetList(widgetsListSetting.value).find(w => w.id === id);
+    if (entry && getWidgetWebSettings(entry).customWidthPx != null) {
+      updateWidgetSettings(id, { customWidthPx: null });
+    }
+  }
 
   onMount(() => catchErrors(onLoad));
 

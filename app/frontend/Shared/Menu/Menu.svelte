@@ -3,7 +3,9 @@
   popupAnchor={anchor}
   {placement}
   {boundaryElSel}
-  dismissOnPointerLeave={dismissOnPointerLeave}>
+  {disableReferenceHide}
+  dismissOnPointerLeave={dismissOnPointerLeave}
+  dismissDelayMs={dismissDelayMs}>
   <vbox class="menu"
     on:keydown={onKeyPress}>
     <slot />
@@ -36,7 +38,7 @@
   /** Under/above which element the popup window should appear.
    * The popup will not cover this element, but be just above/below it.
    * in */
-  export let anchor: HTMLElement;
+  export let anchor: HTMLElement | { getBoundingClientRect(): DOMRect };
   /** Where the popup should appear in relation to the anchor.
    * above/below ("top"/"bottom") and left/right ("start"/"end")
    * in */
@@ -53,6 +55,9 @@
   export let boundaryElSel: string = "body";
   /** Close when the pointer leaves the menu surface (needed beside webviews). */
   export let dismissOnPointerLeave = false;
+  /** Delay before closing after pointer leave (ms). */
+  export let dismissDelayMs = 350;
+  export let disableReferenceHide = false;
 
   function onKeyPress(event: KeyboardEvent) {
     if (event.key == "Escape") {
