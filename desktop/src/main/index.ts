@@ -1,4 +1,4 @@
-import { setMainWindow, startupBackend, shutdownBackend, startupArgs, updateState, checkForUpdateAndNotify, installUpdate, createJPCSecret } from '../../backend/backend';
+import { setMainWindow, startupBackend, shutdownBackend, startupArgs, updateState, checkForUpdateAndNotify, installUpdate, createJPCSecret, isQuittingForUpdate } from '../../backend/backend';
 import { app, shell, BrowserWindow, session, Menu, MenuItemConstructorOptions } from 'electron'
 import { ipcMain } from 'electron/main';
 import { join } from 'path'
@@ -138,14 +138,28 @@ async function releaseOWASessionsOnQuit(): Promise<void> {
 }
 
 app.on("before-quit", event => {
+  if (isQuittingForUpdate()) {
+    return;
+  }
   if (owaSessionsReleased) {
     return;
   }
   event.preventDefault();
-  releaseOWASessionsOnQuit()
-    .catch(console.error)
-    .finally(() => app.quit());
+  void handleBeforeQuit();
 });
+
+async function handleBeforeQuit() {
+  try {
+    await releaseOWASessionsOnQuit();
+    if (await updateState.updateDownloaded()) {
+      await installUpdate();
+      return;
+    }
+  } catch (ex) {
+    console.error(ex);
+  }
+  app.quit();
+}
 
 const gotLock = app.requestSingleInstanceLock();
 if (gotLock) {
@@ -206,20 +220,10 @@ app.on('web-contents-created', (event, webContents) => setWindowOpenHandler(webC
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
-  if (process.platform == 'darwin') {
-    updateAndRestartNowIfNeeded()
-      .catch(console.error);
-  } else {
+  if (process.platform !== 'darwin') {
     app.quit();
   }
 });
-
-async function updateAndRestartNowIfNeeded() {
-  if (await updateState.updateDownloaded()) {
-    await installUpdate();
-    // TODO restart after install, but open only a background window
-  } // else do nothing
-}
 
 // macOS: Capture URL during launch
 app.on("open-url", (_event, url) => {

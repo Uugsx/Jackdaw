@@ -93,6 +93,8 @@ async function createSharedAppObject() {
     getAppVersion,
     checkForUpdate,
     installUpdate,
+    openPendingReleaseDownload,
+    isQuittingForUpdate,
     getUpdateStatus,
     updateStatus: updateState,
     setTheme,
@@ -434,6 +436,12 @@ class UpdateState extends Observable {
 }
 export const updateState = new UpdateState();
 
+let quittingForUpdate = false;
+
+export function isQuittingForUpdate(): boolean {
+  return quittingForUpdate;
+}
+
 const checkForUpdateRunOnce = new RunOnce<boolean>();
 
 function readGhUpdateTokenFile(filePath: string): string | null {
@@ -739,7 +747,16 @@ export async function installUpdate() {
   if (!updateState.readyToInstall && !await updateState.updateDownloaded()) {
     throw new Error("No update downloaded");
   }
-  autoUpdater.quitAndInstall(true, true);
+  quittingForUpdate = true;
+  setImmediate(() => {
+    autoUpdater.quitAndInstall(false, true);
+  });
+}
+
+export async function openPendingReleaseDownload() {
+  let version = updateState.version ?? app.getVersion();
+  let tag = version.startsWith("v") ? version : `v${version}`;
+  await shell.openExternal(`https://github.com/Uugsx/Jackdaw/releases/tag/${tag}`);
 }
 
 function setTheme(theme: "system" | "light" | "dark") {
