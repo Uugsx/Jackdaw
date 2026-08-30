@@ -22,15 +22,29 @@ Desktop-клиент для Exchange / OWA и связанных протоко�
 
 ### О проекте
 
-**Jackdaw** — независимый почтовый клиент с календарём и адресной книгой. Работает с корпоративной почтой через Exchange, OWA, EWS, ActiveSync и Graph, а также с IMAP/JMAP и CardDAV/CalDAV.
+**Jackdaw** — почтовый клиент с календарём и адресной книгой для Exchange / OWA, EWS, ActiveSync, Graph, IMAP/JMAP и CardDAV/CalDAV.
 
-Приложение собрано как **Electron** (desktop) и **Capacitor** (mobile) поверх единой **Svelte + TypeScript** кодовой базы.
+**Electron** (desktop) + **Capacitor** (mobile), UI на **Svelte + TypeScript**.
+
+### Происхождение
+
+Jackdaw — **продолжение и переработка** open-source почтового клиента под [EUPL-1.2](LICENSE).
+
+Исходная кодовая база — работа **Ben Bucksch**, **Beonex GmbH** и других участников. Проект **не писался с нуля**: взята существующая основа, исправлено то, что не работало, добавлены новые возможности.
+
+**Сейчас Jackdaw развивает [uugsx](https://github.com/Uugsx)** — ребрендинг, стабилизация, UI, протоколы OWA.
+
+> EUPL разрешает форк и доработку. При распространении нужно сохранять лицензию и указание авторов исходника — см. [LICENSE](LICENSE).
+
+### Главная особенность Jackdaw
+
+**Синхронизация дополнительных OWA-ящиков** (shared / delegated mailboxes): письма, категории, уведомления — для ящиков, к которым у тебя есть делегированный доступ. Это ключевая доработка Jackdaw поверх исходного клиента.
 
 ### Возможности
 
 | Модуль | Что умеет |
 |--------|-----------|
-| **Почта** | Папки, поиск, теги/категории OWA, композер, тёмная тема писем, undo удаления |
+| **Почта** | Папки, поиск, теги/категории OWA, композер, тёмная тема писем, undo удаления, **shared OWA mailboxes** |
 | **Календарь** | События, приглашения, онлайн-встречи |
 | **Контакты** | Личные и GAL-контакты, группы |
 | **Файлы** | WebDAV / Nextcloud |
@@ -80,10 +94,11 @@ lib/        — общие библиотеки (JPC protocol)
 
 ### Лицензия
 
-[EUPL-1.2](LICENSE). Отдельные модули (Exchange, WebMail, Meet) — proprietary, см. заголовок LICENSE.
+[EUPL-1.2](LICENSE) — форк и доработка разрешены. Копирайт исходных авторов (Ben Bucksch, Beonex GmbH) сохранён. Отдельные модули (Exchange, WebMail, Meet) — proprietary, см. LICENSE.
 
 ### Контакты
 
+- **Maintainer:** [uugsx](https://github.com/Uugsx)
 - **Сайт:** [jackdaw.app](https://jackdaw.app)
 - **Репозиторий:** [github.com/Uugsx/Jackdaw](https://github.com/Uugsx/Jackdaw)
 
@@ -93,15 +108,29 @@ lib/        — общие библиотеки (JPC protocol)
 
 ### About
 
-**Jackdaw** is an independent mail client with calendar and contacts. It connects to corporate mail via Exchange, OWA, EWS, ActiveSync, and Graph, as well as IMAP/JMAP and CardDAV/CalDAV.
+**Jackdaw** is a mail client with calendar and contacts for Exchange / OWA, EWS, ActiveSync, Graph, IMAP/JMAP, and CardDAV/CalDAV.
 
-Built as **Electron** (desktop) and **Capacitor** (mobile) on a shared **Svelte + TypeScript** codebase.
+**Electron** (desktop) + **Capacitor** (mobile), **Svelte + TypeScript** UI.
+
+### Origin
+
+Jackdaw is a **continued fork and rework** of an open-source mail client under [EUPL-1.2](LICENSE).
+
+The original codebase is the work of **Ben Bucksch**, **Beonex GmbH**, and other contributors. Jackdaw was **not written from scratch** — the existing foundation was taken forward, broken parts were fixed, and new features were added.
+
+**Jackdaw is now maintained by [uugsx](https://github.com/Uugsx)** — rebranding, stabilization, UI, and OWA protocol work.
+
+> EUPL allows forking and modification. Distribution requires keeping the license and upstream attribution — see [LICENSE](LICENSE).
+
+### Jackdaw's key differentiator
+
+**OWA shared mailbox synchronization** (delegated / additional mailboxes): messages, categories, and notifications for mailboxes you can access on behalf of others. This is Jackdaw-specific work on top of the original client.
 
 ### Features
 
 | Module | Highlights |
 |--------|------------|
-| **Mail** | Folders, search, OWA categories/tags, composer, dark-mode email rendering, delete undo |
+| **Mail** | Folders, search, OWA categories/tags, composer, dark-mode email rendering, delete undo, **shared OWA mailboxes** |
 | **Calendar** | Events, invitations, online meetings |
 | **Contacts** | Personal & GAL contacts, groups |
 | **Files** | WebDAV / Nextcloud |
@@ -151,10 +180,11 @@ lib/        — shared libraries (JPC protocol)
 
 ### License
 
-[EUPL-1.2](LICENSE). Some modules (Exchange, WebMail, Meet) are proprietary — see LICENSE header.
+[EUPL-1.2](LICENSE) — forking and modification allowed. Original authors' copyright (Ben Bucksch, Beonex GmbH) retained. Some modules (Exchange, WebMail, Meet) are proprietary — see LICENSE.
 
 ### Links
 
+- **Maintainer:** [uugsx](https://github.com/Uugsx)
 - **Website:** [jackdaw.app](https://jackdaw.app)
 - **Repository:** [github.com/Uugsx/Jackdaw](https://github.com/Uugsx/Jackdaw)
 
@@ -162,6 +192,6 @@ lib/        — shared libraries (JPC protocol)
 
 <div align="center">
 
-<sub>Jackdaw · Private repository · Maintained by <a href="https://github.com/Uugsx">Uugsx</a></sub>
+<sub>Jackdaw · EUPL fork, maintained by <a href="https://github.com/Uugsx">uugsx</a> · Private repository</sub>
 
 </div>
