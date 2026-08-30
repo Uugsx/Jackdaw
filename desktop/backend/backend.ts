@@ -556,13 +556,12 @@ let ghUpdateAuthApplied = false;
 
 function ensureGhUpdateAuth(): boolean {
   let token = resolveGhUpdateToken();
-  if (!token) {
-    return false;
-  }
-  process.env.GH_TOKEN = token;
-  if (!ghUpdateAuthApplied) {
-    autoUpdater.addAuthHeader(`token ${token}`);
-    ghUpdateAuthApplied = true;
+  if (token) {
+    process.env.GH_TOKEN = token;
+    if (!ghUpdateAuthApplied) {
+      autoUpdater.addAuthHeader(`token ${token}`);
+      ghUpdateAuthApplied = true;
+    }
   }
   return true;
 }
@@ -673,15 +672,15 @@ type GhReleaseAsset = { name: string; url: string; size: number };
 type GhRelease = { assets: GhReleaseAsset[] };
 
 function ghApiHeaders(): Record<string, string> {
-  let token = resolveGhUpdateToken();
-  if (!token) {
-    throw new Error("Missing GitHub update token");
-  }
-  return {
-    Authorization: `token ${token}`,
+  let headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "User-Agent": "Jackdaw-Updater",
   };
+  let token = resolveGhUpdateToken();
+  if (token) {
+    headers.Authorization = `token ${token}`;
+  }
+  return headers;
 }
 
 async function fetchReleaseByTag(version: string): Promise<GhRelease> {
@@ -840,10 +839,7 @@ async function runUpdateCheck(check: () => Promise<UpdateCheckResult | null>): P
     markUpdateUnavailable("ota-not-configured");
     return false;
   }
-  if (!ensureGhUpdateAuth()) {
-    markUpdateUnavailable("ota-no-token");
-    return false;
-  }
+  ensureGhUpdateAuth();
   updateState.beginCheck();
   try {
     updateState.update = await ignoreMissingUpdateConfig(withTimeout(

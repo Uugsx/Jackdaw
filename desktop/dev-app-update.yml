@@ -1,0 +1,5 @@
+provider: github
+owner: Uugsx
+repo: Jackdaw
+private: false
+updaterCacheDirName: jackdaw-updater

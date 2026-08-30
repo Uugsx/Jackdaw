@@ -6,7 +6,7 @@
 
 Jackdaw OTA is **not** stock electron-builder only. It includes:
 
-- Private GitHub Releases + `JACKDAW_GH_UPDATE_TOKEN`
+- Private GitHub Releases + `JACKDAW_GH_UPDATE_TOKEN` (optional on public repo)
 - CI job `prepare` that must create the release **before** parallel Mac/Windows publish
 - **Mac:** DMG download + quit-then-install script (no Apple Developer signing on prerelease)
 - **Windows:** standard `electron-updater` + `latest.yml`
@@ -28,4 +28,4 @@ Do **not** revert to parallel publish without the `prepare` release shell (cause
 
 ## Secrets (never commit)
 
-- `JACKDAW_GH_UPDATE_TOKEN` — GitHub Actions + baked into installers as `gh-update-token.txt`
+- `JACKDAW_GH_UPDATE_TOKEN` — optional GitHub Actions secret; was baked into installers when repo was private
