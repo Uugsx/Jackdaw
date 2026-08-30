@@ -472,9 +472,16 @@ function ensureGhUpdateAuth(): boolean {
   if (!token) {
     return false;
   }
-  if (!ghUpdateAuthApplied || process.env.GH_TOKEN !== token) {
-    process.env.GH_TOKEN = token;
-    autoUpdater.addAuthHeader(`Bearer ${token}`);
+  process.env.GH_TOKEN = token;
+  if (!ghUpdateAuthApplied) {
+    autoUpdater.addAuthHeader(`token ${token}`);
+    autoUpdater.setFeedURL({
+      provider: "github",
+      owner: "Uugsx",
+      repo: "Jackdaw",
+      private: true,
+      token,
+    });
     ghUpdateAuthApplied = true;
   }
   return true;
@@ -510,11 +517,16 @@ function configureAutoUpdater() {
   autoUpdater.on("error", err => {
     let msg = String(err?.message ?? err ?? "");
     if (/ENOENT|404|401|Cannot find .*yml/i.test(msg)) {
-      updateState.markUnsupported();
+      if (updateState.phase === "checking") {
+        updateState.markUnsupported();
+      } else {
+        updateState.error = msg;
+        updateState.phase = "idle";
+      }
       return;
     }
     updateState.error = msg;
-    if (updateState.phase === "checking") {
+    if (updateState.phase === "checking" || updateState.phase === "available" || updateState.phase === "downloading") {
       updateState.phase = "idle";
     }
   });
@@ -547,7 +559,31 @@ function failUpdateCheck(message: string) {
 }
 
 function hasAppUpdateConfig(): boolean {
-  return fs.existsSync(path.join(process.resourcesPath, "app-update.yml"));
+  for (let candidate of [
+    path.join(process.resourcesPath, "app-update.yml"),
+    path.join(path.dirname(app.getPath("exe")), "resources", "app-update.yml"),
+  ]) {
+    if (fs.existsSync(candidate)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const kUpdateDownloadTimeoutMs = 20 * 60_000;
+
+function trackUpdateDownload(result: UpdateCheckResult | null) {
+  let downloadPromise = result?.downloadPromise;
+  if (!downloadPromise) {
+    return;
+  }
+  void withTimeout(Promise.resolve(downloadPromise), kUpdateDownloadTimeoutMs, "Update download timed out")
+    .catch(ex => {
+      updateState.error = String((ex as Error)?.message ?? ex ?? "Update download failed");
+      if (updateState.phase === "available" || updateState.phase === "downloading") {
+        updateState.phase = "idle";
+      }
+    });
 }
 
 function markUpdateUnavailable(reason: string) {
@@ -594,6 +630,7 @@ async function runUpdateCheck(check: () => Promise<UpdateCheckResult | null>): P
   if (updateState.phase === "checking") {
     updateState.phase = "available";
   }
+  trackUpdateDownload(updateState.update);
   return true;
 }
 
@@ -665,6 +702,9 @@ export function getUpdateStatus() {
     version: updateState.version,
     readyToInstall: updateState.readyToInstall,
     error: updateState.error,
+    appVersion: app.getVersion(),
+    otaConfigured: hasAppUpdateConfig(),
+    otaTokenPresent: !!resolveGhUpdateToken(),
   };
 }
 
