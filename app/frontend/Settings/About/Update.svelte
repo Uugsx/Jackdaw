@@ -15,14 +15,18 @@
     <div class="status">{$t`Update ready`}{version ? `: ${version}` : ""}</div>
     {#if isMac}
       <p class="hint">
-        {$t`On Mac, click Install update or quit the app (Cmd+Q). If the version does not change, download the .dmg below.`}
+        {$t`Installing automatically… The app will restart when done.`}
       </p>
     {:else}
       <p class="hint">{$t`The update will also install automatically when you quit the app.`}</p>
     {/if}
     <hbox class="actions">
-      <Button label={installingUpdate ? $t`Installing update…` : $t`Install update`} onClick={installUpdate}
-        disabled={installingUpdate} />
+      {#if !isMac}
+        <Button label={installingUpdate ? $t`Installing update…` : $t`Install update`} onClick={installUpdate}
+          disabled={installingUpdate} />
+      {:else if installingUpdate}
+        <div class="status">{$t`Installing update…`}</div>
+      {/if}
       {#if isMac}
         <Button label={$t`Download .dmg`} onClick={openManualDownload} errorCallback={showError} />
       {/if}
@@ -152,6 +156,15 @@
   }) {
     if (obj.phase != null) {
       phase = obj.phase;
+      if (phase === "downloading" || phase === "available") {
+        installingUpdate = false;
+      }
+      if (phase === "downloading") {
+        startDownloadWatchdog();
+      }
+      if (isMac && phase === "downloaded") {
+        installingUpdate = true;
+      }
     }
     if (obj.progress != null) {
       progress = obj.progress;

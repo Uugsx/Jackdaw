@@ -35,9 +35,10 @@ jobs:
         id: ota_suffix
         if: github.event_name == 'push' || inputs.release_type == 'prerelease'
         run: echo "value=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
-      - name: Create release tag
+      - name: Create release tag and GitHub prerelease
         if: github.event_name == 'push' || inputs.release_type == 'prerelease'
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OTA_BUILD_SUFFIX: ${{ steps.ota_suffix.outputs.value }}
         run: |
           BASE=$(node -p "require('./app/package.json').version.replace(/-dev.*/, '')")
@@ -46,6 +47,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -f "$TAG" "$GITHUB_SHA"
           git push origin "$TAG" --force
+          gh release delete "$TAG" --repo Uugsx/Jackdaw -y 2>/dev/null || true
+          gh release create "$TAG" --repo Uugsx/Jackdaw --prerelease \
+            --title "${BASE}-dev.${OTA_BUILD_SUFFIX}" \
+            --notes "Jackdaw desktop prerelease."
 
   mac:
     needs: prepare
@@ -98,7 +103,7 @@ jobs:
           NODE_OPTIONS: '--max-old-space-size=32768'
 
   windows:
-    needs: prepare
+    needs: [prepare, mac]
     runs-on: windows-2022
     permissions:
       contents: write
@@ -143,11 +148,23 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v6
-      - name: Clean GitHub release description
+      - name: Clean GitHub release description and dedupe
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OTA_BUILD_SUFFIX: ${{ needs.prepare.outputs.ota_build_suffix }}
         run: |
           BASE=$(node -p "require('./app/package.json').version.replace(/-dev.*/, '')")
           TAG="v${BASE}-dev.${OTA_BUILD_SUFFIX}"
-          gh release edit "$TAG" --repo Uugsx/Jackdaw --notes "Jackdaw desktop prerelease."
+          IDS=$(gh api "repos/Uugsx/Jackdaw/releases?per_page=100" --jq ".[] | select(.tag_name==\"$TAG\") | .id")
+          KEEP=$(gh api "repos/Uugsx/Jackdaw/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name==\"$TAG\")] | max_by(.assets | length) | .id // empty")
+          for ID in $IDS; do
+            if [ "$ID" != "$KEEP" ]; then
+              gh api -X DELETE "repos/Uugsx/Jackdaw/releases/$ID"
+            fi
+          done
+          if [ -n "$KEEP" ]; then
+            gh api -X PATCH "repos/Uugsx/Jackdaw/releases/$KEEP" \
+              -f body="Jackdaw desktop prerelease." \
+              -f name="${BASE}-dev.${OTA_BUILD_SUFFIX}"
+          fi
