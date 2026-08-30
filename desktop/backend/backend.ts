@@ -55,6 +55,10 @@ export function createJPCSecret(): string {
   return crypto.randomBytes(32).toString("hex"); // 256-bit hex secret
 }
 
+function getAppVersion(): string {
+  return app.getVersion();
+}
+
 async function createSharedAppObject() {
   return {
     kyCreate,
@@ -86,6 +90,7 @@ async function createSharedAppObject() {
     askForMediaAccess,
     onScreenSharingSelect,
     restartApp,
+    getAppVersion,
     checkForUpdate,
     installUpdate,
     getUpdateStatus,
