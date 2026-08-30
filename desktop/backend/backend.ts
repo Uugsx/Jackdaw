@@ -26,11 +26,9 @@ import os from "node:os";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import crypto from "node:crypto";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
 import https from "node:https";
 import { RunOnce } from '../../app/logic/util/flow/RunOnce';
-const execFileAsync = promisify(execFile);
 const { autoUpdater } = electronUpdater;
 
 const kGhOwner = "Uugsx";
@@ -704,26 +702,54 @@ function downloadGithubAsset(asset: GhReleaseAsset, destPath: string, onProgress
   });
 }
 
-async function installMacDmgFromPath(dmgPath: string) {
-  let mountPoint = path.join(os.tmpdir(), `jackdaw-update-${process.pid}`);
-  await fsPromises.mkdir(mountPoint, { recursive: true });
-  try {
-    await execFileAsync("hdiutil", ["attach", "-nobrowse", "-mountpoint", mountPoint, dmgPath]);
-    let entries = await fsPromises.readdir(mountPoint);
-    let appBundle = entries.find(name => name.endsWith(".app"));
-    if (!appBundle) {
-      throw new Error("No .app bundle found in the update image");
+function getMacAppBundlePath(): string {
+  let dir = path.dirname(process.execPath);
+  while (dir !== path.dirname(dir)) {
+    if (path.basename(dir).endsWith(".app")) {
+      return dir;
     }
-    let sourceApp = path.join(mountPoint, appBundle);
-    let destApp = path.join("/Applications", appBundle);
-    await fsPromises.rm(destApp, { recursive: true, force: true });
-    await execFileAsync("ditto", [sourceApp, destApp]);
-  } finally {
-    await execFileAsync("hdiutil", ["detach", mountPoint, "-quiet"]).catch(() => {});
-    await fsPromises.rm(mountPoint, { recursive: true, force: true }).catch(() => {});
+    dir = path.dirname(dir);
   }
+  return path.join("/Applications", "Jackdaw.app");
+}
+
+/** Quit first, then a detached shell script mounts the DMG and replaces the .app bundle. */
+async function scheduleMacDmgInstallAndQuit(dmgPath: string): Promise<void> {
+  let destApp = getMacAppBundlePath();
+  if (!destApp.startsWith("/Applications/")) {
+    destApp = path.join("/Applications", path.basename(destApp));
+  }
+  let scriptPath = path.join(app.getPath("temp"), `jackdaw-install-${process.pid}.sh`);
+  let script = `#!/bin/bash
+set -euo pipefail
+DMG=${JSON.stringify(dmgPath)}
+DEST=${JSON.stringify(destApp)}
+PID=${process.pid}
+MOUNT=$(mktemp -d /tmp/jackdaw-update.XXXXXX)
+
+while kill -0 "$PID" 2>/dev/null; do sleep 0.2; done
+sleep 0.5
+
+cleanup() {
+  hdiutil detach "$MOUNT" -quiet 2>/dev/null || true
+  rm -rf "$MOUNT"
+  rm -f ${JSON.stringify(scriptPath)}
+}
+trap cleanup EXIT
+
+hdiutil attach -nobrowse -mountpoint "$MOUNT" "$DMG"
+SRC=$(find "$MOUNT" -maxdepth 1 -name '*.app' | head -1)
+if [ -z "$SRC" ]; then echo "No .app in DMG" >&2; exit 1; fi
+rm -rf "$DEST"
+ditto "$SRC" "$DEST"
+open "$DEST"
+`;
+  await fsPromises.writeFile(scriptPath, script, { mode: 0o755 });
+  let child = spawn("/bin/bash", [scriptPath], { detached: true, stdio: "ignore" });
+  child.unref();
+
   quittingForUpdate = true;
-  app.relaunch();
+  await shutdownBackend();
   app.exit(0);
 }
 
@@ -749,12 +775,7 @@ async function downloadMacDmgUpdate(version: string | null | undefined) {
     macDmgPendingPath = dmgPath;
     updateState.phase = "downloaded";
     updateState.progress = 100;
-    try {
-      await installMacDmgFromPath(dmgPath);
-    } catch (ex) {
-      updateState.error = String((ex as Error)?.message ?? ex ?? "Mac update install failed");
-      throw ex;
-    }
+    await scheduleMacDmgInstallAndQuit(dmgPath);
   });
 }
 
@@ -937,11 +958,12 @@ export async function prepareUpdaterAuth(): Promise<boolean> {
 
 export async function installUpdate() {
   if (process.platform === "darwin") {
-    if (macDmgPendingPath) {
-      await installMacDmgFromPath(macDmgPendingPath);
+    let dmgPath = macDmgPendingPath;
+    if (!dmgPath) {
+      await downloadMacDmgUpdate(updateState.version);
       return;
     }
-    await downloadMacDmgUpdate(updateState.version);
+    await scheduleMacDmgInstallAndQuit(dmgPath);
     return;
   }
   if (!updateState.readyToInstall && !await updateState.updateDownloaded()) {
