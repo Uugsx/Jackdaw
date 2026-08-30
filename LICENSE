@@ -5,8 +5,8 @@ For such subdirectories or files, the given license applies.
 
 Jackdaw is an independent continuation of the open-source mail client
 codebase, maintained by uugsx (https://github.com/Uugsx).
-Jackdaw-specific development includes fixes, rebranding, UI improvements,
-and OWA shared mailbox (delegated inbox) synchronization.
+Jackdaw-specific development includes fixes, rebranding, sidebar widgets, UI redesign,
+mail workflow improvements, and OWA shared mailbox (delegated inbox) synchronization.
 
 The following features are proprietary:
 * Exchange support (because Microsoft is also proprietary)
