@@ -49,8 +49,12 @@ jobs:
     - run: cd desktop; yarn run build:prerelease:win
       if: inputs.release_type == 'prerelease'
       env: *build_env
-    - run: cd desktop; yarn run build; npx electron-builder --win --config --publish never -c.publish=null -c.generateUpdatesFilesForAllChannels=false
+    - run: |
+        cd desktop
+        yarn run build
+        npx electron-builder --win --config --publish never -c.publish=null -c.generateUpdatesFilesForAllChannels=false
       if: inputs.release_type == 'test'
+      shell: bash
       env: *build_env
     - name: Upload
       uses: actions/upload-artifact@v7
