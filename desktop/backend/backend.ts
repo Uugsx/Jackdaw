@@ -443,6 +443,7 @@ function readGhUpdateTokenFile(filePath: string): string | null {
 function resolveGhUpdateToken(): string | null {
   for (let candidate of [
     path.join(process.resourcesPath, "gh-update-token.txt"),
+    path.join(path.dirname(app.getPath("exe")), "resources", "gh-update-token.txt"),
     path.join(import.meta.dirname, "../build/gh-update-token.txt"),
     path.join(app.getPath("exe"), "..", "..", "Resources", "gh-update-token.txt"),
   ]) {
@@ -540,10 +541,26 @@ function failUpdateCheck(message: string) {
   }
 }
 
+function hasAppUpdateConfig(): boolean {
+  return fs.existsSync(path.join(process.resourcesPath, "app-update.yml"));
+}
+
+function markUpdateUnavailable(reason: string) {
+  updateState.error = reason;
+  updateState.markUnsupported();
+}
+
 async function runUpdateCheck(check: () => Promise<UpdateCheckResult | null>): Promise<boolean> {
+  if (!hasAppUpdateConfig()) {
+    markUpdateUnavailable(
+      "Install the release build from GitHub Releases to enable automatic updates.",
+    );
+    return false;
+  }
   if (!ensureGhUpdateAuth()) {
-    updateState.error = "GitHub update token is missing in this build";
-    updateState.markUnsupported();
+    markUpdateUnavailable(
+      "Install the release build from GitHub Releases to enable automatic updates.",
+    );
     return false;
   }
   updateState.beginCheck();
@@ -559,7 +576,9 @@ async function runUpdateCheck(check: () => Promise<UpdateCheckResult | null>): P
   }
   if (!updateState.update) {
     if (updateState.phase === "checking") {
-      updateState.markUnsupported();
+      markUpdateUnavailable(
+        "Could not reach the update server. Install the latest build from GitHub Releases.",
+      );
     }
     return false;
   }

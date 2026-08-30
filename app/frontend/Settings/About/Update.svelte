@@ -18,7 +18,9 @@
   {:else if phase === "available"}
     <div class="status">{$t`Update found`}{version ? `: ${version}` : ""}. {$t`Downloading…`}</div>
   {:else if phase === "unsupported"}
-    <div class="status">{$t`Automatic updates are not configured in this build.`}</div>
+    <div class="status">
+      {errorEx?.message || $t`Automatic updates are not configured in this build.`}
+    </div>
     <Button label={$t`Check for update`} onClick={() => checkForUpdate(true)} errorCallback={showError} />
   {:else if phase === "uptodate"}
     <div class="status">{$t`This is the latest version`}</div>
@@ -27,7 +29,7 @@
     <Button label={$t`Check for update`} onClick={() => checkForUpdate(true)} errorCallback={showError} />
   {/if}
 
-  {#if errorEx}
+  {#if errorEx && phase !== "unsupported"}
     <ErrorMessageInline ex={errorEx} />
   {/if}
 </vbox>
