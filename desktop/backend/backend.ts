@@ -504,9 +504,43 @@ function configureAutoUpdater() {
 }
 configureAutoUpdater();
 
+const kUpdateCheckTimeoutMs = 90_000;
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+function failUpdateCheck(message: string) {
+  updateState.error = message;
+  if (updateState.phase === "checking") {
+    updateState.phase = "idle";
+  }
+}
+
 async function runUpdateCheck(check: () => Promise<UpdateCheckResult | null>): Promise<boolean> {
   updateState.beginCheck();
-  updateState.update = await ignoreMissingUpdateConfig(check());
+  try {
+    updateState.update = await ignoreMissingUpdateConfig(withTimeout(
+      check(),
+      kUpdateCheckTimeoutMs,
+      "Update check timed out",
+    ));
+  } catch (ex) {
+    failUpdateCheck(String((ex as Error)?.message ?? ex ?? "Update check failed"));
+    throw ex;
+  }
   if (!updateState.update) {
     if (updateState.phase === "checking") {
       updateState.markUnsupported();
@@ -531,19 +565,36 @@ async function checkForUpdate(force = false): Promise<boolean> {
   if (!force && updateState.haveUpdate) {
     return true;
   }
+  if (!force && (updateState.phase === "uptodate" || updateState.phase === "unsupported")) {
+    return false;
+  }
   if (force) {
     updateState.reset();
+    checkForUpdateRunOnce.running = null;
   }
-  return await checkForUpdateRunOnce.runOnce(async () =>
-    runUpdateCheck(() => autoUpdater.checkForUpdates()));
+  return await checkForUpdateRunOnce.runOnce(async () => {
+    try {
+      return await runUpdateCheck(() => autoUpdater.checkForUpdates());
+    } catch {
+      return false;
+    }
+  });
 }
 
 export async function checkForUpdateAndNotify(): Promise<boolean> {
   if (updateState.readyToInstall || updateState.haveUpdate) {
     return updateState.haveUpdate || updateState.readyToInstall;
   }
-  return await checkForUpdateRunOnce.runOnce(async () =>
-    runUpdateCheck(() => autoUpdater.checkForUpdatesAndNotify()));
+  if (updateState.phase === "uptodate" || updateState.phase === "unsupported") {
+    return false;
+  }
+  return await checkForUpdateRunOnce.runOnce(async () => {
+    try {
+      return await runUpdateCheck(() => autoUpdater.checkForUpdatesAndNotify());
+    } catch {
+      return false;
+    }
+  });
 }
 
 /** Builds without a publish configuration ship no `app-update.yml`.
