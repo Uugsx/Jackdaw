@@ -36,15 +36,24 @@ Jackdaw — **продолжение и переработка** open-source п�
 
 > EUPL разрешает форк и доработку. При распространении нужно сохранять лицензию и указание авторов исходника — см. [LICENSE](LICENSE).
 
-### Главная особенность Jackdaw
+### Что добавлено в Jackdaw
 
-**Синхронизация дополнительных OWA-ящиков** (shared / delegated mailboxes): письма, категории, уведомления — для ящиков, к которым у тебя есть делегированный доступ. Это ключевая доработка Jackdaw поверх исходного клиента.
+Доработки поверх исходного клиента — **активная разработка**, список растёт:
+
+- **OWA shared mailboxes** — синхронизация дополнительных ящиков: письма, категории, уведомления *(ключевая фича)*
+- **Боковая панель** — виджеты, календарь, встроенные web-панели (Gemini и др.)
+- **Переработанный UI** — брендинг Jackdaw, почтовые layout'ы (широкий табличный / 3-pane), лента, ribbon, плавающий композер
+- **Почта** — тёмная тема HTML-писем, комбинации категорий OWA, undo удаления, дерево папок, quick filters
+- **Стабилизация** — исправления OWA sync, стартовые папки, splitter'ы, то, что в upstream работало криво
+
+**В планах:** OTA-обновления из Git, сайт [jackdaw.app](https://jackdaw.app), полировка панелей и тулбара, дальнейшие OWA-фичи.
 
 ### Возможности
 
 | Модуль | Что умеет |
 |--------|-----------|
-| **Почта** | Папки, поиск, теги/категории OWA, композер, тёмная тема писем, undo удаления, **shared OWA mailboxes** |
+| **Почта** | Папки, поиск, теги/категории OWA, композер, тёмная тема писем, undo удаления, shared OWA mailboxes, ribbon, floating compose |
+| **UI** | Боковая панель виджетов, переработанные layout'ы, Jackdaw theme |
 | **Календарь** | События, приглашения, онлайн-встречи |
 | **Контакты** | Личные и GAL-контакты, группы |
 | **Файлы** | WebDAV / Nextcloud |
@@ -122,15 +131,24 @@ The original codebase is the work of **Ben Bucksch**, **Beonex GmbH**, and other
 
 > EUPL allows forking and modification. Distribution requires keeping the license and upstream attribution — see [LICENSE](LICENSE).
 
-### Jackdaw's key differentiator
+### What's new in Jackdaw
 
-**OWA shared mailbox synchronization** (delegated / additional mailboxes): messages, categories, and notifications for mailboxes you can access on behalf of others. This is Jackdaw-specific work on top of the original client.
+Work on top of the original client — **active development**, list keeps growing:
+
+- **OWA shared mailboxes** — sync delegated mailboxes: messages, categories, notifications *(flagship feature)*
+- **Sidebar panel** — widgets, mini-calendar, embedded web panels (Gemini, etc.)
+- **Redesigned UI** — Jackdaw branding, mail layouts (wide table / 3-pane), ribbon, floating composer
+- **Mail** — dark-mode HTML rendering, OWA category combinations, delete undo, folder tree, quick filters
+- **Stabilization** — OWA sync fixes, startup folders, splitters, broken upstream behaviour fixed
+
+**Roadmap:** OTA updates from Git, [jackdaw.app](https://jackdaw.app) website, sidebar/toolbar polish, more OWA features.
 
 ### Features
 
 | Module | Highlights |
 |--------|------------|
-| **Mail** | Folders, search, OWA categories/tags, composer, dark-mode email rendering, delete undo, **shared OWA mailboxes** |
+| **Mail** | Folders, search, OWA categories/tags, composer, dark-mode email rendering, delete undo, shared OWA mailboxes, ribbon, floating compose |
+| **UI** | Widget sidebar, reworked layouts, Jackdaw theme |
 | **Calendar** | Events, invitations, online meetings |
 | **Contacts** | Personal & GAL contacts, groups |
 | **Files** | WebDAV / Nextcloud |
