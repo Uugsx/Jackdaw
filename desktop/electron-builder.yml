@@ -31,10 +31,10 @@ mac:
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: true
   target:
-    - target: dmg
+    - target: zip
       arch:
         - universal
-    - target: zip
+    - target: dmg
       arch:
         - universal
     - target: pkg
@@ -81,6 +81,7 @@ extraResources:
     to: gh-update-token.txt
 extraMetadata:
   productName: Jackdaw
+electronUpdaterCompatibility: ">=2.16"
 releaseInfo:
   releaseNotes: ""
 fileAssociations:

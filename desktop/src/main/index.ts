@@ -1,4 +1,4 @@
-import { setMainWindow, startupBackend, shutdownBackend, startupArgs, updateState, checkForUpdateAndNotify, installUpdate, createJPCSecret, isQuittingForUpdate } from '../../backend/backend';
+import { setMainWindow, startupBackend, shutdownBackend, startupArgs, updateState, checkForUpdateAndNotify, installUpdate, createJPCSecret, isQuittingForUpdate, prepareUpdaterAuth } from '../../backend/backend';
 import { app, shell, BrowserWindow, session, Menu, MenuItemConstructorOptions } from 'electron'
 import { ipcMain } from 'electron/main';
 import { join } from 'path'
@@ -196,6 +196,7 @@ async function whenReady() {
   })
 
   try {
+    await prepareUpdaterAuth();
     await checkForUpdateAndNotify();
     setInterval(async () => {
       try {
