@@ -26,6 +26,10 @@ jobs:
         node-version: 24.x
 
     - run: cd app/build; sh jackdaw-brand.sh
+    - name: OAuth2 secrets stub for CI
+      run: cp OAuth2Secrets.local.example.ts OAuth2Secrets.user.ts
+      working-directory: app/logic/Auth
+      shell: bash
     - run: sudo -H pip install setuptools
     - run: cd app; yarn install
     - run: cd lib; yarn install
@@ -40,6 +44,7 @@ jobs:
       if: github.event_name == 'push' || inputs.release_type == 'release'
       env: &build_env
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
         CSC_LINK: ${{ secrets.CSC_LINK }}
         CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         CSC_INSTALLER_LINK: ${{ secrets.CSC_INSTALLER_LINK }}

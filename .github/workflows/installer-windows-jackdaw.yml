@@ -25,8 +25,16 @@ jobs:
       with:
         node-version: 24.x
 
-    - run: cd app/build; bash fix-installer-filenames.sh
-    - run: cd app/build; sh jackdaw-brand.sh
+    - run: bash fix-installer-filenames.sh
+      working-directory: app/build
+      shell: bash
+    - run: bash jackdaw-brand.sh
+      working-directory: app/build
+      shell: bash
+    - name: OAuth2 secrets stub for CI
+      run: cp OAuth2Secrets.local.example.ts OAuth2Secrets.user.ts
+      working-directory: app/logic/Auth
+      shell: bash
     - run: cd app; yarn install
     - run: cd lib; yarn install
     - run: cd desktop; yarn install
@@ -35,6 +43,7 @@ jobs:
       if: github.event_name == 'push' || inputs.release_type == 'release'
       env: &build_env
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
         SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         # For Sentry source maps. Otherwise, vite build is out of memory
         NODE_OPTIONS: '--max-old-space-size=32768'

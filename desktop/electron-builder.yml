@@ -84,3 +84,9 @@ fileAssociations:
   description: RFC 822 email message
   role: Viewer
   rank: Default
+publish:
+  provider: github
+  owner: Uugsx
+  repo: Jackdaw
+  private: true
+  releaseType: release
