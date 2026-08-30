@@ -15,7 +15,7 @@
     <div class="status">{$t`Update ready`}{version ? `: ${version}` : ""}</div>
     {#if isMac}
       <p class="hint">
-        {$t`Installing automatically… The app will restart when done.`}
+        {$t`The app will close, install the update, and reopen automatically.`}
       </p>
     {:else}
       <p class="hint">{$t`The update will also install automatically when you quit the app.`}</p>
