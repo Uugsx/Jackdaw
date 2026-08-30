@@ -10,6 +10,14 @@ on:
           - prerelease
           - release
         default: prerelease
+      platform:
+        type: choice
+        description: Build mac, windows, or both (single-OS keeps other platform OTA metadata via carry-forward)
+        options:
+          - both
+          - mac
+          - windows
+        default: both
   push:
     branches: [main]
     paths:
@@ -54,6 +62,7 @@ jobs:
 
   mac:
     needs: prepare
+    if: github.event_name == 'push' || inputs.platform == 'both' || inputs.platform == 'mac'
     runs-on: macos-15
     permissions:
       contents: write
@@ -104,6 +113,7 @@ jobs:
 
   windows:
     needs: prepare
+    if: github.event_name == 'push' || inputs.platform == 'both' || inputs.platform == 'windows'
     runs-on: windows-2022
     permissions:
       contents: write
@@ -140,9 +150,41 @@ jobs:
         if: github.event_name == 'push' || inputs.release_type == 'prerelease'
         env: *win_env
 
-  finalize:
+  carry-forward:
     needs: [prepare, mac, windows]
-    if: github.event_name == 'push' || inputs.release_type == 'prerelease'
+    if: |
+      always() &&
+      needs.prepare.result == 'success' &&
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.platform == 'mac' || inputs.platform == 'windows') &&
+      (
+        (inputs.platform == 'mac' && needs.mac.result == 'success') ||
+        (inputs.platform == 'windows' && needs.windows.result == 'success')
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Carry forward other platform OTA assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OTA_BUILD_SUFFIX: ${{ needs.prepare.outputs.ota_build_suffix }}
+        run: |
+          BASE=$(node -p "require('./app/package.json').version.replace(/-dev.*/, '')")
+          TAG="v${BASE}-dev.${OTA_BUILD_SUFFIX}"
+          bash app/build/ota-carry-forward.sh "$TAG" "${{ inputs.platform }}" Uugsx/Jackdaw
+
+  finalize:
+    needs: [prepare, mac, windows, carry-forward]
+    if: |
+      always() &&
+      needs.prepare.result == 'success' &&
+      (needs.mac.result == 'success' || needs.mac.result == 'skipped') &&
+      (needs.windows.result == 'success' || needs.windows.result == 'skipped') &&
+      (needs.carry-forward.result == 'success' || needs.carry-forward.result == 'skipped') &&
+      (needs.mac.result == 'success' || needs.windows.result == 'success') &&
+      (github.event_name == 'push' || inputs.release_type == 'prerelease')
     runs-on: ubuntu-latest
     permissions:
       contents: write

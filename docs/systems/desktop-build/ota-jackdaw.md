@@ -12,7 +12,7 @@ Related generic docs: [electron-builder.md](./electron-builder.md), [macos.md](.
 
 | Piece | Role |
 |-------|------|
-| **CI** | `.github/workflows/publish-desktop-jackdaw.yml` — builds Mac + Windows, publishes one prerelease |
+| **CI** | `.github/workflows/publish-desktop-jackdaw.yml` — builds Mac and/or Windows, one prerelease |
 | **Version** | `0.9.38-dev.<UTC timestamp>` — suffix from job `prepare` (`OTA_BUILD_SUFFIX`) |
 | **Updater backend** | `desktop/backend/backend.ts` — `electron-updater`, auth, platform-specific install |
 | **Updater UI** | `app/frontend/Settings/About/Update.svelte`, `About.svelte` |
@@ -20,18 +20,44 @@ Related generic docs: [electron-builder.md](./electron-builder.md), [macos.md](.
 | **Builder config** | `desktop/electron-builder.yml` — `publish`, `extraResources`, Mac targets |
 | **Branding / token** | `app/build/jackdaw-brand.sh` — version bump, `gh-update-token.txt` |
 
-Push to `main` (paths: `app/**`, `lib/**`, `desktop/**`, workflow file) triggers a **prerelease** with **the same version number** on Mac and Windows.
+Push to `main` builds **both** platforms. Manual **workflow_dispatch** can choose `platform: mac | windows | both`.
 
 ---
 
 ## CI pipeline (do not break)
 
 ```
-prepare  →  mac  ║  windows  →  finalize
+prepare  →  mac  ║  windows  →  carry-forward?  →  finalize
   │            │       │
   │            └─ upload assets to ONE prerelease
   └─ tag + empty GitHub prerelease (required!)
 ```
+
+### Platform-independent OTA (`latest.yml` vs `latest-mac.yml`)
+
+`electron-updater` reads **separate manifests per OS**. Windows and macOS can ship at **different version numbers** without forcing empty updates on the other platform.
+
+| Manifest | OS |
+|----------|-----|
+| `latest.yml` | Windows |
+| `latest-mac.yml` | macOS |
+
+**workflow_dispatch → platform:**
+
+| Input | Builds | Other OS |
+|-------|--------|----------|
+| `both` (default) | Mac + Windows | — |
+| `mac` | Mac only | Windows assets copied from previous release (`ota-carry-forward.sh`) |
+| `windows` | Windows only | Mac assets copied from previous release |
+
+Carry-forward copies the **previous** prerelease’s `latest*.yml` and installers for the skipped platform into the **new** release. The skipped OS keeps its old version in metadata → **no pointless update prompt**.
+
+Example after a Windows-only fix:
+
+- `latest.yml` → `0.9.38-dev.NEW` (Windows users update)
+- `latest-mac.yml` → still `0.9.38-dev.OLD` (Mac users stay put)
+
+**Push to `main` always builds both** — use manual dispatch for single-OS releases.
 
 ### Job `prepare` (ubuntu)
 
@@ -50,13 +76,19 @@ prepare  →  mac  ║  windows  →  finalize
   - Mac: `desktop` → `yarn run build:publish:prerelease:mac` (ad-hoc sign: `-c.mac.identity=-`, `-c.mac.notarize=false`)
   - Win: `desktop` → `yarn run build:publish:prerelease:win`
 
+### Job `carry-forward` (ubuntu, platform-only dispatch only)
+
+- Runs after a successful **mac-only** or **windows-only** job
+- `app/build/ota-carry-forward.sh` — downloads the other platform’s OTA assets from the newest prior prerelease and uploads them to the current tag
+- Prevents “Could not read update metadata” on the OS that was not rebuilt
+
 ### Job `finalize`
 
 - Waits for **both** mac and windows (housekeeping only, ~10 s)
 - Deletes duplicate releases with the same tag (keeps the one with **most assets**)
 - Normalizes release title/notes
 
-**Users do not wait for finalize.** OTA works as soon as **their** platform job finishes uploading.
+**Users do not wait for finalize or carry-forward.** OTA works once **their** platform job finishes (carry-forward adds the other OS metadata within ~1 min for single-OS dispatches).
 
 ---
 
@@ -131,8 +163,9 @@ Dev/local builds without timestamp suffix show **“Automatic updates are not co
 ## Manual publish
 
 ```bash
-# workflow_dispatch on GitHub Actions → "Jackdaw Publish Desktop Update"
+# workflow_dispatch → "Jackdaw Publish Desktop Update"
 # release_type: prerelease (default) or release
+# platform: both (default) | mac | windows  — single-OS keeps other platform via carry-forward
 ```
 
 Or push to `main` touching monitored paths.
