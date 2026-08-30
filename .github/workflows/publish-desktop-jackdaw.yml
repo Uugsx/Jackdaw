@@ -1,0 +1,89 @@
+name: Jackdaw Publish Desktop Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        type: choice
+        description: GitHub Release type (use prerelease for -dev builds)
+        options:
+          - prerelease
+          - release
+        default: prerelease
+
+jobs:
+  mac:
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+      - run: bash jackdaw-brand.sh
+        working-directory: app/build
+        shell: bash
+      - run: sudo -H pip install setuptools
+      - run: cd app; yarn install
+      - run: cd lib; yarn install
+      - run: cd desktop; yarn install
+      - run: cd desktop/backend; yarn install
+      - run: |
+          mkdir -p ~/private_keys/
+          echo '${{ secrets.APPLE_API_KEY }}' > ~/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+      - name: OAuth2 secrets stub for CI
+        run: cp OAuth2Secrets.local.example.ts OAuth2Secrets.user.ts
+        working-directory: app/logic/Auth
+        shell: bash
+      - run: cd desktop; yarn run build:release:mac
+        if: inputs.release_type == 'release'
+        env: &mac_env
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          CSC_INSTALLER_LINK: ${{ secrets.CSC_INSTALLER_LINK }}
+          CSC_INSTALLER_KEY_PASSWORD: ${{ secrets.CSC_INSTALLER_KEY_PASSWORD }}
+          APPLE_API_KEY: ~/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          NODE_OPTIONS: '--max-old-space-size=32768'
+      - run: cd desktop; yarn run build:prerelease:mac
+        if: inputs.release_type == 'prerelease'
+        env: *mac_env
+
+  windows:
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+      - run: bash fix-installer-filenames.sh
+        working-directory: app/build
+        shell: bash
+      - run: bash jackdaw-brand.sh
+        working-directory: app/build
+        shell: bash
+      - run: cd app; yarn install
+      - run: cd lib; yarn install
+      - run: cd desktop; yarn install
+      - run: cd desktop/backend; yarn install
+      - name: OAuth2 secrets stub for CI
+        run: cp OAuth2Secrets.local.example.ts OAuth2Secrets.user.ts
+        working-directory: app/logic/Auth
+        shell: bash
+      - run: cd desktop; yarn run build:release:win
+        if: inputs.release_type == 'release'
+        env: &win_env
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          NODE_OPTIONS: '--max-old-space-size=32768'
+      - run: cd desktop; yarn run build:prerelease:win
+        if: inputs.release_type == 'prerelease'
+        env: *win_env
