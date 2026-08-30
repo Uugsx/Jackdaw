@@ -52,7 +52,7 @@ jobs:
     - run: |
         cd desktop
         yarn run build
-        npx electron-builder --win --config --publish never -c.publish=null -c.generateUpdatesFilesForAllChannels=false
+        npx electron-builder --win --config --publish never
       if: inputs.release_type == 'test'
       shell: bash
       env: *build_env
