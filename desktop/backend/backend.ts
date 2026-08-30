@@ -576,21 +576,46 @@ function configureAutoUpdater() {
     updateState.version = info.version ?? null;
     updateState.phase = "available";
     updateState.error = null;
+    if (process.platform === "darwin") {
+      void downloadMacDmgUpdate(info.version ?? null).catch(ex => {
+        updateState.error = String((ex as Error)?.message ?? ex ?? "Mac update download failed");
+        if (!macDmgPendingPath) {
+          updateState.phase = "idle";
+        }
+      });
+    }
   });
   autoUpdater.on("update-not-available", () => {
     updateState.markUpToDate();
   });
   autoUpdater.on("download-progress", progress => {
+    if (process.platform === "darwin") {
+      return;
+    }
     updateState.phase = "downloading";
     updateState.progress = Math.round(progress.percent ?? 0);
   });
   autoUpdater.on("update-downloaded", info => {
+    if (process.platform === "darwin") {
+      return;
+    }
     updateState.version = info.version ?? updateState.version;
     updateState.phase = "downloaded";
     updateState.progress = 100;
   });
   autoUpdater.on("error", err => {
     let msg = String(err?.message ?? err ?? "");
+    if (process.platform === "darwin" && /code signature|ShipIt|did not pass validation/i.test(msg)) {
+      updateState.error = null;
+      updateState.update = null;
+      if (updateState.version) {
+        updateState.phase = "available";
+        void downloadMacDmgUpdate(updateState.version).catch(dmgEx => {
+          updateState.error = String((dmgEx as Error)?.message ?? dmgEx ?? "Mac update download failed");
+        });
+      }
+      return;
+    }
     if (/ENOENT|404|401|Cannot find .*yml/i.test(msg)) {
       if (updateState.phase === "checking") {
         updateState.markUnsupported(
@@ -846,12 +871,14 @@ async function runUpdateCheck(check: () => Promise<UpdateCheckResult | null>): P
   }
   let newVersion = updateState.version ?? updateState.update?.updateInfo?.version ?? null;
   if (process.platform === "darwin") {
-    void downloadMacDmgUpdate(newVersion).catch(ex => {
-      updateState.error = String((ex as Error)?.message ?? ex ?? "Mac update download failed");
-      if (!macDmgPendingPath && (updateState.phase === "available" || updateState.phase === "downloading")) {
-        updateState.phase = "idle";
-      }
-    });
+    if (updateState.phase !== "downloading" && updateState.phase !== "downloaded") {
+      void downloadMacDmgUpdate(newVersion).catch(ex => {
+        updateState.error = String((ex as Error)?.message ?? ex ?? "Mac update download failed");
+        if (!macDmgPendingPath && (updateState.phase === "available" || updateState.phase === "downloading")) {
+          updateState.phase = "idle";
+        }
+      });
+    }
   } else {
     trackUpdateDownload(updateState.update);
   }
@@ -958,13 +985,17 @@ export async function prepareUpdaterAuth(): Promise<boolean> {
 
 export async function installUpdate() {
   if (process.platform === "darwin") {
-    let dmgPath = macDmgPendingPath;
-    if (!dmgPath) {
-      await downloadMacDmgUpdate(updateState.version);
+    if (macDmgPendingPath) {
+      await scheduleMacDmgInstallAndQuit(macDmgPendingPath);
       return;
     }
-    await scheduleMacDmgInstallAndQuit(dmgPath);
-    return;
+    let version = updateState.version;
+    if (version) {
+      updateState.update = null;
+      await downloadMacDmgUpdate(version);
+      return;
+    }
+    throw new Error("No update version to install");
   }
   if (!updateState.readyToInstall && !await updateState.updateDownloaded()) {
     throw new Error("No update downloaded");
