@@ -52,9 +52,14 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           NODE_OPTIONS: '--max-old-space-size=32768'
-      - run: cd desktop; yarn run build:prerelease:mac
+      - run: cd desktop; yarn run build:publish:prerelease:mac
         if: inputs.release_type == 'prerelease'
-        env: *mac_env
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          NODE_OPTIONS: '--max-old-space-size=32768'
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
   windows:
     runs-on: windows-2022
@@ -88,6 +93,6 @@ jobs:
           JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           NODE_OPTIONS: '--max-old-space-size=32768'
-      - run: cd desktop; yarn run build:prerelease:win
+      - run: cd desktop; yarn run build:publish:prerelease:win
         if: inputs.release_type == 'prerelease'
         env: *win_env
