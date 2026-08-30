@@ -2,7 +2,12 @@ import { appGlobal } from "../../logic/app";
 import { webMail } from "../../logic/build";
 import { ButtonData, Notification, NotificationSeverity, notifications } from "./Notification";
 import { openAboutForUpdate } from "../Settings/About/updateNavigation";
-import { gt } from "../../l10n/l10n";
+import {
+  updateAvailableMessage,
+  updateDownloadingMessage,
+  updateInstallButtonLabel,
+  updateReadyMessage,
+} from "../Settings/About/updateMessages";
 
 type UpdatePhase = "idle" | "checking" | "available" | "downloading" | "downloaded" | "uptodate" | "unsupported";
 
@@ -68,28 +73,22 @@ function syncUpdateNotification(obj: {
       updateNotification = null;
     } else {
       if (phase === "downloading" && version) {
-        updateNotification.message = gt`Downloading update ${version}… ${obj.progress ?? 0}%`;
+        updateNotification.message = updateDownloadingMessage(version, obj.progress ?? 0);
       }
       return;
     }
   }
 
   notifiedVersion = version;
-  let message = version
-    ? gt`Update available: ${version}`
-    : gt`Update available`;
+  let message = updateAvailableMessage(version ?? "");
   if (phase === "downloading") {
-    message = version
-      ? gt`Downloading update ${version}… ${obj.progress ?? 0}%`
-      : gt`Downloading update…`;
+    message = updateDownloadingMessage(version, obj.progress ?? 0);
   } else if (phase === "downloaded" || obj.readyToInstall) {
-    message = version
-      ? gt`Update ready: ${version}`
-      : gt`Update ready`;
+    message = updateReadyMessage(version);
   }
 
   updateNotification = new Notification(message, NotificationSeverity.Info);
-  updateNotification.buttons.add(new ButtonData(gt`Install`, async () => {
+  updateNotification.buttons.add(new ButtonData(updateInstallButtonLabel(), async () => {
     openAboutForUpdate();
   }));
   notifications.add(updateNotification);
