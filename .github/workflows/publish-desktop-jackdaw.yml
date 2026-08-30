@@ -103,7 +103,7 @@ jobs:
           NODE_OPTIONS: '--max-old-space-size=32768'
 
   windows:
-    needs: [prepare, mac]
+    needs: prepare
     runs-on: windows-2022
     permissions:
       contents: write
