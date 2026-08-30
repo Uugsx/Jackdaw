@@ -35,10 +35,16 @@
 
   onMount(async () => {
     try {
-      let runtimeVersion = await appGlobal.remoteApp.getAppVersion?.();
-      if (runtimeVersion) {
-        displayVersion = runtimeVersion;
-        otaCapable = /-dev\.\d{14}$/.test(runtimeVersion);
+      let status = await appGlobal.remoteApp.getUpdateStatus?.();
+      if (status?.appVersion) {
+        displayVersion = status.appVersion;
+        otaCapable = /-dev\.\d{14}$/.test(status.appVersion);
+      } else {
+        let runtimeVersion = await appGlobal.remoteApp.getAppVersion?.();
+        if (runtimeVersion) {
+          displayVersion = runtimeVersion;
+          otaCapable = /-dev\.\d{14}$/.test(runtimeVersion);
+        }
       }
     } catch {
       // keep compile-time fallback

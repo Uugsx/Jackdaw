@@ -17,6 +17,9 @@
       disabled={installingUpdate} />
   {:else if phase === "available"}
     <div class="status">{$t`Update found`}{version ? `: ${version}` : ""}. {$t`Downloading…`}</div>
+    <div class="progress" role="progressbar" aria-valuenow={progress} aria-valuemin="0" aria-valuemax="100">
+      <div class="progress-fill" style:width="{Math.max(progress, 2)}%"></div>
+    </div>
   {:else if phase === "unsupported"}
     <div class="status">
       {errorEx?.message || $t`Automatic updates are not configured in this build.`}
@@ -58,6 +61,17 @@
     let status = await appGlobal.remoteApp.getUpdateStatus?.();
     if (status) {
       syncFromBackend(status);
+      if (status.phase === "unsupported") {
+        if (!status.otaConfigured) {
+          errorEx = new Error(
+            "This install is missing OTA config. Download and run the setup.exe from GitHub Releases.",
+          );
+        } else if (!status.otaTokenPresent) {
+          errorEx = new Error(
+            "This install is missing the update token. Download and run the setup.exe from GitHub Releases.",
+          );
+        }
+      }
     }
   }
 
@@ -112,12 +126,13 @@
     }
   }
 
-  onMount(() => {
+  onMount(async () => {
     let status = appGlobal.remoteApp?.updateStatus;
     if (status?.subscribe) {
       unsub = status.subscribe((obj: typeof status) => syncFromBackend(obj));
       syncFromBackend(status);
     }
+    await refreshStatus();
     if (phase === "idle") {
       checkForUpdate(false);
     } else if (phase === "checking") {

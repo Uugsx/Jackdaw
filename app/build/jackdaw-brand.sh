@@ -57,6 +57,10 @@ if [ -n "${JACKDAW_GH_UPDATE_TOKEN:-}" ]; then
 else
   : > ../../desktop/build/gh-update-token.txt
 fi
+if [ ! -s ../../desktop/build/gh-update-token.txt ]; then
+  echo "ERROR: gh-update-token.txt is empty. Set the JACKDAW_GH_UPDATE_TOKEN repository secret."
+  exit 1
+fi
 
 if command -v rg >/dev/null 2>&1; then
   if rg -i "parula|mustang" ../.. --glob '!**/node_modules/**' --glob '!**/.git/**' --glob '!**/package-lock.json' --glob '!**/yarn.lock' -q; then
