@@ -49,7 +49,7 @@ jobs:
     - run: cd desktop; yarn run build:prerelease:win
       if: inputs.release_type == 'prerelease'
       env: *build_env
-    - run: cd desktop; yarn run build:win
+    - run: cd desktop; yarn run build && yarn electron-builder --win --config --publish never
       if: inputs.release_type == 'test'
       env: *build_env
     - name: Upload
