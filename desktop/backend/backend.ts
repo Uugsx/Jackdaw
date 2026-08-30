@@ -26,8 +26,15 @@ import os from "node:os";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import crypto from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import https from "node:https";
 import { RunOnce } from '../../app/logic/util/flow/RunOnce';
+const execFileAsync = promisify(execFile);
 const { autoUpdater } = electronUpdater;
+
+const kGhOwner = "Uugsx";
+const kGhRepo = "Jackdaw";
 
 let jpc: JPCWebSocket | null = null;
 let backendStartup: Promise<void> | null = null;
@@ -557,8 +564,9 @@ function ensureGhUpdateAuth(): boolean {
 }
 
 function configureAutoUpdater() {
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  let isMac = process.platform === "darwin";
+  autoUpdater.autoDownload = !isMac;
+  autoUpdater.autoInstallOnAppQuit = !isMac;
   if (app.getVersion().includes("-dev")) {
     autoUpdater.allowPrerelease = true;
   }
@@ -631,6 +639,125 @@ function failUpdateCheck(message: string) {
 
 const kUpdateDownloadTimeoutMs = 20 * 60_000;
 
+let macDmgPendingPath: string | null = null;
+const macDmgDownloadRunOnce = new RunOnce<void>();
+
+type GhReleaseAsset = { name: string; url: string; size: number };
+type GhRelease = { assets: GhReleaseAsset[] };
+
+function ghApiHeaders(): Record<string, string> {
+  let token = resolveGhUpdateToken();
+  if (!token) {
+    throw new Error("Missing GitHub update token");
+  }
+  return {
+    Authorization: `token ${token}`,
+    Accept: "application/vnd.github+json",
+    "User-Agent": "Jackdaw-Updater",
+  };
+}
+
+async function fetchReleaseByTag(version: string): Promise<GhRelease> {
+  let tag = version.startsWith("v") ? version : `v${version}`;
+  let response = await fetch(`https://api.github.com/repos/${kGhOwner}/${kGhRepo}/releases/tags/${tag}`, {
+    headers: ghApiHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(`Release ${tag} not found (${response.status})`);
+  }
+  return await response.json() as GhRelease;
+}
+
+function downloadGithubAsset(asset: GhReleaseAsset, destPath: string, onProgress: (pct: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let headers = {
+      ...ghApiHeaders(),
+      Accept: "application/octet-stream",
+    };
+    let request = https.get(asset.url, { headers }, response => {
+      if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        downloadGithubAsset({ ...asset, url: response.headers.location }, destPath, onProgress).then(resolve, reject);
+        return;
+      }
+      if (response.statusCode !== 200) {
+        reject(new Error(`Download failed (${response.statusCode})`));
+        return;
+      }
+      let total = Number(response.headers["content-length"] ?? asset.size ?? 0);
+      let received = 0;
+      let file = fs.createWriteStream(destPath);
+      response.on("data", chunk => {
+        received += chunk.length;
+        if (total > 0) {
+          onProgress(Math.min(100, Math.round(received / total * 100)));
+        }
+      });
+      response.pipe(file);
+      file.on("finish", () => {
+        file.close();
+        resolve();
+      });
+      file.on("error", reject);
+      response.on("error", reject);
+    });
+    request.on("error", reject);
+  });
+}
+
+async function installMacDmgFromPath(dmgPath: string) {
+  let mountPoint = path.join(os.tmpdir(), `jackdaw-update-${process.pid}`);
+  await fsPromises.mkdir(mountPoint, { recursive: true });
+  try {
+    await execFileAsync("hdiutil", ["attach", "-nobrowse", "-mountpoint", mountPoint, dmgPath]);
+    let entries = await fsPromises.readdir(mountPoint);
+    let appBundle = entries.find(name => name.endsWith(".app"));
+    if (!appBundle) {
+      throw new Error("No .app bundle found in the update image");
+    }
+    let sourceApp = path.join(mountPoint, appBundle);
+    let destApp = path.join("/Applications", appBundle);
+    await fsPromises.rm(destApp, { recursive: true, force: true });
+    await execFileAsync("ditto", [sourceApp, destApp]);
+  } finally {
+    await execFileAsync("hdiutil", ["detach", mountPoint, "-quiet"]).catch(() => {});
+    await fsPromises.rm(mountPoint, { recursive: true, force: true }).catch(() => {});
+  }
+  quittingForUpdate = true;
+  app.relaunch();
+  app.exit(0);
+}
+
+async function downloadMacDmgUpdate(version: string | null | undefined) {
+  if (!version) {
+    throw new Error("No update version to download");
+  }
+  return macDmgDownloadRunOnce.runOnce(async () => {
+    let release = await fetchReleaseByTag(version);
+    let dmgAsset = release.assets.find(asset => asset.name.endsWith(".dmg") && /jackdaw/i.test(asset.name));
+    if (!dmgAsset) {
+      throw new Error(`No .dmg found in release v${version}`);
+    }
+    let cacheDir = path.join(app.getPath("cache"), "jackdaw-updates");
+    await fsPromises.mkdir(cacheDir, { recursive: true });
+    let dmgPath = path.join(cacheDir, dmgAsset.name);
+    updateState.phase = "downloading";
+    updateState.progress = 0;
+    updateState.error = null;
+    await downloadGithubAsset(dmgAsset, dmgPath, pct => {
+      updateState.progress = pct;
+    });
+    macDmgPendingPath = dmgPath;
+    updateState.phase = "downloaded";
+    updateState.progress = 100;
+    try {
+      await installMacDmgFromPath(dmgPath);
+    } catch (ex) {
+      updateState.error = String((ex as Error)?.message ?? ex ?? "Mac update install failed");
+      throw ex;
+    }
+  });
+}
+
 function trackUpdateDownload(result: UpdateCheckResult | null) {
   let downloadPromise = result?.downloadPromise;
   if (!downloadPromise) {
@@ -696,7 +823,17 @@ async function runUpdateCheck(check: () => Promise<UpdateCheckResult | null>): P
   if (updateState.phase === "checking") {
     updateState.phase = "available";
   }
-  trackUpdateDownload(updateState.update);
+  let newVersion = updateState.version ?? updateState.update?.updateInfo?.version ?? null;
+  if (process.platform === "darwin") {
+    void downloadMacDmgUpdate(newVersion).catch(ex => {
+      updateState.error = String((ex as Error)?.message ?? ex ?? "Mac update download failed");
+      if (!macDmgPendingPath && (updateState.phase === "available" || updateState.phase === "downloading")) {
+        updateState.phase = "idle";
+      }
+    });
+  } else {
+    trackUpdateDownload(updateState.update);
+  }
   return true;
 }
 
@@ -786,7 +923,7 @@ export async function getUpdateStatus() {
     phase: updateState.phase,
     progress: updateState.progress,
     version: updateState.version,
-    readyToInstall: updateState.readyToInstall,
+    readyToInstall: updateState.readyToInstall || (process.platform === "darwin" && !!macDmgPendingPath),
     error: updateState.error,
     appVersion: app.getVersion(),
     otaConfigured: hasAppUpdateConfig(),
@@ -799,6 +936,14 @@ export async function prepareUpdaterAuth(): Promise<boolean> {
 }
 
 export async function installUpdate() {
+  if (process.platform === "darwin") {
+    if (macDmgPendingPath) {
+      await installMacDmgFromPath(macDmgPendingPath);
+      return;
+    }
+    await downloadMacDmgUpdate(updateState.version);
+    return;
+  }
   if (!updateState.readyToInstall && !await updateState.updateDownloaded()) {
     throw new Error("No update downloaded");
   }
