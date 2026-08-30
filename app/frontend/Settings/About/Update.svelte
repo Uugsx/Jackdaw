@@ -13,14 +13,28 @@
     </div>
   {:else if phase === "downloaded" || readyToInstall}
     <div class="status">{$t`Update ready`}{version ? `: ${version}` : ""}</div>
-    <p class="hint">{$t`The update will also install automatically when you quit the app.`}</p>
-    <Button label={installingUpdate ? $t`Installing update…` : $t`Install update`} onClick={installUpdate}
-      disabled={installingUpdate} />
+    {#if isMac}
+      <p class="hint">
+        {$t`On Mac, click Install update or quit the app (Cmd+Q). If the version does not change, download the .dmg below.`}
+      </p>
+    {:else}
+      <p class="hint">{$t`The update will also install automatically when you quit the app.`}</p>
+    {/if}
+    <hbox class="actions">
+      <Button label={installingUpdate ? $t`Installing update…` : $t`Install update`} onClick={installUpdate}
+        disabled={installingUpdate} />
+      {#if isMac}
+        <Button label={$t`Download .dmg`} onClick={openManualDownload} errorCallback={showError} />
+      {/if}
+    </hbox>
   {:else if phase === "available"}
     <div class="status">{$t`Update found`}{version ? `: ${version}` : ""}. {$t`Downloading…`}</div>
     <div class="progress" role="progressbar" aria-valuenow={progress} aria-valuemin="0" aria-valuemax="100">
       <div class="progress-fill" style:width="{Math.max(progress, 2)}%"></div>
     </div>
+    {#if isMac}
+      <Button label={$t`Download .dmg manually`} onClick={openManualDownload} errorCallback={showError} />
+    {/if}
   {:else if phase === "unsupported"}
     <div class="status">
       {errorEx?.message || $t`Automatic updates are not configured in this build.`}
@@ -57,7 +71,29 @@
   let checkTimedOut = false;
   let watchdog: ReturnType<typeof setTimeout> | undefined;
   let pollTimer: ReturnType<typeof setInterval> | undefined;
+  let isMac = false;
 
+  onMount(async () => {
+    try {
+      isMac = await appGlobal.remoteApp.platform?.() === "darwin";
+    } catch {
+      isMac = false;
+    }
+    let status = appGlobal.remoteApp?.updateStatus;
+    if (status?.subscribe) {
+      unsub = status.subscribe((obj: typeof status) => syncFromBackend(obj));
+      syncFromBackend(status);
+    }
+    await refreshStatus();
+    if (phase === "idle") {
+      checkForUpdate(false);
+    } else if (phase === "checking") {
+      startCheckingWatchdog();
+      checkForUpdate(true);
+    } else if (phase === "available" || phase === "downloading") {
+      startDownloadWatchdog();
+    }
+  });
   async function refreshStatus() {
     let status = await appGlobal.remoteApp.getUpdateStatus?.();
     if (status) {
@@ -134,23 +170,6 @@
     }
   }
 
-  onMount(async () => {
-    let status = appGlobal.remoteApp?.updateStatus;
-    if (status?.subscribe) {
-      unsub = status.subscribe((obj: typeof status) => syncFromBackend(obj));
-      syncFromBackend(status);
-    }
-    await refreshStatus();
-    if (phase === "idle") {
-      checkForUpdate(false);
-    } else if (phase === "checking") {
-      startCheckingWatchdog();
-      checkForUpdate(true);
-    } else if (phase === "available" || phase === "downloading") {
-      startDownloadWatchdog();
-    }
-  });
-
   onDestroy(() => {
     unsub?.();
     clearWatchdog();
@@ -181,6 +200,15 @@
     }
   }
 
+  async function openManualDownload() {
+    errorEx = undefined;
+    try {
+      await appGlobal.remoteApp.openPendingReleaseDownload?.();
+    } catch (ex) {
+      errorEx = ex as Error;
+    }
+  }
+
   function showError(ex: Error) {
     errorEx = ex;
   }
@@ -201,6 +229,10 @@
     line-height: 1.45;
     font-size: 14px;
     color: color-mix(in srgb, var(--fg) 72%, transparent);
+  }
+  .actions {
+    gap: 8px;
+    flex-wrap: wrap;
   }
   .progress {
     width: min(100%, 20em);
