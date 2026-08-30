@@ -91,6 +91,7 @@ async function createSharedAppObject() {
     onScreenSharingSelect,
     restartApp,
     getAppVersion,
+    prepareUpdaterAuth,
     checkForUpdate,
     installUpdate,
     openPendingReleaseDownload,
@@ -483,13 +484,6 @@ function ensureGhUpdateAuth(): boolean {
   process.env.GH_TOKEN = token;
   if (!ghUpdateAuthApplied) {
     autoUpdater.addAuthHeader(`token ${token}`);
-    autoUpdater.setFeedURL({
-      provider: "github",
-      owner: "Uugsx",
-      repo: "Jackdaw",
-      private: true,
-      token,
-    });
     ghUpdateAuthApplied = true;
   }
   return true;
@@ -743,14 +737,16 @@ export async function getUpdateStatus() {
   };
 }
 
+export async function prepareUpdaterAuth(): Promise<boolean> {
+  return ensureGhUpdateAuth();
+}
+
 export async function installUpdate() {
   if (!updateState.readyToInstall && !await updateState.updateDownloaded()) {
     throw new Error("No update downloaded");
   }
   quittingForUpdate = true;
-  setImmediate(() => {
-    autoUpdater.quitAndInstall(false, true);
-  });
+  autoUpdater.quitAndInstall(false, true);
 }
 
 export async function openPendingReleaseDownload() {

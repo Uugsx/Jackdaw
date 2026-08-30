@@ -82,7 +82,6 @@ jobs:
           JACKDAW_GH_UPDATE_TOKEN: ${{ secrets.JACKDAW_GH_UPDATE_TOKEN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           NODE_OPTIONS: '--max-old-space-size=32768'
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
   windows:
     needs: prepare
