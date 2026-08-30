@@ -81,6 +81,8 @@ extraResources:
     to: gh-update-token.txt
 extraMetadata:
   productName: Jackdaw
+releaseInfo:
+  releaseNotes: ""
 fileAssociations:
   ext: eml
   name: E-Mail Message

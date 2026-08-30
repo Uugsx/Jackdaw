@@ -121,3 +121,20 @@ jobs:
       - run: cd desktop; yarn run build:publish:prerelease:win
         if: github.event_name == 'push' || inputs.release_type == 'prerelease'
         env: *win_env
+
+  finalize:
+    needs: [prepare, mac, windows]
+    if: github.event_name == 'push' || inputs.release_type == 'prerelease'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Clean GitHub release description
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OTA_BUILD_SUFFIX: ${{ needs.prepare.outputs.ota_build_suffix }}
+        run: |
+          BASE=$(node -p "require('./app/package.json').version.replace(/-dev.*/, '')")
+          TAG="v${BASE}-dev.${OTA_BUILD_SUFFIX}"
+          gh release edit "$TAG" --repo Uugsx/Jackdaw --notes "Jackdaw desktop prerelease."
