@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="desktop/build/icon-jackdaw.png" width="120" alt="Jackdaw">
+<img src="desktop/build/icon-jackdaw-github.png" width="120" alt="Jackdaw">
 
 # Jackdaw
 
