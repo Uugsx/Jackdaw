@@ -1,6 +1,9 @@
 <vbox class="update">
   {#if phase === "checking"}
     <div class="status">{$t`Checking for updates…`}</div>
+    {#if checkTimedOut}
+      <Button label={$t`Check for update`} onClick={() => checkForUpdate(true)} errorCallback={showError} />
+    {/if}
   {:else if phase === "downloading"}
     <div class="status">
       {$t`Downloading update`}{version ? ` ${version}` : ""}… {progress}%
@@ -45,6 +48,38 @@
   let installingUpdate = false;
   let errorEx: Error | undefined;
   let unsub: (() => void) | undefined;
+  let checkTimedOut = false;
+  let watchdog: ReturnType<typeof setTimeout> | undefined;
+  let pollTimer: ReturnType<typeof setInterval> | undefined;
+
+  async function refreshStatus() {
+    let status = await appGlobal.remoteApp.getUpdateStatus?.();
+    if (status) {
+      syncFromBackend(status);
+    }
+  }
+
+  function clearWatchdog() {
+    if (watchdog) {
+      clearTimeout(watchdog);
+      watchdog = undefined;
+    }
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = undefined;
+    }
+    checkTimedOut = false;
+  }
+
+  function startCheckingWatchdog() {
+    clearWatchdog();
+    pollTimer = setInterval(() => {
+      refreshStatus().catch(showError);
+    }, 2000);
+    watchdog = setTimeout(() => {
+      checkTimedOut = true;
+    }, 50_000);
+  }
 
   function syncFromBackend(obj: {
     phase?: UpdatePhase;
@@ -67,6 +102,11 @@
     }
     if (obj.error) {
       errorEx = new Error(obj.error);
+    } else if (obj.error === null) {
+      errorEx = undefined;
+    }
+    if (phase !== "checking") {
+      clearWatchdog();
     }
   }
 
@@ -78,21 +118,28 @@
     }
     if (phase === "idle") {
       checkForUpdate(false);
+    } else if (phase === "checking") {
+      startCheckingWatchdog();
+      checkForUpdate(true);
     }
   });
 
   onDestroy(() => {
     unsub?.();
+    clearWatchdog();
   });
 
   async function checkForUpdate(force: boolean) {
+    if (force) {
+      clearWatchdog();
+    }
     errorEx = undefined;
     try {
       await appGlobal.remoteApp.checkForUpdate(force);
-      syncFromBackend(appGlobal.remoteApp.updateStatus ?? {});
+      await refreshStatus();
     } catch (ex) {
       errorEx = ex as Error;
-      syncFromBackend(appGlobal.remoteApp.updateStatus ?? {});
+      await refreshStatus();
     }
   }
 

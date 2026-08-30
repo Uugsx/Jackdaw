@@ -88,6 +88,7 @@ async function createSharedAppObject() {
     restartApp,
     checkForUpdate,
     installUpdate,
+    getUpdateStatus,
     updateStatus: updateState,
     setTheme,
     openMenu,
@@ -441,8 +442,9 @@ function readGhUpdateTokenFile(filePath: string): string | null {
 
 function resolveGhUpdateToken(): string | null {
   for (let candidate of [
-    path.join(import.meta.dirname, "../build/gh-update-token.txt"),
     path.join(process.resourcesPath, "gh-update-token.txt"),
+    path.join(import.meta.dirname, "../build/gh-update-token.txt"),
+    path.join(app.getPath("exe"), "..", "..", "Resources", "gh-update-token.txt"),
   ]) {
     let token = readGhUpdateTokenFile(candidate);
     if (token) {
@@ -457,17 +459,26 @@ function resolveGhUpdateToken(): string | null {
   return token || null;
 }
 
+let ghUpdateAuthApplied = false;
+
+function ensureGhUpdateAuth(): boolean {
+  let token = resolveGhUpdateToken();
+  if (!token) {
+    return false;
+  }
+  if (!ghUpdateAuthApplied || process.env.GH_TOKEN !== token) {
+    process.env.GH_TOKEN = token;
+    autoUpdater.addAuthHeader(`Bearer ${token}`);
+    ghUpdateAuthApplied = true;
+  }
+  return true;
+}
+
 function configureAutoUpdater() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   if (app.getVersion().includes("-dev")) {
     autoUpdater.allowPrerelease = true;
-  }
-  let token = resolveGhUpdateToken();
-  if (token) {
-    autoUpdater.requestHeaders = {
-      Authorization: `Bearer ${token}`,
-    };
   }
 
   autoUpdater.on("checking-for-update", () => {
@@ -504,7 +515,7 @@ function configureAutoUpdater() {
 }
 configureAutoUpdater();
 
-const kUpdateCheckTimeoutMs = 90_000;
+const kUpdateCheckTimeoutMs = 45_000;
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -530,6 +541,11 @@ function failUpdateCheck(message: string) {
 }
 
 async function runUpdateCheck(check: () => Promise<UpdateCheckResult | null>): Promise<boolean> {
+  if (!ensureGhUpdateAuth()) {
+    updateState.error = "GitHub update token is missing in this build";
+    updateState.markUnsupported();
+    return false;
+  }
   updateState.beginCheck();
   try {
     updateState.update = await ignoreMissingUpdateConfig(withTimeout(
@@ -616,6 +632,16 @@ async function ignoreMissingUpdateConfig(check: Promise<UpdateCheckResult | null
     }
     throw ex;
   }
+}
+
+export function getUpdateStatus() {
+  return {
+    phase: updateState.phase,
+    progress: updateState.progress,
+    version: updateState.version,
+    readyToInstall: updateState.readyToInstall,
+    error: updateState.error,
+  };
 }
 
 export async function installUpdate() {
