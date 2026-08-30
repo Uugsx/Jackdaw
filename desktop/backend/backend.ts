@@ -10,7 +10,7 @@ import { ImapFlow } from 'imapflow';
 import { Database } from "@radically-straightforward/sqlite"; // formerly @leafac/sqlite
 import Zip from "adm-zip";
 import ky from 'ky';
-import { shell, nativeTheme, Notification, Tray, nativeImage, app, BrowserWindow, webContents, Menu, MenuItemConstructorOptions, clipboard, NativeImage, session, desktopCapturer, type DesktopCapturerSource, autoUpdater, systemPreferences, powerMonitor } from "electron";
+import { shell, nativeTheme, Notification, Tray, nativeImage, app, BrowserWindow, webContents, Menu, MenuItemConstructorOptions, clipboard, NativeImage, session, desktopCapturer, type DesktopCapturerSource, systemPreferences, powerMonitor } from "electron";
 import electronUpdater, { type UpdateCheckResult } from 'electron-updater';
 import nodemailer from 'nodemailer';
 import MailComposer from 'nodemailer/lib/mail-composer';
@@ -27,6 +27,7 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import crypto from "node:crypto";
 import { RunOnce } from '../../app/logic/util/flow/RunOnce';
+import { builtInGhUpdateToken } from './updateAuth';
 const { autoUpdater } = electronUpdater;
 
 let jpc: JPCWebSocket | null = null;
@@ -88,6 +89,7 @@ async function createSharedAppObject() {
     restartApp,
     checkForUpdate,
     installUpdate,
+    updateStatus: updateState,
     setTheme,
     openMenu,
     getConfigDir,
@@ -357,36 +359,178 @@ function restartApp() {
   app.quit();
 }
 
-class UpdateState {
+export type UpdatePhase =
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "downloaded"
+  | "uptodate"
+  | "unsupported";
+
+class UpdateState extends Observable {
   update: UpdateCheckResult | null = null;
+
+  @notifyChangedProperty
+  phase: UpdatePhase = "idle";
+
+  @notifyChangedProperty
+  progress = 0;
+
+  @notifyChangedProperty
+  version: string | null = null;
+
+  @notifyChangedProperty
+  error: string | null = null;
 
   get haveUpdate(): boolean {
     return !!this.update?.isUpdateAvailable;
   }
 
+  get readyToInstall(): boolean {
+    return this.phase === "downloaded";
+  }
+
+  reset() {
+    this.update = null;
+    this.phase = "idle";
+    this.progress = 0;
+    this.version = null;
+    this.error = null;
+  }
+
+  beginCheck() {
+    this.error = null;
+    this.phase = "checking";
+  }
+
+  markUnsupported() {
+    this.update = null;
+    this.phase = "unsupported";
+    this.progress = 0;
+    this.version = null;
+  }
+
+  markUpToDate() {
+    this.phase = "uptodate";
+    this.progress = 0;
+    this.version = null;
+  }
+
   async updateDownloaded(): Promise<boolean> {
-    if (!this.haveUpdate) return false;
-    return !!(await this.update.downloadPromise);
+    if (!this.haveUpdate) {
+      return false;
+    }
+    if (this.phase === "downloaded") {
+      return true;
+    }
+    return !!(await this.update?.downloadPromise);
   }
 }
 export const updateState = new UpdateState();
 
 const checkForUpdateRunOnce = new RunOnce<boolean>();
-/** @returns have update */
-async function checkForUpdate(): Promise<boolean> {
-  if (updateState.haveUpdate) return true;
-  return await checkForUpdateRunOnce.runOnce(async () => {
-    updateState.update = await ignoreMissingUpdateConfig(autoUpdater.checkForUpdates());
-    return updateState.haveUpdate;
+
+function resolveGhUpdateToken(): string | null {
+  let token = builtInGhUpdateToken?.trim() || "";
+  if (token && token !== "__JACKDAW_GH_UPDATE_TOKEN__") {
+    return token;
+  }
+  token = process.env.JACKDAW_GH_UPDATE_TOKEN?.trim() || "";
+  if (token) {
+    return token;
+  }
+  token = process.env.GH_TOKEN?.trim() || "";
+  return token || null;
+}
+
+function configureAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  if (app.getVersion().includes("-dev")) {
+    autoUpdater.allowPrerelease = true;
+  }
+  let token = resolveGhUpdateToken();
+  if (token) {
+    autoUpdater.requestHeaders = {
+      Authorization: `Bearer ${token}`,
+    };
+  }
+
+  autoUpdater.on("checking-for-update", () => {
+    updateState.beginCheck();
   });
+  autoUpdater.on("update-available", info => {
+    updateState.version = info.version ?? null;
+    updateState.phase = "available";
+    updateState.error = null;
+  });
+  autoUpdater.on("update-not-available", () => {
+    updateState.markUpToDate();
+  });
+  autoUpdater.on("download-progress", progress => {
+    updateState.phase = "downloading";
+    updateState.progress = Math.round(progress.percent ?? 0);
+  });
+  autoUpdater.on("update-downloaded", info => {
+    updateState.version = info.version ?? updateState.version;
+    updateState.phase = "downloaded";
+    updateState.progress = 100;
+  });
+  autoUpdater.on("error", err => {
+    let msg = String(err?.message ?? err ?? "");
+    if (/ENOENT|404|401|Cannot find .*yml/i.test(msg)) {
+      updateState.markUnsupported();
+      return;
+    }
+    updateState.error = msg;
+    if (updateState.phase === "checking") {
+      updateState.phase = "idle";
+    }
+  });
+}
+configureAutoUpdater();
+
+async function runUpdateCheck(check: () => Promise<UpdateCheckResult | null>): Promise<boolean> {
+  updateState.beginCheck();
+  updateState.update = await ignoreMissingUpdateConfig(check());
+  if (!updateState.update) {
+    if (updateState.phase === "checking") {
+      updateState.markUnsupported();
+    }
+    return false;
+  }
+  if (!updateState.haveUpdate) {
+    updateState.markUpToDate();
+    return false;
+  }
+  if (updateState.phase === "checking") {
+    updateState.phase = "available";
+  }
+  return true;
+}
+
+/** @returns have update */
+async function checkForUpdate(force = false): Promise<boolean> {
+  if (!force && updateState.readyToInstall) {
+    return true;
+  }
+  if (!force && updateState.haveUpdate) {
+    return true;
+  }
+  if (force) {
+    updateState.reset();
+  }
+  return await checkForUpdateRunOnce.runOnce(async () =>
+    runUpdateCheck(() => autoUpdater.checkForUpdates()));
 }
 
 export async function checkForUpdateAndNotify(): Promise<boolean> {
-  if (updateState.haveUpdate) return true;
-  return await checkForUpdateRunOnce.runOnce(async () => {
-    updateState.update = await ignoreMissingUpdateConfig(autoUpdater.checkForUpdatesAndNotify());
-    return updateState.haveUpdate;
-  });
+  if (updateState.readyToInstall || updateState.haveUpdate) {
+    return updateState.haveUpdate || updateState.readyToInstall;
+  }
+  return await checkForUpdateRunOnce.runOnce(async () =>
+    runUpdateCheck(() => autoUpdater.checkForUpdatesAndNotify()));
 }
 
 /** Builds without a publish configuration ship no `app-update.yml`.
@@ -403,12 +547,15 @@ async function ignoreMissingUpdateConfig(check: Promise<UpdateCheckResult | null
     if (ex.statusCode == 404 || ex.httpStatusCode == 404 || /404|Cannot find .*yml/i.test(msg)) {
       return null;
     }
+    if (ex.statusCode == 401 || ex.httpStatusCode == 401) {
+      return null;
+    }
     throw ex;
   }
 }
 
 export async function installUpdate() {
-  if (!await updateState.updateDownloaded()) {
+  if (!updateState.readyToInstall && !await updateState.updateDownloaded()) {
     throw new Error("No update downloaded");
   }
   autoUpdater.quitAndInstall(true, true);

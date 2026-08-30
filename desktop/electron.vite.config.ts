@@ -13,6 +13,9 @@ export default defineConfig({
       externalizeDepsPlugin({ exclude: ["@radically-straightforward/sqlite"] }),
       replace({
         __dirname: 'import.meta.dirname',
+        __JACKDAW_GH_UPDATE_TOKEN__: JSON.stringify(
+          process.env.JACKDAW_GH_UPDATE_TOKEN ?? process.env.GH_TOKEN ?? "",
+        ),
       }),
     ],
   },
