@@ -52,10 +52,27 @@ async function getJPCSecret(): Promise<string> {
   // #endif
 }
 
+async function connectToBackend(jpc: JPCWebSocket, secret: string, port: number) {
+  const delaysMS = [0, 300, 700, 1500, 3000];
+  let lastEx: Error | undefined;
+  for (let delayMS of delaysMS) {
+    if (delayMS) {
+      await sleep(delayMS / 1000);
+    }
+    try {
+      await jpc.connect(secret, "localhost", port);
+      return;
+    } catch (ex) {
+      lastEx = ex as Error;
+    }
+  }
+  throw lastEx ?? new Error("JPC: Could not connect to backend");
+}
+
 export async function getStartObjects(): Promise<void> {
   const secret = await getJPCSecret();
   let jpc = new JPCWebSocket(null);
-  await jpc.connect(secret, "localhost", production ? 5455 : 5453);
+  await connectToBackend(jpc, secret, production ? 5455 : 5453);
   jpc.errorCallback = showError;
   jpc.reconnectCallback = checkAccounts;
   console.log("Connected to backend");

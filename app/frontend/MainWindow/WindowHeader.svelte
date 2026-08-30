@@ -65,7 +65,7 @@
     if (canMaximize) {
       appGlobal.remoteApp.maximizeMainWindow();
     } else {
-      appGlobal.remoteApp.unminimizeMainWindow();
+      appGlobal.remoteApp.restoreMainWindow();
     }
     canMaximize = !canMaximize;
   }

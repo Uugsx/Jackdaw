@@ -30,11 +30,48 @@ import { RunOnce } from '../../app/logic/util/flow/RunOnce';
 const { autoUpdater } = electronUpdater;
 
 let jpc: JPCWebSocket | null = null;
+let backendStartup: Promise<void> | null = null;
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isAddrInUse(ex: unknown): boolean {
+  return typeof ex === "object" && ex !== null && (ex as NodeJS.ErrnoException).code === "EADDRINUSE";
+}
+
+async function listenForJPC(appGlobal: Awaited<ReturnType<typeof createSharedAppObject>>, jpcSecret: string, port: number) {
+  const kMaxAttempts = 15;
+  for (let attempt = 0; attempt < kMaxAttempts; attempt++) {
+    let jpcInstance = new JPCWebSocket(appGlobal);
+    try {
+      await jpcInstance.listen(jpcSecret, port, false);
+      return jpcInstance;
+    } catch (ex) {
+      await jpcInstance.stopListening().catch(() => {});
+      if (!isAddrInUse(ex) || attempt >= kMaxAttempts - 1) {
+        throw ex;
+      }
+      await delay(400 * (attempt + 1));
+    }
+  }
+  throw new Error("JPC backend failed to bind port");
+}
 
 export async function startupBackend(jpcSecret: string) {
-  let appGlobal = await createSharedAppObject();
-  jpc = new JPCWebSocket(appGlobal);
-  await jpc.listen(jpcSecret, production ? 5455 : 5453, false);
+  if (jpc) {
+    return;
+  }
+  if (backendStartup) {
+    return backendStartup;
+  }
+  backendStartup = (async () => {
+    let appGlobal = await createSharedAppObject();
+    jpc = await listenForJPC(appGlobal, jpcSecret, production ? 5455 : 5453);
+  })().finally(() => {
+    backendStartup = null;
+  });
+  return backendStartup;
 }
 
 export async function shutdownBackend() {
@@ -70,6 +107,7 @@ async function createSharedAppObject() {
     minimizeMainWindow,
     unminimizeMainWindow,
     focusMainWindow,
+    restoreMainWindow,
     maximizeMainWindow,
     addEventListenerWebContents,
     containWebContentsNavigation,
@@ -412,11 +450,14 @@ class UpdateState extends Observable {
     this.phase = "checking";
   }
 
-  markUnsupported() {
+  markUnsupported(reason?: string) {
     this.update = null;
     this.phase = "unsupported";
     this.progress = 0;
     this.version = null;
+    if (reason) {
+      this.error = reason;
+    }
   }
 
   markUpToDate() {
@@ -454,12 +495,38 @@ function readGhUpdateTokenFile(filePath: string): string | null {
   }
 }
 
+function appResourcePaths(...parts: string[]): string[] {
+  let results = new Set<string>();
+  let add = (base: string | undefined) => {
+    if (base) {
+      results.add(path.join(base, ...parts));
+    }
+  };
+  add(process.resourcesPath);
+  add(path.join(path.dirname(app.getPath("exe")), "..", "Resources"));
+  add(path.join(path.dirname(app.getPath("exe")), "resources"));
+  add(path.dirname(app.getAppPath()));
+  return [...results];
+}
+
+function hasAppUpdateConfig(): boolean {
+  for (let candidate of appResourcePaths("app-update.yml")) {
+    if (fs.existsSync(candidate)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function resolveGhUpdateToken(): string | null {
+  for (let candidate of appResourcePaths("gh-update-token.txt")) {
+    let token = readGhUpdateTokenFile(candidate);
+    if (token) {
+      return token;
+    }
+  }
   for (let candidate of [
-    path.join(process.resourcesPath, "gh-update-token.txt"),
-    path.join(path.dirname(app.getPath("exe")), "resources", "gh-update-token.txt"),
     path.join(import.meta.dirname, "../build/gh-update-token.txt"),
-    path.join(app.getPath("exe"), "..", "..", "Resources", "gh-update-token.txt"),
   ]) {
     let token = readGhUpdateTokenFile(candidate);
     if (token) {
@@ -520,7 +587,9 @@ function configureAutoUpdater() {
     let msg = String(err?.message ?? err ?? "");
     if (/ENOENT|404|401|Cannot find .*yml/i.test(msg)) {
       if (updateState.phase === "checking") {
-        updateState.markUnsupported();
+        updateState.markUnsupported(
+          "Could not read update metadata from GitHub Releases. Install the latest build from GitHub Releases.",
+        );
       } else {
         updateState.error = msg;
         updateState.phase = "idle";
@@ -560,18 +629,6 @@ function failUpdateCheck(message: string) {
   }
 }
 
-function hasAppUpdateConfig(): boolean {
-  for (let candidate of [
-    path.join(process.resourcesPath, "app-update.yml"),
-    path.join(path.dirname(app.getPath("exe")), "resources", "app-update.yml"),
-  ]) {
-    if (fs.existsSync(candidate)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 const kUpdateDownloadTimeoutMs = 20 * 60_000;
 
 function trackUpdateDownload(result: UpdateCheckResult | null) {
@@ -597,7 +654,7 @@ function trackUpdateDownload(result: UpdateCheckResult | null) {
 
 function markUpdateUnavailable(reason: string) {
   updateState.error = reason;
-  updateState.markUnsupported();
+  updateState.markUnsupported(reason);
 }
 
 async function runUpdateCheck(check: () => Promise<UpdateCheckResult | null>): Promise<boolean> {
@@ -1055,6 +1112,15 @@ function minimizeMainWindow() {
 
 function unminimizeMainWindow() {
   focusMainWindow();
+}
+
+function restoreMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  }
 }
 
 function maximizeMainWindow() {
