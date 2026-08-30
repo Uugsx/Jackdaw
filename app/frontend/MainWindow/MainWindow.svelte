@@ -107,6 +107,7 @@
     widgetSplitterResetKey,
   } from "../Widgets/widgetState";
   import { catchErrors, backgroundError } from "../Util/error";
+  import { startUpdateNotificationWatcher } from "./UpdateNotification";
   import { assert } from "../../logic/util/util";
   import { getUILocale, t } from "../../l10n/l10n";
   import { rtlLocales } from "../../l10n/list";
@@ -151,6 +152,7 @@
 
   async function startup() {
     await getStartObjects();
+    startUpdateNotificationWatcher();
     if (appGlobal.emailAccounts.isEmpty && appGlobal.chatAccounts.isEmpty) {
       await setup();
     } else {

@@ -164,6 +164,15 @@ Or push to `main` touching monitored paths.
 
 ---
 
+### User-facing flow
+
+- **Background check:** on app startup, then every **4 hours** (`desktop/src/main/index.ts`)
+- **Banner:** yellow/blue bar at top when update is `available` / `downloading` / `downloaded` — button **Install** opens Settings → About and starts the update flow (`app/frontend/MainWindow/UpdateNotification.ts`)
+
+Do not poll every few minutes — wastes GitHub API and user bandwidth. 4 h is a reasonable default for `-dev` prereleases; increase to 12–24 h when releases become less frequent.
+
+---
+
 ## Changing OTA safely
 
 1. Read this doc and `electron-builder.yml`
