@@ -24,6 +24,8 @@
     "build:linux": "npm run build && npm run icon:icns && electron-builder --linux --config",
     "build:prerelease:win": "npm run build && electron-builder --win --config -c.publish.releaseType=prerelease",
     "build:prerelease:mac": "npm run build && electron-builder --mac --config -c.publish.releaseType=prerelease",
+    "build:publish:prerelease:win": "npm run build && electron-builder --win --config --publish always -c.publish.releaseType=prerelease",
+    "build:publish:prerelease:mac": "npm run build && electron-builder --mac --config --publish always -c.publish.releaseType=prerelease -c.mac.notarize=false",
     "build:prerelease:linux": "npm run build && npm run icon:icns && electron-builder --linux --config -c.publish.releaseType=prerelease",
     "build:release:win": "npm run build && electron-builder --win --config --publish always",
     "build:release:mac": "npm run build && electron-builder --mac --config --publish always",
