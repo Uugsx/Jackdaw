@@ -58,8 +58,7 @@ else
   : > ../../desktop/build/gh-update-token.txt
 fi
 if [ ! -s ../../desktop/build/gh-update-token.txt ]; then
-  echo "ERROR: gh-update-token.txt is empty. Set the JACKDAW_GH_UPDATE_TOKEN repository secret."
-  exit 1
+  echo "WARN: gh-update-token.txt is empty (OK for public GitHub repo OTA)."
 fi
 
 if command -v rg >/dev/null 2>&1; then
