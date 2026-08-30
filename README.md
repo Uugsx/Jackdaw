@@ -32,7 +32,8 @@ Desktop на **Electron**, mobile на **Capacitor**, UI — **Svelte + TypeScri
 - **Боковая панель** — виджеты, календарь, встроенные web-панели
 - **Обновлённый UI** — layout'ы почты, ribbon, плавающий композер, тема Jackdaw
 - **Почта** — тёмная тема HTML-писем, категории OWA, undo удаления, дерево папок
-- **В планах** — OTA-обновления, [jackdaw.app](https://jackdaw.app), дальнейшие OWA-фичи
+- **Desktop OTA** — автообновление через GitHub Releases (Mac + Windows); см. [`docs/systems/desktop-build/ota-jackdaw.md`](docs/systems/desktop-build/ota-jackdaw.md)
+- **Roadmap** — [jackdaw.app](https://jackdaw.app), дальнейшие OWA-фичи
 
 ### Возможности
 
@@ -75,7 +76,7 @@ cd app && npm run build
 cd desktop && npm run build:mac
 ```
 
-Подробнее: [`docs/INSTALL.md`](docs/INSTALL.md) · [`docs/systems/desktop-build/`](docs/systems/desktop-build/)
+Подробнее: [`docs/INSTALL.md`](docs/INSTALL.md) · [`docs/systems/desktop-build/`](docs/systems/desktop-build/) · **OTA:** [`ota-jackdaw.md`](docs/systems/desktop-build/ota-jackdaw.md)
 
 ### Структура репозитория
 
@@ -113,7 +114,8 @@ lib/        — общие библиотеки (JPC protocol)
 - **Sidebar** — widgets, mini-calendar, embedded web panels
 - **Updated UI** — mail layouts, ribbon, floating composer, Jackdaw theme
 - **Mail** — dark-mode HTML, OWA categories, delete undo, folder tree
-- **Roadmap** — OTA updates, [jackdaw.app](https://jackdaw.app), more OWA work
+- **Desktop OTA** — auto-update via GitHub Releases (Mac + Windows); see [`docs/systems/desktop-build/ota-jackdaw.md`](docs/systems/desktop-build/ota-jackdaw.md)
+- **Roadmap** — [jackdaw.app](https://jackdaw.app), more OWA work
 
 ### Features
 
@@ -156,7 +158,7 @@ cd app && npm run build
 cd desktop && npm run build:mac
 ```
 
-See also: [`docs/INSTALL.md`](docs/INSTALL.md) · [`docs/systems/desktop-build/`](docs/systems/desktop-build/)
+See also: [`docs/INSTALL.md`](docs/INSTALL.md) · [`docs/systems/desktop-build/`](docs/systems/desktop-build/) · **OTA:** [`ota-jackdaw.md`](docs/systems/desktop-build/ota-jackdaw.md)
 
 ### Repository layout
 
