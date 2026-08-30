@@ -13,6 +13,7 @@
     </div>
   {:else if phase === "downloaded" || readyToInstall}
     <div class="status">{$t`Update ready`}{version ? `: ${version}` : ""}</div>
+    <p class="hint">{$t`The update will also install automatically when you quit the app.`}</p>
     <Button label={installingUpdate ? $t`Installing update…` : $t`Install update`} onClick={installUpdate}
       disabled={installingUpdate} />
   {:else if phase === "available"}
@@ -87,6 +88,13 @@
     checkTimedOut = false;
   }
 
+  function startDownloadWatchdog() {
+    clearWatchdog();
+    pollTimer = setInterval(() => {
+      refreshStatus().catch(showError);
+    }, 2000);
+  }
+
   function startCheckingWatchdog() {
     clearWatchdog();
     pollTimer = setInterval(() => {
@@ -121,7 +129,7 @@
     } else if (obj.error === null) {
       errorEx = undefined;
     }
-    if (phase !== "checking") {
+    if (phase === "downloaded" || phase === "uptodate" || phase === "unsupported" || phase === "idle") {
       clearWatchdog();
     }
   }
@@ -138,6 +146,8 @@
     } else if (phase === "checking") {
       startCheckingWatchdog();
       checkForUpdate(true);
+    } else if (phase === "available" || phase === "downloading") {
+      startDownloadWatchdog();
     }
   });
 
@@ -184,6 +194,13 @@
   }
   .status {
     line-height: 1.45;
+  }
+  .hint {
+    margin: 0;
+    max-width: 28em;
+    line-height: 1.45;
+    font-size: 14px;
+    color: color-mix(in srgb, var(--fg) 72%, transparent);
   }
   .progress {
     width: min(100%, 20em);

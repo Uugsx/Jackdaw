@@ -578,6 +578,13 @@ function trackUpdateDownload(result: UpdateCheckResult | null) {
     return;
   }
   void withTimeout(Promise.resolve(downloadPromise), kUpdateDownloadTimeoutMs, "Update download timed out")
+    .then(() => {
+      if (updateState.phase !== "downloaded") {
+        updateState.phase = "downloaded";
+        updateState.progress = 100;
+        updateState.error = null;
+      }
+    })
     .catch(ex => {
       updateState.error = String((ex as Error)?.message ?? ex ?? "Update download failed");
       if (updateState.phase === "available" || updateState.phase === "downloading") {
@@ -695,7 +702,27 @@ async function ignoreMissingUpdateConfig(check: Promise<UpdateCheckResult | null
   }
 }
 
-export function getUpdateStatus() {
+async function syncUpdateDownloadState(): Promise<void> {
+  if (updateState.phase === "downloaded") {
+    return;
+  }
+  let promise = updateState.update?.downloadPromise;
+  if (!promise) {
+    return;
+  }
+  let outcome = await Promise.race([
+    promise.then(() => "done" as const, () => "error" as const),
+    new Promise<"pending">(resolve => setTimeout(() => resolve("pending"), 0)),
+  ]);
+  if (outcome === "done" && updateState.phase !== "downloaded") {
+    updateState.phase = "downloaded";
+    updateState.progress = 100;
+    updateState.error = null;
+  }
+}
+
+export async function getUpdateStatus() {
+  await syncUpdateDownloadState();
   return {
     phase: updateState.phase,
     progress: updateState.progress,
