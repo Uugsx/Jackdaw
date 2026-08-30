@@ -44,6 +44,8 @@ export class WebMailBackend {
   }
   async unminimizeMainWindow() {
   }
+  async restoreMainWindow() {
+  }
   async focusMainWindow() {
     window.focus();
   }

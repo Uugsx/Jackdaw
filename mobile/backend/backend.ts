@@ -48,6 +48,7 @@ async function createSharedAppObject() {
     setBadgeCount,
     minimizeMainWindow,
     unminimizeMainWindow,
+    restoreMainWindow,
     maximizeMainWindow,
     addEventListenerWebContents,
     containWebContentsNavigation,
@@ -364,6 +365,10 @@ function minimizeMainWindow() {
 }
 
 function unminimizeMainWindow() {
+  throw new Error("Not supported");
+}
+
+function restoreMainWindow() {
   throw new Error("Not supported");
 }
 

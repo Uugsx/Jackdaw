@@ -25,13 +25,27 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       ota_build_suffix: ${{ steps.ota_suffix.outputs.value }}
     steps:
+      - uses: actions/checkout@v6
       - name: OTA dev version suffix
         id: ota_suffix
         if: github.event_name == 'push' || inputs.release_type == 'prerelease'
         run: echo "value=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+      - name: Create release tag
+        if: github.event_name == 'push' || inputs.release_type == 'prerelease'
+        env:
+          OTA_BUILD_SUFFIX: ${{ steps.ota_suffix.outputs.value }}
+        run: |
+          BASE=$(node -p "require('./app/package.json').version.replace(/-dev.*/, '')")
+          TAG="v${BASE}-dev.${OTA_BUILD_SUFFIX}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "$TAG" "$GITHUB_SHA"
+          git push origin "$TAG" --force
 
   mac:
     needs: prepare

@@ -89,7 +89,6 @@
       checkForUpdate(false);
     } else if (phase === "checking") {
       startCheckingWatchdog();
-      checkForUpdate(true);
     } else if (phase === "available" || phase === "downloading") {
       startDownloadWatchdog();
     }
@@ -99,14 +98,17 @@
     if (status) {
       syncFromBackend(status);
       if (status.phase === "unsupported") {
+        let installer = isMac ? ".dmg" : "setup.exe";
         if (!status.otaConfigured) {
           errorEx = new Error(
-            "This install is missing OTA config. Download and run the setup.exe from GitHub Releases.",
+            `This install is missing OTA config. Download and run the ${installer} from GitHub Releases.`,
           );
         } else if (!status.otaTokenPresent) {
           errorEx = new Error(
-            "This install is missing the update token. Download and run the setup.exe from GitHub Releases.",
+            `This install is missing the update token. Download and run the ${installer} from GitHub Releases.`,
           );
+        } else if (status.error) {
+          errorEx = new Error(status.error);
         }
       }
     }
