@@ -28,6 +28,9 @@ function owaMessageListProperties(): object[] {
   }, {
     __type: "PropertyUri:#Exchange",
     FieldURI: "item:Importance",
+  }, {
+    __type: "PropertyUri:#Exchange",
+    FieldURI: "item:HasAttachments",
   }];
 }
 
@@ -157,11 +160,9 @@ export function owaGetNewMsgHeadersRequest(newMessageIDs: string[]): OWARequest 
       }, {
         __type: "PropertyUri:#Exchange",
         FieldURI: "item:ItemClass",
-        /* Non-MIME @see OWAEMail.bodyAndAttachmentsFromJson()
-        }, {
-          __type: "PropertyUri:#Exchange",
-          FieldURI: "item:Attachments",
-        */
+      }, {
+        __type: "PropertyUri:#Exchange",
+        FieldURI: "item:HasAttachments",
       }, {
         __type: "PropertyUri:#Exchange",
         FieldURI: "item:Subject",

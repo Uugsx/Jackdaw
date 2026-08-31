@@ -155,7 +155,7 @@ export class SearchEMail extends Observable {
     if (!matchesBoolean(this.isImportant, email.isImportant)) {
       return false;
     }
-    if (!matchesBoolean(this.hasAttachment, email.attachments.hasItems)) {
+    if (!matchesBoolean(this.hasAttachment, email.hasVisibleAttachments)) {
       return false;
     }
     // TODO attachment type

@@ -204,6 +204,13 @@
     min-height: 5em;
     padding: 8px;
   }
+  .signature :global(.html-editor .ProseMirror) {
+    margin-block: 0;
+    line-height: 1;
+  }
+  .signature :global(.html-editor .ProseMirror p) {
+    margin-block: 0;
+  }
   .sentBy {
     padding: 8px 16px;
   }

@@ -135,11 +135,18 @@
             <SMLComposer {mail} />
             <vbox class="editor" class:loading={loading} spellcheck={$spellcheckEnabled.value}
               style:zoom={editorZoom / 100}>
-              <!-- The html in the mail passed in MUST already be sanitized HTML.
-              Using `rawHTMLDangerous` avoids that we're sanitizing on every keypress. -->
-              <HTMLEditor bind:html={mail.rawHTMLDangerous} bind:editor tabindex={1}
-                extraExtensions={composeEditorExtensions} />
+              <HTMLEditor bind:html={editableHtml} bind:editor tabindex={1}
+                extraExtensions={composeEditorExtensions}
+                on:change={onEditorChange} />
             </vbox>
+            {#if composeQuoteHtml}
+              <vbox class="compose-quote">
+                {#if showQuoteAttribution && mail.composeSource && mail.inReplyTo}
+                  <p class="quote-header">{mail.composeSource.compose.quotePrefixLine()}</p>
+                {/if}
+                <ComposeQuoteEditor html={quoteBodyHtml} on:change={onQuoteChange} />
+              </vbox>
+            {/if}
           </Scroll>
         </Paper>
       </vbox>
@@ -189,11 +196,13 @@
   import FileSelector from "./Attachments/FileSelector.svelte";
   import FileDropTarget from "./Attachments/FileDropTarget.svelte";
   import HTMLEditor from "../../Shared/Editor/HTMLEditor.svelte";
+  import ComposeQuoteEditor from "./ComposeQuoteEditor.svelte";
   import { composeEditorExtensions, composeDefaultFontFamily, composeDefaultFontSize, fontSizeToCSS } from "../../Shared/Editor/composeEditorExtensions";
   import { resolveComposeRecipients } from "../../../logic/Mail/composeResolveRecipients";
   import { closeFloatingCompose } from "./composeFloating";
   import { focusComposeTypingArea } from "./composeCursor";
   import { editorHasNewComposeText } from "./composeBody";
+  import { applyQuoteBodyEdit, mergeComposeQuote, quoteDisplayBody, splitComposeQuote } from "./composeQuote";
   import UserCheckIcon from "lucide-svelte/icons/user-check";
   import { createEventDispatcher } from "svelte";
   import ComposeRibbon from "./ComposeRibbon.svelte";
@@ -221,12 +230,22 @@
   const dispatchEvent = createEventDispatcher<{ close: void }>();
 
   let editor: Editor;
+  let editableHtml = "";
+  /** Quoted original kept out of TipTap — preserved byte-for-byte for send. */
+  let composeQuoteHtml = "";
+  /** Editable body shown in the quote block (may differ from composeQuoteHtml wrapper). */
+  let quoteBodyHtml = "";
+  let composeContentReady = false;
+  let loadingEditorContent = false;
   $: to = mail.to;
   let fromIdentity: MailIdentity;
   let toAutocomplete: MailAutocomplete;
   let ccAutocomplete: MailAutocomplete;
   let bccAutocomplete: MailAutocomplete;
   let spellcheckEnabled = getLocalStorage("mail.send.spellcheck.enabled", false);
+  let quoteAttributionSetting = getLocalStorage("mail.send.quote.attribution", false);
+  $: showQuoteAttribution = $quoteAttributionSetting.value;
+  $: isReplyQuote = !!(mail.composeSource && mail.inReplyTo);
   let editorZoom = 100;
   let encryptionError: string | null = null;
 
@@ -242,6 +261,10 @@
       return;
     }
     lastMail = mail;
+    composeContentReady = false;
+    composeQuoteHtml = "";
+    editableHtml = "";
+    quoteBodyHtml = "";
 
     fromIdentity = mail.identity
       ?? mail.folder?.account.identities.first
@@ -270,6 +293,9 @@
       return;
     }
     loading = true;
+    if (mail.composeSource && mail.inReplyTo) {
+      await mail.composeSource.loadBody();
+    }
     await mail.loadBody();
     loading = false;
     // Drafts already contain signature; replies/forwards need it injected
@@ -287,26 +313,96 @@
     return /<footer\b[^>]*>/i.test(top);
   }
 
-  async function ensureEditorContent() {
-    if (!editor) {
-      await tick();
+  function syncComposeHtml() {
+    if (editor) {
+      editableHtml = editor.getHTML();
     }
-    if (!editor) {
+    mail.rawHTMLDangerous = mergeComposeQuote(editableHtml, composeQuoteHtml);
+  }
+
+  function onQuoteChange(event: CustomEvent<string>) {
+    if (!composeContentReady || loading) {
       return;
     }
-    // User may paste/type while loadBody/applySignature is still running — keep that text.
-    let editorHtml = editor.getHTML();
-    if (editorHasNewComposeText(editorHtml, mail.rawHTMLDangerous)) {
-      mail.rawHTMLDangerous = editorHtml;
-      if (!mail.isDraft) {
-        mail.compose.applySignature();
-      }
+    quoteBodyHtml = event.detail;
+    composeQuoteHtml = applyQuoteBodyEdit(composeQuoteHtml, quoteBodyHtml, isReplyQuote);
+    syncComposeHtml();
+  }
+
+  function refreshQuoteBodyHtml() {
+    let sourceHtml = mail.composeSource && mail.inReplyTo && mail.composeSource.loadedBody
+      ? mail.composeSource.html
+      : null;
+    quoteBodyHtml = quoteDisplayBody(composeQuoteHtml, sourceHtml, isReplyQuote);
+  }
+
+  function onEditorChange() {
+    if (!composeContentReady || loading) {
+      return;
     }
-    // Use raw HTML so DOMPurify WHOLE_DOCUMENT wrapping does not break TipTap
-    editor.commands.setContent(mail.rawHTMLDangerous || "<p></p>");
-    applyDefaultComposeFormatting();
-    await tick();
-    setCursorDefault();
+    syncComposeHtml();
+  }
+
+  async function waitForEditor(maxTicks = 40): Promise<boolean> {
+    for (let i = 0; i < maxTicks; i++) {
+      if (editor) {
+        return true;
+      }
+      await tick();
+    }
+    return false;
+  }
+
+  async function reloadEditorFromMail() {
+    let { editable, quote } = splitComposeQuote(mail.rawHTMLDangerous);
+    composeQuoteHtml = quote;
+    editableHtml = editable;
+    refreshQuoteBodyHtml();
+    if (editor) {
+      editor.commands.setContent(editableHtml || "<p></p>");
+    }
+    composeContentReady = true;
+  }
+
+  async function ensureEditorContent() {
+    if (loadingEditorContent || composeContentReady) {
+      return;
+    }
+    if (!await waitForEditor()) {
+      return;
+    }
+    loadingEditorContent = true;
+    try {
+      let { editable, quote } = splitComposeQuote(mail.rawHTMLDangerous);
+      composeQuoteHtml = quote;
+      refreshQuoteBodyHtml();
+      let editorHtml = editor.getHTML();
+      if (editorHasNewComposeText(editorHtml, editable)) {
+        editableHtml = editorHtml;
+        mail.rawHTMLDangerous = mergeComposeQuote(editableHtml, composeQuoteHtml);
+        if (!mail.isDraft) {
+          mail.compose.applySignature();
+          ({ editable, quote } = splitComposeQuote(mail.rawHTMLDangerous));
+          composeQuoteHtml = quote;
+          editableHtml = editable;
+          refreshQuoteBodyHtml();
+        }
+      } else {
+        editableHtml = editable;
+      }
+      refreshQuoteBodyHtml();
+      editor.commands.setContent(editableHtml || "<p></p>");
+      applyDefaultComposeFormatting();
+      await tick();
+      setCursorDefault();
+      composeContentReady = true;
+    } finally {
+      loadingEditorContent = false;
+    }
+  }
+
+  $: if (editor && mail === lastMail && !composeContentReady && !loading && !loadingEditorContent) {
+    void ensureEditorContent();
   }
 
   function applyDefaultComposeFormatting() {
@@ -343,10 +439,9 @@
     if (!editor) {
       return;
     }
-    mail.rawHTMLDangerous = editor.getHTML();
+    syncComposeHtml();
     mail.compose.applySignature();
-    editor.commands.setContent(mail.rawHTMLDangerous || "<p></p>");
-    setCursorDefault();
+    void reloadEditorFromMail().then(() => setCursorDefault());
   }
 
   function toggleHighImportance() {
@@ -429,10 +524,9 @@
     }
     // When user switches identity in composer, refresh signature footer
     if (identityChanged && editor && !loading) {
-      mail.rawHTMLDangerous = editor.getHTML();
+      syncComposeHtml();
       mail.compose.applySignature();
-      editor.commands.setContent(mail.rawHTMLDangerous || "<p></p>");
-      setCursorDefault();
+      void reloadEditorFromMail().then(() => setCursorDefault());
     }
   }
 
@@ -511,9 +605,7 @@
     }
     sending = true;
     try {
-      if (editor) {
-        mail.rawHTMLDangerous = editor.getHTML();
-      }
+      syncComposeHtml();
       await commitPendingRecipients();
       await resolveComposeRecipients(mail);
       await mail.compose.send();
@@ -524,17 +616,13 @@
   }
 
   async function onSaveDraft() {
-    if (editor) {
-      mail.rawHTMLDangerous = editor.getHTML();
-    }
+    syncComposeHtml();
     await mail.compose.saveAsDraft();
   }
 
   /** Sync editor HTML before save/close from floating window chrome. */
   export function syncEditorContent() {
-    if (editor) {
-      mail.rawHTMLDangerous = editor.getHTML();
-    }
+    syncComposeHtml();
   }
 
   export async function saveDraft() {
@@ -753,6 +841,21 @@
   .editor.loading {
     pointer-events: none;
     opacity: 0.72;
+  }
+  .editor :global(.ProseMirror) {
+    overflow: visible;
+    max-height: none;
+  }
+  .compose-quote {
+    margin: 0 12px 12px;
+    padding-block-start: 8px;
+    border-block-start: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .compose-quote .quote-header {
+    margin: 0 0 8px;
+    color: var(--input-placeholder);
+    font-size: 12px;
   }
   .editor-wrapper {
     flex: 3 0 0;

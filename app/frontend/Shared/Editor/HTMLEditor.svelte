@@ -153,11 +153,17 @@
     padding-inline-start: 20px;
     margin-inline-start: 0px;
   }
+  .html-editor :global(blockquote table) {
+    width: auto;
+    max-width: 100%;
+  }
   .html-editor :global(img) {
     max-width: 100%;
   }
   .html-editor :global(table) {
     border-collapse: collapse;
+  }
+  .html-editor :global(.tiptap > table) {
     width: 100%;
   }
   .html-editor :global(footer.signature table),
@@ -170,6 +176,11 @@
     border: 1px solid var(--border);
     padding: 4px 8px;
     vertical-align: top;
+  }
+  .html-editor :global(blockquote td),
+  .html-editor :global(blockquote th) {
+    border: none;
+    padding: 0;
   }
 
   /** Undo the default margin of first/last <p> */

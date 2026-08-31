@@ -293,6 +293,9 @@ export class OWAFolder extends ExchangeFolder {
     } else {
       await this.downloadMessages(newMsgs);
     }
+    if (!this.attachmentFlagsSynced && this.messages.hasItems) {
+      void this.syncHasAttachmentFlags().catch(ex => this.account.errorCallback(ex));
+    }
     return newMsgs;
   }
 
@@ -473,6 +476,66 @@ export class OWAFolder extends ExchangeFolder {
       }
       this.completeInitialSync();
       return newMsgs;
+    } finally {
+      lock.release();
+    }
+  }
+
+  /** Load attachment metadata for header-only messages (list icon + filters). */
+  async syncHasAttachmentFlags(): Promise<void> {
+    if (!this.id || this.attachmentFlagsSynced) {
+      return;
+    }
+    let lock = await this.listMessagesLock.lock();
+    try {
+      if (this.attachmentFlagsSynced) {
+        return;
+      }
+      let request = owaFindMsgsInFolderRequest(
+        this.id,
+        kMaxFetchCount,
+        false,
+        this.account.isDependentAccount,
+      );
+      while (true) {
+        let result = await this.account.callOWA(request);
+        let messages = result?.RootFolder?.Items ?? [];
+        if (!messages.length) {
+          break;
+        }
+        for (let message of messages) {
+          let id = sanitize.nonemptystring(message?.ItemId?.Id ?? message?.ItemId, "");
+          if (!id) {
+            continue;
+          }
+          let email = this.getEmailByItemID(id);
+          if (!email) {
+            continue;
+          }
+          if (email.setFlags(message, "full")) {
+            await email.saveWritablePropsLocally();
+          }
+        }
+        let nextOffset = result.RootFolder?.IndexedPagingOffset;
+        if (typeof nextOffset === "number" && nextOffset > request.Body.Paging.Offset) {
+          request.Body.Paging.Offset = nextOffset;
+        } else {
+          request.Body.Paging.Offset += messages.length;
+        }
+        if (result?.RootFolder?.IncludesLastItemInRange === true) {
+          break;
+        }
+        let totalCount = result?.RootFolder?.TotalItemsInView;
+        if (typeof totalCount === "number" && request.Body.Paging.Offset >= totalCount) {
+          break;
+        }
+        if (messages.length < kMaxFetchCount && result?.RootFolder?.IncludesLastItemInRange !== false) {
+          break;
+        }
+      }
+      this.attachmentFlagsSynced = true;
+      await this.storage.saveFolder(this);
+      this.notifyObservers();
     } finally {
       lock.release();
     }

@@ -24,6 +24,7 @@ export class JSONFolder extends Folder {
     json.countNewArrived = folder.countNewArrived;
     json.uidvalidity = (folder as any as IMAPFolder).uidvalidity;
     json.syncState = folder.syncState;
+    json.attachmentFlagsSynced = folder.attachmentFlagsSynced;
   }
 
   static read(folder: Folder, json: any): Folder {
@@ -39,6 +40,7 @@ export class JSONFolder extends Folder {
     folder.syncState = typeof(json.syncState) == "number"
       ? sanitize.integer(json.syncState, null)
       : sanitize.string(json.syncState, null);
+    folder.attachmentFlagsSynced = sanitize.boolean(json.attachmentFlagsSynced, false);
     let accountID = sanitize.alphanumdash(json.accountID);
     folder.account = appGlobal.emailAccounts.find(acc => acc.id == accountID);
     assert(folder.account, `Account ${accountID} not yet loaded`);

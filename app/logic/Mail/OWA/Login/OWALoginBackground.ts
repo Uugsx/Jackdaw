@@ -1,6 +1,22 @@
 import { appGlobal } from "../../../app";
 
 export class OWALoginBackground {
+  static async fetchPageWithRetry(partition: string, page: string, retries = 2) {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await appGlobal.remoteApp.OWA.fetchText(partition, page);
+      } catch (ex) {
+        lastError = ex;
+        if (attempt >= retries) {
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+      }
+    }
+    throw lastError;
+  }
+
   static async submitLoginForm(username: string, password: string, partition: string, elements: OWALoginFormElements) {
     elements.username.value = username;
     elements.password.value = password;
@@ -91,7 +107,7 @@ export class OWALoginBackground {
         continue;
       }
       seen.add(page);
-      let response = await appGlobal.remoteApp.OWA.fetchText(partition, page);
+      let response = await this.fetchPageWithRetry(partition, page);
       let responseURL = await response.url;
       let text = await response.text;
       let status = await response.status;

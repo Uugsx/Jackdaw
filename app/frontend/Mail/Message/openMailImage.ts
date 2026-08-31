@@ -12,6 +12,63 @@ type WebviewGuest = HTMLIFrameElement & {
   executeJavaScript?: (code: string) => Promise<unknown>;
 };
 
+async function waitForImageElement(img: HTMLImageElement): Promise<void> {
+  if (img.complete && img.naturalWidth > 0) {
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    img.addEventListener("load", () => resolve(), { once: true });
+    img.addEventListener("error", () => reject(new Error("load failed")), { once: true });
+  });
+}
+
+/** Read pixels from an inline `<img>` in the main document or a guest webview. */
+export async function imageElementToDataURL(img: HTMLImageElement): Promise<string | null> {
+  if (!img?.src) {
+    return null;
+  }
+  if (img.src.startsWith("data:")) {
+    return img.src;
+  }
+  try {
+    await waitForImageElement(img);
+    let canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    if (!canvas.width || !canvas.height) {
+      return null;
+    }
+    canvas.getContext("2d")?.drawImage(img, 0, 0);
+    return canvas.toDataURL("image/png");
+  } catch {
+    try {
+      let response = await fetch(img.src);
+      let blob = await response.blob();
+      return await new Promise<string | null>((resolve, reject) => {
+        let reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result == "string" ? reader.result : null);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** Open an inline image from a DOM `<img>` (compose quote, etc.). */
+export async function openMailImageFromElement(
+  img: HTMLImageElement,
+  suggestedFilename?: string,
+): Promise<void> {
+  let dataURL = await imageElementToDataURL(img);
+  if (!dataURL) {
+    throw new UserError(gt`Could not read the image`);
+  }
+  let blob = await dataURLToBlob(dataURL);
+  await saveAndOpenBlob(blob, img.src as URLString, suggestedFilename);
+}
+
 /** Open an inline email image in the default OS image viewer. */
 export async function openMailImageAtPoint(
   webview: WebviewGuest | null | undefined,

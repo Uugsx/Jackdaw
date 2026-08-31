@@ -79,6 +79,20 @@ export class OWAEMail extends ExchangeEMail {
     setPersons(this.bcc, json.BccRecipients);
     this.contact = computeEMailContact(this);
     this.invitationMessage = ExchangeScheduling[sanitize.string(json.ItemClass)] || InvitationMessage.None;
+    this.applyHasAttachmentsFromJSON(json);
+  }
+
+  /** Exchange `HasAttachments` from FindItem / GetItem (no extra round-trip). */
+  applyHasAttachmentsFromJSON(json: Record<string, any>): boolean {
+    if (!("HasAttachments" in json)) {
+      return false;
+    }
+    let next = sanitize.boolean(propertyValue(json.HasAttachments), false);
+    if (this.hasAttachmentsFlag == next) {
+      return false;
+    }
+    this.hasAttachmentsFlag = next;
+    return true;
   }
 
   /**
@@ -120,10 +134,11 @@ export class OWAEMail extends ExchangeEMail {
     let tagsChanged = oldTagNames.length != tagNames.length ||
       oldTagNames.some((name, i) => name != tagNames[i]) ||
       tagNames.some((name, i) => name != oldTagNames[i]);
+    let attachmentsFlagChanged = this.applyHasAttachmentsFromJSON(json);
     let changed = this.isRead != isRead || this.isReplied != isReplied ||
       this.isForwarded != isForwarded || this.isImportant != isImportant ||
       this.isStarred != isStarred || this.isDraft != isDraft ||
-      tagsChanged || datesChanged;
+      tagsChanged || datesChanged || attachmentsFlagChanged;
     this.isRead = isRead;
     this.isReplied = isReplied;
     this.isForwarded = isForwarded;

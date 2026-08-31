@@ -3,6 +3,7 @@
 <script lang="ts">
   import { newMailListener } from "./NotifyNewMail";
   import { startMailUnreadTracking } from "./mailUnreadCounts";
+  import { startFavoriteFolderTracking } from "./LeftPane/favoriteFolders";
   import { mailApp } from "./MailJackdawApp";
   import { openFileInternally } from "../Files/open";
   import { bringAppToFront } from "../AppsBar/selectedApp";
@@ -12,6 +13,8 @@
   import { assert, sleep, type URLString } from "../../logic/util/util";
   import { t } from "../../l10n/l10n";
   import { onMount } from "svelte";
+
+  startFavoriteFolderTracking();
 
   onMount(() => {
     catchErrors(newMailListener);

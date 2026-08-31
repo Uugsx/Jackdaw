@@ -10,6 +10,7 @@ import {
   normalizeSignatureHTML,
   signatureEditorExtensions,
   textColorForHighlight,
+  currentLineHeight,
 } from "../../../frontend/Shared/Editor/composeEditorExtensions";
 
 function createEditor(content: string) {
@@ -97,5 +98,35 @@ describe("signature font size", () => {
   it("normalizes outlook font tags", () => {
     let normalized = normalizeSignatureHTML('<p><font size="2">Company</font></p>');
     expect(normalized).toContain("10pt");
+  });
+
+  it("normalizes Outlook block spacing to single lines", () => {
+    let normalized = normalizeSignatureHTML(
+      '<p style="margin: 0cm 0cm 8pt; line-height: 115%;">Company</p><div>Address</div>',
+    )!;
+    expect(normalized).toContain("margin-top: 0px");
+    expect(normalized).toContain("margin-bottom: 0px");
+    expect(normalized).toContain("line-height: 1.15");
+
+    let { editor, element } = createEditor(normalized);
+    let paragraphs = [...element.querySelectorAll("p")];
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs[0].style.marginTop).toBe("0px");
+    expect(paragraphs[0].style.marginBottom).toBe("0px");
+    expect(paragraphs[0].style.lineHeight).toBe("1.15");
+    editor.destroy();
+    element.remove();
+  });
+
+  it("uses a real single line height by default", () => {
+    let normalized = normalizeSignatureHTML("<p>Company</p>")!;
+    let { editor, element } = createEditor(normalized);
+    expect(element.querySelector("p")?.style.lineHeight).toBe("1");
+    expect(currentLineHeight(editor)).toBe("");
+    expect(editor.commands.setLineHeight("1.5")).toBe(true);
+    expect(currentLineHeight(editor)).toBe("1.5");
+    expect(editor.getHTML()).toMatch(/line-height:\s*1\.5/);
+    editor.destroy();
+    element.remove();
   });
 });
