@@ -20,6 +20,7 @@
   {#if activeTab == SearchView.Folder}
     {#if quickAccessAccount}
       <QuickAccessFolders
+        {accounts}
         account={quickAccessAccount}
         bind:selectedFolder
         on:select={event => selectedFolder = event.detail} />

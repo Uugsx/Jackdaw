@@ -1,8 +1,9 @@
 <button type="button" class="quick-folder" class:selected={selected}
   aria-pressed={selected}
-  on:click={() => dispatch("select", folder)}>
+  on:click={() => dispatch("select", folder)}
+  on:contextmenu={removableFromFavorites ? contextMenu.onContextMenu : undefined}>
   <FolderIcon {folder} size="14px" />
-  <span class="label">{folderLabel}</span>
+  <span class="label">{displayLabel}</span>
   <span class="count-cell">
     {#if count}
       <span class="count mail-folder-count">{count}</span>
@@ -10,20 +11,42 @@
   </span>
 </button>
 
+{#if removableFromFavorites}
+  <ContextMenu bind:this={contextMenu}>
+    <MenuItem
+      onClick={() => removeFavoriteFolder(folder)}
+      label={$t`Remove from favorites`}
+      icon={StarIcon} />
+  </ContextMenu>
+{/if}
+
 <script lang="ts">
   import { SpecialFolder, type Folder } from "../../../logic/Mail/Folder";
   import { specialFolderNames } from "../../../logic/Mail/Folder";
   import FolderIcon from "./FolderIcon.svelte";
+  import ContextMenu from "../../Shared/Menu/ContextMenu.svelte";
+  import MenuItem from "../../Shared/Menu/MenuItem.svelte";
+  import StarIcon from "lucide-svelte/icons/star";
   import { createEventDispatcher } from "svelte";
+  import { t } from "../../../l10n/l10n";
+  import { removeFavoriteFolder } from "./favoriteFolders";
 
   export let folder: Folder;
   export let selected = false;
+  export let showAccountLabel = false;
+  export let accountLabel = "";
+  export let removableFromFavorites = false;
 
   const dispatch = createEventDispatcher<{ select: Folder }>();
+  let contextMenu: ContextMenu;
+
   $: _folder = $folder;
   $: folderLabel = folder.specialFolder == SpecialFolder.Normal
     ? folder.name
     : specialFolderNames[folder.specialFolder] ?? folder.name;
+  $: displayLabel = showAccountLabel && accountLabel
+    ? `${folderLabel} — ${accountLabel}`
+    : folderLabel;
   $: count = folder.countUnread || folder.countNewArrived;
 </script>
 
