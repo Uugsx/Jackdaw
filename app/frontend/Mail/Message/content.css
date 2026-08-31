@@ -47,6 +47,9 @@ footer.signature,
 .signature {
   margin-block-start: 1em;
 }
+footer.signature {
+  line-height: 1;
+}
 footer.signature p,
 .signature p {
   margin-block: 0;

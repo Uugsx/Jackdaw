@@ -86,6 +86,8 @@ export class JSONEMail {
       e.mustEncrypt = email.mustEncrypt;
       e.shouldEncrypt = email.shouldEncrypt;
     }
+
+    json.hasAttachmentsFlag = email.hasAttachmentsFlag;
   }
 
   protected static saveRecipients(email: EMail, json: any) {
@@ -244,6 +246,7 @@ export class JSONEMail {
       email.shouldEncrypt = sanitize.boolean(e.shouldEncrypt, false);
       email.mustEncrypt = sanitize.boolean(e.mustEncrypt, false);
     }
+    email.hasAttachmentsFlag = sanitize.boolean(json.hasAttachmentsFlag, false);
   }
 
   static readRecipients(email: EMail, json: any): void {

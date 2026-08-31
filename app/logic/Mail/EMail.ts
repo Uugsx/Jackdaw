@@ -75,6 +75,18 @@ export class EMail extends Message {
   isDraft = false;
   @notifyChangedProperty
   isDeleted = false;
+  /** Server-reported attachment hint from Exchange (FindItem / GetItem). */
+  @notifyChangedProperty
+  hasAttachmentsFlag = false;
+
+  /** Whether the list/filter should show an attachment indicator. */
+  get hasVisibleAttachments(): boolean {
+    if (this.hasAttachmentsFlag) {
+      return true;
+    }
+    return this.attachments.hasItems && this.attachments.some(att => !att.hidden);
+  }
+
   /** Complete MIME source of the email */
   @notifyChangedProperty
   mime: Uint8Array | undefined;

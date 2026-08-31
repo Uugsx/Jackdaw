@@ -1,8 +1,8 @@
 // #if [!WEBMAIL && !MOBILE]
-<webview bind:this={webviewE} src={url ?? blobURL} {title} class:hidden {partition} useragent={userAgent || undefined} />
+<webview bind:this={webviewE} src={url ?? blobURL} {title} class:hidden class:autosize={autoSize} {partition} useragent={userAgent || undefined} />
 // #else
 <!-- TODO Security: Test that this <webview> is untrusted and jailed -->
-<iframe bind:this={webviewE} src={url ?? blobURL} {title} class:hidden />
+<iframe bind:this={webviewE} src={url ?? blobURL} {title} class:hidden class:autosize={autoSize} />
 // #endif
 
 <!--
@@ -95,12 +95,15 @@
     }
     blobURL = "";
     const autoSizeCSS = `<style>
+      html, body {
+        min-height: 0 !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow: visible !important;
+      }
       body {
-        min-height: 0px !important;
         min-width: 100px !important;
-        height: fit-content !important;
-        width: fit-content !important;
-        over-flow: visible !important;
+        width: auto !important;
       }
     </style>`;
     let servers = allowServerCalls ? `* 'unsafe-inline'` : `'unsafe-inline'` ;
@@ -133,16 +136,34 @@
     }
   });
 
+  let webviewSetupToken = 0;
   let webviewE: HTMLIFrameElement = null;
-  $: webviewE && haveWebView();
-  function haveWebView () {
-    webviewE.addEventListener("dom-ready", async () => {
-      try {
-        dispatch("webview", webviewE);
-        // #if [!WEBMAIL]
-        if (autoSize) {
-          webviewE.addEventListener("did-finish-load", () => catchErrors(onLoadResize));
-        }
+  let boundWebview: HTMLIFrameElement = null;
+  $: if (webviewE && webviewE !== boundWebview) {
+    boundWebview = webviewE;
+    attachWebviewListeners(webviewE);
+  }
+
+  function attachWebviewListeners(el: HTMLIFrameElement) {
+    // #if [!WEBMAIL]
+    el.addEventListener("context-menu", event =>
+      catchErrors(() => onContextMenu((event as any).params)));
+    // #endif
+    el.addEventListener("dom-ready", () => {
+      catchErrors(() => setupWebViewContents(++webviewSetupToken));
+    });
+  }
+
+  let listenersAttachedTo: HTMLIFrameElement = null;
+  async function setupWebViewContents(setupToken: number) {
+    if (!webviewE || setupToken !== webviewSetupToken) {
+      return;
+    }
+    try {
+      dispatch("webview", webviewE);
+      // #if [!WEBMAIL]
+      if (listenersAttachedTo !== webviewE) {
+        listenersAttachedTo = webviewE;
         await addInputListener();
         if (containNavigation) {
           addContainedNavigationListeners();
@@ -156,17 +177,14 @@
           let id = (webviewE as any).getWebContentsId();
           appGlobal.remoteApp.containWebContentsNavigation(id);
         }
-        // #endif
-      } catch (ex) {
-        backgroundError(ex);
       }
-    }, { once: true });
-
-    // #if [!WEBMAIL]
-    // <https://www.electronjs.org/docs/latest/api/webview-tag/#event-context-menu>
-    webviewE.addEventListener("context-menu", event =>
-      catchErrors(() => onContextMenu((event as any).params)));
-    // #endif
+      if (autoSize) {
+        catchErrors(onLoadResize);
+      }
+      // #endif
+    } catch (ex) {
+      backgroundError(ex);
+    }
   }
 
   // #if [!WEBMAIL]
@@ -176,7 +194,7 @@
     }
     let id = (webviewE as any).getWebContentsId();
     await appGlobal.remoteApp.addEventListenerWebContents(id, "input-event", (event) => {
-      if (event.type == "mouseDown") {
+      if (event.type == "mouseDown" && event.clickCount == 1) {
         webviewE.click();
       } else if (event.type == "rawKeyDown") {
         onKeyOnMessage(newElectronKeyboardEvent(event))
@@ -221,6 +239,15 @@
     let id = (webviewE as any).getWebContentsId();
     await appGlobal.remoteApp.addEventListenerWebContents(id, "input-event", async (event) => {
       if (event.type != "mouseDown" || event.button != "left" || event.clickCount != 2) {
+        return;
+      }
+      let onImage = await webviewE.executeJavaScript(`
+        (function () {
+          const el = document.elementFromPoint(${event.x}, ${event.y});
+          return !!(el && el.closest("img"));
+        })()
+      `);
+      if (!onImage) {
         return;
       }
       const { openMailImageFromContext } = await import("../Mail/Message/openMailImage");
@@ -268,63 +295,96 @@
   async function getContentSize() {
     try {
       size = await webviewE.executeJavaScript(`
-        try {
+        (function () {
           const body = document.body;
-          const styles = window.getComputedStyle(body);
-          const width = parseFloat(styles.width);
-          const height = Math.max( body.scrollHeight, body.offsetHeight, parseFloat(styles.height) );
-          new Promise((resolve) => {
-            resolve({
-              width: width,
-              height: height,
-            });
-          });
-        } catch (ex) {
-          new Promise((_, reject) => {
-            reject(JSON.stringify(ex));
-          });
-        }
+          const root = document.documentElement;
+          const bodyStyles = window.getComputedStyle(body);
+          const width = Math.max(
+            root.scrollWidth,
+            body.scrollWidth,
+            body.offsetWidth,
+            parseFloat(bodyStyles.width) || 0,
+          );
+          const height = Math.max(
+            root.scrollHeight,
+            root.offsetHeight,
+            body.scrollHeight,
+            body.offsetHeight,
+            parseFloat(bodyStyles.height) || 0,
+          );
+          return { width, height };
+        })()
       `);
     } catch (ex) {
       console.error(ex);
     }
   }
 
-  async function onLoadResize() {
+  async function waitForImagesAndResize() {
+    try {
+      await webviewE.executeJavaScript(`
+        Promise.all(Array.from(document.images)
+          .filter(img => !img.complete)
+          .map(img => new Promise(resolve => {
+            img.addEventListener("load", resolve, { once: true });
+            img.addEventListener("error", resolve, { once: true });
+          })))
+      `);
+    } catch {
+    }
     await getContentSize();
     resizeWebview();
   }
+
+  async function onLoadResize() {
+    await waitForImagesAndResize();
+    for (let delay of [250, 750, 1500, 3000]) {
+      setTimeout(() => catchErrors(waitForImagesAndResize), delay);
+    }
+  }
   // #endif
 
-  const heightBuffer = 10;
+  const heightBuffer = 32;
   let maxWidth: number;
-  $: autoSize && size && maxWidth && resizeWebview();
+  $: autoSize && size && resizeWebview();
   function resizeWebview() {
-    if ((webviewE.parentElement && size.width > webviewE.parentElement.clientWidth) &&
-    (!maxWidth || maxWidth && size.width < maxWidth)) {
+    if (!webviewE || !size) {
+      return;
+    }
+    let parentWidth = webviewE.parentElement?.clientWidth ?? 0;
+    if (size.width > parentWidth && (!maxWidth || size.width < maxWidth)) {
       webviewE.style.width = size.width + "px";
-    }
-    if (maxWidth && maxWidth < size.width) {
+    } else if (maxWidth && maxWidth < size.width) {
       webviewE.style.width = maxWidth + "px";
-    }
-    if (webviewE.parentElement && size.width < webviewE.parentElement.clientWidth) {
+    } else if (parentWidth && size.width < parentWidth) {
       webviewE.style.width = "100%";
+    } else if (size.width > 0) {
+      webviewE.style.width = size.width + "px";
     }
     webviewE.style.height = (size.height + heightBuffer) + "px";
   };
 
   function observeMaxWidth() {
-    const parent = parentWithMaxWidth(webviewE);
-    const maxWidthVal = getComputedStyle(parent).maxWidth;
-    const observer = new ResizeObserver((entries) => {
-      const el = entries[0];
-      if (maxWidthVal.endsWith("%")) {
-        maxWidth = el.contentRect.width * (parseInt(maxWidthVal)/100);
+    if (!webviewE?.parentElement) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      const parent = parentWithMaxWidth(webviewE);
+      const maxWidthVal = getComputedStyle(parent).maxWidth;
+      if (maxWidthVal && maxWidthVal != "none") {
+        if (maxWidthVal.endsWith("%")) {
+          maxWidth = parent.clientWidth * (parseInt(maxWidthVal) / 100);
+        } else {
+          maxWidth = parseInt(maxWidthVal);
+        }
       } else {
-        maxWidth = parseInt(maxWidthVal);
+        maxWidth = webviewE.parentElement.clientWidth;
+      }
+      if (size) {
+        resizeWebview();
       }
     });
-    observer.observe(parent.parentElement);
+    observer.observe(webviewE.parentElement);
   }
 
   function parentWithMaxWidth(el: HTMLElement) {
@@ -341,6 +401,10 @@
     flex: 1 0 0;
     width: 100%;
     height: auto;
+  }
+  webview.autosize, iframe.autosize {
+    flex: 0 0 auto;
+    overflow: hidden;
   }
   iframe {
     border: none;

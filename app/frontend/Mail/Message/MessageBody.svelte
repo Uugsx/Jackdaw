@@ -10,9 +10,9 @@
       <ErrorMessage {ex} />
     {/await}
   {:else if mode == DisplayMode.HTML}
-    <HTMLDisplay html={$message.html} allowExternalImages={false} />
+    <HTMLDisplay html={$message.html} allowExternalImages={false} allowImageOpen />
   {:else if mode == DisplayMode.HTMLWithExternal}
-    <HTMLDisplay html={$message.html} allowExternalImages={true} />
+    <HTMLDisplay html={$message.html} allowExternalImages={true} allowImageOpen />
   {:else if mode == DisplayMode.Plaintext}
     <PlaintextDisplay plaintext={$message.text} />
     <!--<HTMLDisplay html={convertTextToHTML($message.text)} />-->
@@ -24,7 +24,7 @@
     {/await}
   {:else if mode == DisplayMode.Thread}
     <!-- Thread view unfinished; show HTML until implemented -->
-    <HTMLDisplay html={$message.html} allowExternalImages={false} />
+    <HTMLDisplay html={$message.html} allowExternalImages={false} allowImageOpen />
   {:else}
     {$t`Unknown display mode`}
   {/if}

@@ -159,7 +159,7 @@ export function normalizeSignatureHTML(html: string | null | undefined): string 
     }
     font.replaceWith(span);
   }
-  for (let block of root.querySelectorAll("p, td, th, li")) {
+  for (let block of root.querySelectorAll("p, div, li, h1, h2, h3, h4, h5, h6, blockquote, td, th")) {
     let blockEl = block as HTMLElement;
     let blockSize = blockEl.style.fontSize?.trim();
     if (blockSize) {
@@ -169,6 +169,9 @@ export function normalizeSignatureHTML(html: string | null | undefined): string 
       }
       blockEl.style.removeProperty("font-size");
     }
+    blockEl.style.marginTop = "0";
+    blockEl.style.marginBottom = "0";
+    blockEl.style.lineHeight = normalizeLineHeightValue(blockEl.style.lineHeight) || "1";
   }
   return root.innerHTML;
 }
@@ -343,7 +346,7 @@ const FontSizeExtension = Extension.create({
   },
 });
 
-const lineHeightTypes = ["paragraph", "heading", "tableCell"];
+const lineHeightTypes = ["paragraph", "heading", "tableCell", "tableHeader", "blockquote"];
 
 const LineHeight = Extension.create({
   name: "lineHeight",
@@ -359,8 +362,13 @@ const LineHeight = Extension.create({
         attributes: {
           lineHeight: {
             default: null,
-            parseHTML: element =>
-              normalizeLineHeightValue(element.style.lineHeight?.replace(/['"]+/g, "") ?? "") || null,
+            parseHTML: element => {
+              let value = element.style.lineHeight?.replace(/['"]+/g, "") ?? "";
+              if (!value) {
+                return null;
+              }
+              return normalizeLineHeightValue(value) || "1";
+            },
             renderHTML: attributes => {
               if (!attributes.lineHeight) {
                 return {};
@@ -451,6 +459,127 @@ const ComposeHighlight = Highlight.extend({
   },
 });
 
+/** Keep legacy Outlook/Word table attributes when quoting HTML into the composer. */
+function preserveHtmlAttribute(name: string) {
+  return {
+    default: null as string | null,
+    parseHTML: (element: HTMLElement) => element.getAttribute(name),
+    renderHTML: (attributes: Record<string, unknown>) => {
+      let value = attributes[name];
+      return typeof value == "string" && value ? { [name]: value } : {};
+    },
+  };
+}
+
+function removeCssProperty(style: string | null, property: string): string | null {
+  if (!style) {
+    return style;
+  }
+  if (typeof document !== "undefined") {
+    let element = document.createElement("div");
+    element.setAttribute("style", style);
+    element.style.removeProperty(property);
+    return element.getAttribute("style") || null;
+  }
+  let filtered = style.split(";").filter(declaration =>
+    declaration.split(":", 1)[0].trim().toLowerCase() != property).join(";").trim();
+  return filtered || null;
+}
+
+function preserveBlockStyle() {
+  return {
+    default: null as string | null,
+    parseHTML: (element: HTMLElement) => removeCssProperty(element.getAttribute("style"), "line-height"),
+    renderHTML: (attributes: Record<string, unknown>) => {
+      let value = typeof attributes.style == "string" ? attributes.style : null;
+      let withoutLineHeight = removeCssProperty(value, "line-height");
+      return withoutLineHeight ? { style: withoutLineHeight } : {};
+    },
+  };
+}
+
+const composeTableAttributes = {
+  style: preserveHtmlAttribute("style"),
+  width: preserveHtmlAttribute("width"),
+  border: preserveHtmlAttribute("border"),
+  cellpadding: preserveHtmlAttribute("cellpadding"),
+  cellspacing: preserveHtmlAttribute("cellspacing"),
+  role: preserveHtmlAttribute("role"),
+};
+
+const composeTableCellAttributes = {
+  style: preserveHtmlAttribute("style"),
+  width: preserveHtmlAttribute("width"),
+  height: preserveHtmlAttribute("height"),
+  bgcolor: preserveHtmlAttribute("bgcolor"),
+  valign: preserveHtmlAttribute("valign"),
+  align: preserveHtmlAttribute("align"),
+};
+
+const ComposeTable = Table.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      ...composeTableAttributes,
+    };
+  },
+});
+
+const ComposeTableRow = TableRow.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      style: preserveHtmlAttribute("style"),
+      valign: preserveHtmlAttribute("valign"),
+      align: preserveHtmlAttribute("align"),
+    };
+  },
+});
+
+const ComposeTableCell = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      ...composeTableCellAttributes,
+    };
+  },
+});
+
+const ComposeTableHeader = TableHeader.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      ...composeTableCellAttributes,
+    };
+  },
+});
+
+const composeTableExtensions = [
+  ComposeTable.configure({
+    resizable: false,
+    HTMLAttributes: {
+      style: "border-collapse: collapse;",
+    },
+  }),
+  ComposeTableRow,
+  ComposeTableHeader,
+  ComposeTableCell,
+];
+
+const composeBlockStyle = Extension.create({
+  name: "composeBlockStyle",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["paragraph", "heading", "blockquote", "codeBlock"],
+        attributes: {
+          style: preserveBlockStyle(),
+        },
+      },
+    ];
+  },
+});
+
 /** Rich-text extensions for the mail compose editor (Outlook-style). */
 export const composeEditorExtensions = [
   TextStyle,
@@ -458,6 +587,8 @@ export const composeEditorExtensions = [
     types: ["textStyle"],
   }),
   FontSizeExtension,
+  LineHeight,
+  composeBlockStyle,
   Color.configure({
     types: ["textStyle"],
   }),
@@ -469,15 +600,7 @@ export const composeEditorExtensions = [
     types: ["heading", "paragraph"],
     alignments: ["left", "center", "right", "justify"],
   }),
-  Table.configure({
-    resizable: false,
-    HTMLAttributes: {
-      style: "border-collapse: collapse; width: 100%;",
-    },
-  }),
-  TableRow,
-  TableHeader,
-  TableCell,
+  ...composeTableExtensions,
 ];
 
 /** Signature editor in settings — inline font size and block line spacing. */
@@ -488,6 +611,7 @@ export const signatureEditorExtensions = [
   }),
   FontSizeExtension,
   LineHeight,
+  composeBlockStyle,
   Color.configure({
     types: ["textStyle"],
   }),
@@ -499,15 +623,7 @@ export const signatureEditorExtensions = [
     types: ["heading", "paragraph"],
     alignments: ["left", "center", "right", "justify"],
   }),
-  Table.configure({
-    resizable: false,
-    HTMLAttributes: {
-      style: "border-collapse: collapse; width: 100%;",
-    },
-  }),
-  TableRow,
-  TableHeader,
-  TableCell,
+  ...composeTableExtensions,
 ];
 
 /** Outlook-style defaults for new compose messages. */

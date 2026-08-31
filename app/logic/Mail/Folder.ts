@@ -52,6 +52,8 @@ export class Folder extends Observable implements TreeItem<Folder> {
    * EWS: Sync state, as string
    */
   syncState: number | string | null = null;
+  /** Every message in this folder has `hasAttachmentsFlag` from Exchange FindItem. */
+  attachmentFlagsSynced = false;
   /** The server reported changed counts, so this folder needs a re-scan.
    * Only protocols without a reliable delta sync (OWA) set this. */
   dirty = false;

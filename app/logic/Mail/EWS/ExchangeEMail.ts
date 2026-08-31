@@ -1,5 +1,8 @@
 import { EMail } from "../EMail";
 import type { Tag } from "../../Abstract/Tag";
+import { ContentDisposition } from "../../Abstract/Attachment";
+import { sanitize } from "../../../../lib/util/sanitizeDatatypes";
+import { exchangeAttachmentEntriesFromJSON } from "./exchangeAttachments";
 
 export abstract class ExchangeEMail extends EMail {
   async markReplied() {
@@ -33,6 +36,46 @@ export abstract class ExchangeEMail extends EMail {
   }
 
   abstract updateTags(): Promise<void>;
+
+  /** Populate attachment metadata from an Exchange header fetch (no MIME download). */
+  applyAttachmentsFromServerJSON(json: Record<string, any>): boolean {
+    if (this.attachments.some(a => a.content || a.filepathLocal)) {
+      return false;
+    }
+    let entries = exchangeAttachmentEntriesFromJSON(json);
+    if (!entries.length) {
+      return false;
+    }
+    let attachments = entries.map(entry => {
+      let attachment = this.newAttachment();
+      attachment.filename = sanitize.filename(entry.Name ?? entry.name, "attachment");
+      attachment.mimeType = sanitize.nonemptystring(entry.ContentType ?? entry.contentType, "application/octet-stream");
+      let isInline = entry.IsInline === true || entry.IsInline === "true";
+      attachment.disposition = isInline ? ContentDisposition.inline : ContentDisposition.attachment;
+      let contentID = entry.ContentId ?? entry.contentId;
+      if (contentID) {
+        attachment.contentID = sanitize.nonemptystring(contentID, null);
+      }
+      attachment.size = sanitize.integer(entry.Size ?? entry.size, null);
+      let attachmentID = entry.AttachmentId?.Id ?? entry.AttachmentId?.id;
+      if (attachmentID) {
+        attachment.pID = sanitize.nonemptystring(attachmentID, null);
+      }
+      return attachment;
+    });
+    let hadItems = this.attachments.hasItems;
+    let oldKey = this.attachments.contents
+      .map(a => `${a.filename}\t${a.disposition}\t${a.size}`)
+      .join("\n");
+    let newKey = attachments
+      .map(a => `${a.filename}\t${a.disposition}\t${a.size}`)
+      .join("\n");
+    if (hadItems && oldKey == newKey) {
+      return false;
+    }
+    this.attachments.replaceAll(attachments);
+    return true;
+  }
 }
 
 // <https://learn.microsoft.com/en-us/openspecs/exchange_server_protocols/ms-oxprops/77844470-22ca-43fb-993d-c53e96cf9cd6>

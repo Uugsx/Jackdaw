@@ -1,13 +1,28 @@
-{#if quickFolders.length}
+{#if favoriteEntries.length || quickFolders.length}
   <nav class="quick-access" aria-label={$t`Favorites`}>
-    {#each quickFolders as folder (folder.id || folder.specialFolder || folder.fullPath)}
-      <QuickAccessFolder
-        {folder}
-        selected={selectedFolder === folder}
-        showAccountLabel={isUserFavorite(folder, favoriteRefs)}
-        removableFromFavorites={isUserFavorite(folder, favoriteRefs)}
-        accountLabel={folder.account?.name}
-        on:select={onSelectFolder} />
+    {#each favoriteEntries as { ref, folder } (ref.accountId + ":" + ref.folderId)}
+      {#if folder}
+        <QuickAccessFolder
+          {folder}
+          selected={selectedFolder === folder}
+          showAccountLabel={true}
+          removableFromFavorites={true}
+          accountLabel={folder.account?.name}
+          on:select={onSelectFolder} />
+      {:else}
+        <span class="quick-folder pending" title={ref.folderPath}>{favoriteRefLabel(ref, accounts)}</span>
+      {/if}
+    {/each}
+    {#each defaultQuickFolders as folder (folder.id || folder.specialFolder || folder.fullPath)}
+      {#if !isUserFavorite(folder, favoriteRefs)}
+        <QuickAccessFolder
+          {folder}
+          selected={selectedFolder === folder}
+          showAccountLabel={false}
+          removableFromFavorites={false}
+          accountLabel={folder.account?.name}
+          on:select={onSelectFolder} />
+      {/if}
     {/each}
   </nav>
 {/if}
@@ -21,47 +36,33 @@
   import type { Collection } from "svelte-collections";
   import {
     favoriteFoldersSetting,
+    favoriteFoldersEpoch,
+    findFavoriteFolder,
+    favoriteRefLabel,
     isFavoriteFolderRef,
-    resolveFavoriteFolders,
     type FavoriteFolderRef,
   } from "./favoriteFolders";
-  import { folderQuickAccessKey, getDefaultQuickAccessFolders } from "./quickAccessUtils";
+  import { getDefaultQuickAccessFolders } from "./quickAccessUtils";
 
   export let accounts: Collection<MailAccount>;
   export let account: MailAccount;
   export let selectedFolder: Folder;
 
   const dispatch = createEventDispatcher<{ select: Folder }>();
+  let favoriteEntries: Array<{ ref: FavoriteFolderRef; folder: Folder | null }> = [];
 
-  /** Recompute when the account finishes loading its folder hierarchy. */
-  $: _account = $account;
-  $: _accounts = accounts;
   $: favoriteRefs = $favoriteFoldersSetting.value ?? [];
-  $: userFavorites = resolveFavoriteFolders(accounts, favoriteRefs);
-  $: defaultQuick = getDefaultQuickAccessFolders(account);
-  $: quickFolders = mergeQuickAccessFolders(userFavorites, defaultQuick);
-
-  function mergeQuickAccessFolders(favorites: Folder[], defaults: Folder[]): Folder[] {
-    let seen = new Set<string>();
-    let merged: Folder[] = [];
-    for (let folder of favorites) {
-      let key = folderQuickAccessKey(folder);
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      merged.push(folder);
-    }
-    for (let folder of defaults) {
-      let key = folderQuickAccessKey(folder);
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      merged.push(folder);
-    }
-    return merged;
+  $: {
+    $accounts;
+    $favoriteFoldersEpoch;
+    favoriteEntries = favoriteRefs.map(ref => ({
+      ref,
+      folder: findFavoriteFolder(accounts, ref),
+    }));
   }
+  $: userFavorites = favoriteEntries.map(entry => entry.folder).filter((f): f is Folder => !!f);
+  $: defaultQuickFolders = getDefaultQuickAccessFolders(account);
+  $: quickFolders = [...userFavorites, ...defaultQuickFolders.filter(f => !isUserFavorite(f, favoriteRefs))];
 
   function isUserFavorite(folder: Folder, refs: FavoriteFolderRef[]): boolean {
     return isFavoriteFolderRef(folder, refs);
@@ -80,5 +81,14 @@
     gap: 1px;
     flex: 0 0 auto;
     padding: 2px 8px 8px;
+  }
+  .quick-folder.pending {
+    display: block;
+    padding: 5px 8px 5px 30px;
+    font-size: 12px;
+    color: color-mix(in srgb, var(--leftbar-fg) 55%, transparent);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>
