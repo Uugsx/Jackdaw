@@ -1,6 +1,7 @@
 <!-- Outlook-style filter + sort pills above the message list -->
 {#if folder}
-  <hbox class="quick-filters font-smallest">
+  <HorizontalScroll edgeButtons bind:this={filterScroll} class="quick-filters-scroll">
+    <hbox class="quick-filters font-smallest">
     {#each visibleDefs as filter (filter.id)}
       {#if filter.kind == "sort"}
         <button type="button"
@@ -72,7 +73,8 @@
         {$t`Clear`}
       </button>
     {/if}
-  </hbox>
+    </hbox>
+  </HorizontalScroll>
 {/if}
 
 <script lang="ts">
@@ -97,9 +99,12 @@
   import type { ArrayColl } from "svelte-collections";
   import { t } from "../../../l10n/l10n";
   import ChevronDownIcon from "lucide-svelte/icons/chevron-down";
+  import HorizontalScroll from "../../Shared/HorizontalScroll.svelte";
 
   export let folder: Folder;
   export let searchMessages: ArrayColl<EMail> | null; /** out */
+
+  let filterScroll: HorizontalScroll;
 
   let visibleIds = getVisibleQuickFilters();
   let addMenuOpen = false;
@@ -112,6 +117,8 @@
     .filter((filter): filter is QuickFilterDef => !!filter);
   $: hiddenDefs = allQuickFilters.filter(f => !visibleIds.includes(f.id));
   $: sortDefs = allQuickFilters.filter(f => f.kind == "sort");
+  $: visibleDefs, filterScroll?.refresh();
+  $: anyActive, filterScroll?.refresh();
   $: currentSortDef = sortDefs.find(s => s.sort === $mailListSort) ?? sortDefs[0];
   $: currentSortLabel = currentSortDef?.label() ?? $t`Newest`;
   $: anyActive =
@@ -234,11 +241,16 @@
 </script>
 
 <style>
+  :global(.quick-filters-scroll) {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
   .quick-filters {
     align-items: center;
     gap: 6px;
     padding: 4px 10px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     min-height: 36px;
     box-sizing: border-box;
     background-color: var(--main-bg);

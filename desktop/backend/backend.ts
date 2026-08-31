@@ -437,6 +437,10 @@ class UpdateState extends Observable {
   @notifyChangedProperty
   errorCode: string | null = null;
 
+  /** Set once on startup after an OTA install completed before the previous quit. */
+  @notifyChangedProperty
+  justInstalledVersion: string | null = null;
+
   get haveUpdate(): boolean {
     return !!this.update?.isUpdateAvailable;
   }
@@ -637,6 +641,50 @@ function configureAutoUpdater() {
   });
 }
 configureAutoUpdater();
+detectPostUpdateSuccess();
+
+function pendingUpdateMarkerPath(): string {
+  return path.join(app.getPath("userData"), "pending-ota-install.json");
+}
+
+async function writePendingUpdateMarker(version: string | null | undefined): Promise<void> {
+  let trimmed = version?.trim();
+  if (!trimmed) {
+    return;
+  }
+  await fsPromises.writeFile(
+    pendingUpdateMarkerPath(),
+    JSON.stringify({ version: trimmed }),
+    "utf8",
+  );
+}
+
+function consumePendingUpdateMarker(): string | null {
+  let markerPath = pendingUpdateMarkerPath();
+  if (!fs.existsSync(markerPath)) {
+    return null;
+  }
+  try {
+    let raw = fs.readFileSync(markerPath, "utf8");
+    let parsed = JSON.parse(raw) as { version?: string };
+    let expected = parsed.version?.trim();
+    if (expected && expected === app.getVersion()) {
+      return expected;
+    }
+  } catch {
+    // stale or corrupt marker
+  } finally {
+    fs.rmSync(markerPath, { force: true });
+  }
+  return null;
+}
+
+function detectPostUpdateSuccess() {
+  let version = consumePendingUpdateMarker();
+  if (version) {
+    updateState.justInstalledVersion = version;
+  }
+}
 
 const kUpdateCheckTimeoutMs = 45_000;
 
@@ -776,6 +824,7 @@ open "$DEST"
   let child = spawn("/bin/bash", [scriptPath], { detached: true, stdio: "ignore" });
   child.unref();
 
+  await writePendingUpdateMarker(updateState.version);
   quittingForUpdate = true;
   await shutdownBackend();
   app.exit(0);
@@ -970,6 +1019,7 @@ export async function getUpdateStatus() {
     error: updateState.error,
     errorCode: updateState.errorCode,
     appVersion: app.getVersion(),
+    justInstalledVersion: updateState.justInstalledVersion,
     otaConfigured: hasAppUpdateConfig(),
     otaTokenPresent: !!resolveGhUpdateToken(),
   };
@@ -996,6 +1046,7 @@ export async function installUpdate() {
   if (!updateState.readyToInstall && !await updateState.updateDownloaded()) {
     throw new Error("No update downloaded");
   }
+  await writePendingUpdateMarker(updateState.version);
   quittingForUpdate = true;
   autoUpdater.quitAndInstall(false, true);
 }

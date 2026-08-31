@@ -64,3 +64,7 @@ export function updateReadyMessage(version: string | null): string {
 export function updateInstallButtonLabel(): string {
   return gt`Install`;
 }
+
+export function updateInstalledSuccessMessage(version: string): string {
+  return gt`Jackdaw was updated successfully. You're now running version ${version}.`;
+}

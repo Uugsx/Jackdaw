@@ -6,6 +6,7 @@ import {
   updateAvailableMessage,
   updateDownloadingMessage,
   updateInstallButtonLabel,
+  updateInstalledSuccessMessage,
   updateReadyMessage,
 } from "../Settings/About/updateMessages";
 
@@ -13,7 +14,10 @@ type UpdatePhase = "idle" | "checking" | "available" | "downloading" | "download
 
 let updateNotification: Notification | null = null;
 let notifiedVersion: string | null = null;
+let postUpdateNotified = false;
 let unsub: (() => void) | undefined;
+
+const kPostUpdateDismissMs = 12_000;
 
 const kActivePhases: UpdatePhase[] = ["available", "downloading", "downloaded"];
 
@@ -26,7 +30,11 @@ export function startUpdateNotificationWatcher(): void {
     return;
   }
   syncUpdateNotification(status);
-  unsub = status.subscribe((obj: typeof status) => syncUpdateNotification(obj));
+  syncPostUpdateSuccess(status);
+  unsub = status.subscribe((obj: typeof status) => {
+    syncUpdateNotification(obj);
+    syncPostUpdateSuccess(obj);
+  });
 }
 
 export function stopUpdateNotificationWatcher(): void {
@@ -40,6 +48,17 @@ function clearUpdateNotification() {
     notifications.remove(updateNotification);
     updateNotification = null;
   }
+}
+
+function syncPostUpdateSuccess(obj: { justInstalledVersion?: string | null }) {
+  let version = obj.justInstalledVersion;
+  if (!version || postUpdateNotified || webMail) {
+    return;
+  }
+  postUpdateNotified = true;
+  let noti = new Notification(updateInstalledSuccessMessage(version), NotificationSeverity.Info);
+  notifications.add(noti);
+  setTimeout(() => notifications.remove(noti), kPostUpdateDismissMs);
 }
 
 function syncUpdateNotification(obj: {
