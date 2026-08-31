@@ -198,9 +198,19 @@
       if (!url) {
         return;
       }
-      if (event.type == "mouseDown" && event.button == "left") {
-        await openExternalURL(url);
+      if (event.type != "mouseDown" || event.button != "left" || event.clickCount != 1) {
+        return;
       }
+      let onImage = await webviewE.executeJavaScript(`
+        (function () {
+          const el = document.elementFromPoint(${event.x}, ${event.y});
+          return !!(el && el.closest("img"));
+        })()
+      `);
+      if (onImage) {
+        return;
+      }
+      await openExternalURL(url);
     });
   }
 
@@ -213,20 +223,8 @@
       if (event.type != "mouseDown" || event.button != "left" || event.clickCount != 2) {
         return;
       }
-      let srcURL = await webviewE.executeJavaScript(`
-        (function () {
-          const el = document.elementFromPoint(${event.x}, ${event.y});
-          if (!el) {
-            return null;
-          }
-          const img = el.closest("img");
-          return img?.src ?? null;
-        })()
-      `);
-      if (srcURL) {
-        const { openMailImageURL } = await import("../Mail/Message/openMailImage");
-        await openMailImageURL(srcURL, webviewE);
-      }
+      const { openMailImageFromContext } = await import("../Mail/Message/openMailImage");
+      await openMailImageFromContext(webviewE, event.x, event.y);
     });
   }
 

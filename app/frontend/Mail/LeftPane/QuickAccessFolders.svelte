@@ -1,9 +1,12 @@
 {#if quickFolders.length}
-  <nav class="quick-access" aria-label={$t`Quick access`}>
+  <nav class="quick-access" aria-label={$t`Favorites`}>
     {#each quickFolders as folder (folder.id || folder.specialFolder || folder.fullPath)}
       <QuickAccessFolder
         {folder}
         selected={selectedFolder === folder}
+        showAccountLabel={isUserFavorite(folder, favoriteRefs)}
+        removableFromFavorites={isUserFavorite(folder, favoriteRefs)}
+        accountLabel={folder.account?.name}
         on:select={onSelectFolder} />
     {/each}
   </nav>
@@ -12,59 +15,57 @@
 <script lang="ts">
   import type { MailAccount } from "../../../logic/Mail/MailAccount";
   import type { Folder } from "../../../logic/Mail/Folder";
-  import { SpecialFolder } from "../../../logic/Mail/Folder";
   import QuickAccessFolder from "./QuickAccessFolder.svelte";
   import { createEventDispatcher } from "svelte";
   import { t } from "../../../l10n/l10n";
+  import type { Collection } from "svelte-collections";
+  import {
+    favoriteFoldersSetting,
+    isFavoriteFolderRef,
+    resolveFavoriteFolders,
+    type FavoriteFolderRef,
+  } from "./favoriteFolders";
+  import { folderQuickAccessKey, getDefaultQuickAccessFolders } from "./quickAccessUtils";
 
+  export let accounts: Collection<MailAccount>;
   export let account: MailAccount;
   export let selectedFolder: Folder;
 
   const dispatch = createEventDispatcher<{ select: Folder }>();
-  const preferredSpecialFolders = [
-    SpecialFolder.Inbox,
-    SpecialFolder.Sent,
-    SpecialFolder.Drafts,
-    SpecialFolder.All,
-    SpecialFolder.Spam,
-    SpecialFolder.Trash,
-    SpecialFolder.Archive,
-  ];
-
-  /**
-   * Saved OWA hierarchies can contain the right folders without retaining the
-   * special-use marker. Prefer the marker, then use the stable system-folder
-   * names as a fallback so quick access never becomes an empty heading.
-   */
-  const fallbackNames: Partial<Record<SpecialFolder, string[]>> = {
-    [SpecialFolder.Inbox]: ["inbox", "входящие"],
-    [SpecialFolder.Sent]: ["sent", "sent items", "отправленные"],
-    [SpecialFolder.Drafts]: ["drafts", "черновики"],
-    [SpecialFolder.All]: ["all mail", "all messages", "все сообщения"],
-    [SpecialFolder.Spam]: ["spam", "junk", "нежелательная почта", "спам"],
-    [SpecialFolder.Trash]: ["trash", "deleted items", "удаленные", "корзина"],
-    [SpecialFolder.Archive]: ["archive", "архив"],
-  };
-
-  function normalizeFolderName(name: string): string {
-    return name.trim().toLocaleLowerCase().replace(/[._-]+/g, " ").replace(/\s+/g, " ");
-  }
-
-  function findFolder(account: MailAccount, specialFolder: SpecialFolder): Folder | null {
-    let marked = account.findSpecialFolder(specialFolder);
-    if (marked) {
-      return marked;
-    }
-    let names = fallbackNames[specialFolder] ?? [];
-    return account.getAllFolders().find(folder => names.includes(normalizeFolderName(folder.name))) ?? null;
-  }
 
   /** Recompute when the account finishes loading its folder hierarchy. */
   $: _account = $account;
-  $: quickFolders = preferredSpecialFolders
-    .map(specialFolder => findFolder(account, specialFolder))
-    .filter((folder): folder is Folder => !!folder)
-    .filter((folder, index, folders) => folders.indexOf(folder) == index);
+  $: _accounts = accounts;
+  $: favoriteRefs = $favoriteFoldersSetting.value ?? [];
+  $: userFavorites = resolveFavoriteFolders(accounts, favoriteRefs);
+  $: defaultQuick = getDefaultQuickAccessFolders(account);
+  $: quickFolders = mergeQuickAccessFolders(userFavorites, defaultQuick);
+
+  function mergeQuickAccessFolders(favorites: Folder[], defaults: Folder[]): Folder[] {
+    let seen = new Set<string>();
+    let merged: Folder[] = [];
+    for (let folder of favorites) {
+      let key = folderQuickAccessKey(folder);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      merged.push(folder);
+    }
+    for (let folder of defaults) {
+      let key = folderQuickAccessKey(folder);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      merged.push(folder);
+    }
+    return merged;
+  }
+
+  function isUserFavorite(folder: Folder, refs: FavoriteFolderRef[]): boolean {
+    return isFavoriteFolderRef(folder, refs);
+  }
 
   function onSelectFolder(event: CustomEvent<Folder>) {
     selectedFolder = event.detail;

@@ -68,6 +68,10 @@
 {/if}
 <MenuDivider />
 <MenuItem
+  onClick={() => toggleFavoriteFolder(folder)}
+  label={isFavorite ? $t`Remove from favorites` : $t`Show in favorites`}
+  icon={StarIcon} />
+<MenuItem
   onClick={openFolderSettings}
   label={$t`Folder properties`}
   icon={FolderSettingsIcon} />
@@ -103,8 +107,14 @@
   import FolderSettingsIcon from "lucide-svelte/icons/folder-cog";
   import MoveUpIcon from "lucide-svelte/icons/arrow-up";
   import MoveDownIcon from "lucide-svelte/icons/arrow-down";
+  import StarIcon from "lucide-svelte/icons/star";
   import { createEventDispatcher, getContext } from "svelte";
   import { t, gt } from "../../../l10n/l10n";
+  import {
+    favoriteFoldersSetting,
+    isFavoriteFolderRef,
+    toggleFavoriteFolder,
+  } from "./favoriteFolders";
 
   export let folder: Folder;
   const dispatch = createEventDispatcher<{
@@ -112,6 +122,9 @@
     requestRenameFolder: void;
   }>();
   let treeRefresh = getContext("treeRefresh") as (() => void) | undefined;
+
+  $: favoriteRefs = $favoriteFoldersSetting.value ?? [];
+  $: isFavorite = isFavoriteFolderRef(folder, favoriteRefs);
 
   async function getNewMessages() {
     let account = folder.account;
