@@ -113,6 +113,7 @@
   let lastReloadTick = 0;
   let activeUrl = "";
   let loadAttempt = 0;
+  let loadFinishedForAttempt = 0;
   let canGoBack = false;
   let canGoForward = false;
 
@@ -146,6 +147,14 @@
   $: if (reloadTick > lastReloadTick) {
     lastReloadTick = reloadTick;
     retryLoad();
+  }
+
+  let prevSuspended = suspended;
+  $: {
+    if (prevSuspended && !suspended && webviewElement && loadFailed) {
+      catchErrors(() => onLoadFinished(webviewElement!));
+    }
+    prevSuspended = suspended;
   }
 
   function clearLoadTimer() {
@@ -189,6 +198,7 @@
     loadSettled = false;
     loadFailed = false;
     embedBlocked = false;
+    loadFinishedForAttempt = 0;
     loadTimer = setTimeout(() => {
       if (attempt === loadAttempt && !loadSettled) {
         settleFailed(embedBlocked);
@@ -230,12 +240,18 @@
       if (attempt !== loadAttempt || loadSettled) {
         return;
       }
+      if (loadFinishedForAttempt >= attempt) {
+        return;
+      }
       embedBlocked = blocked;
       settleFailed(blocked);
     }, FAIL_DEBOUNCE_MS);
   }
 
   function markLoadFailed(event?: Event) {
+    if (loadFinishedForAttempt === loadAttempt) {
+      return;
+    }
     let detail = (event as CustomEvent | undefined)?.detail ?? {};
     let errorCode = detail?.errorCode ?? (event as any)?.errorCode;
     let errorDescription = String(detail?.errorDescription ?? (event as any)?.errorDescription ?? "");
@@ -276,13 +292,14 @@
   async function onLoadFinished(element: HTMLElement) {
     let attempt = loadAttempt;
     clearFailDebounce();
-    if (attempt !== loadAttempt || loadSettled) {
+    if (attempt !== loadAttempt) {
       return;
     }
     await new Promise(resolve => setTimeout(resolve, 400));
-    if (attempt !== loadAttempt || loadSettled) {
+    if (attempt !== loadAttempt) {
       return;
     }
+    loadFinishedForAttempt = attempt;
     if (await pageLooksEmbedBlocked(element)) {
       settleFailed(true);
       return;
@@ -372,6 +389,7 @@
       clearFailDebounce();
       loadSettled = false;
       loadFailed = false;
+      loadFinishedForAttempt = 0;
     });
     element.addEventListener("did-navigate", () => {
       syncNavigationState(element);
@@ -492,7 +510,7 @@
     position: absolute;
     inset: 0;
     z-index: 1;
-    background: var(--leftbar-bg);
+    background: var(--main-bg, var(--leftbar-bg));
   }
   .state-panel :global(.state-icon) {
     color: color-mix(in srgb, var(--leftbar-fg) 58%, transparent);
