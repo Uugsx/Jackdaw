@@ -13,13 +13,14 @@
   </hbox>
   <WriteButton account={selectedAccount} toolbar />
   <QuickFilterBar folder={selectedFolder} bind:searchMessages={filterSearchMessages} />
-  <hbox flex />
-  <ClassicRibbon
-    account={selectedAccount}
-    folder={selectedFolder}
-    message={selectedMessage}
-    {selectedMessages}
-    showNew={false} />
+  <HorizontalScroll edgeButtons bind:this={ribbonScroll} class="ribbon-scroll">
+    <ClassicRibbon
+      account={selectedAccount}
+      folder={selectedFolder}
+      message={selectedMessage}
+      {selectedMessages}
+      showNew={false} />
+  </HorizontalScroll>
 </hbox>
 
 {#if filtersAnchor}
@@ -55,6 +56,7 @@
   import { catchErrors, showError } from "../Util/error";
   import { t } from "../../l10n/l10n";
   import SlidersIcon from "lucide-svelte/icons/sliders-horizontal";
+  import HorizontalScroll from "../Shared/HorizontalScroll.svelte";
   import debounce from "lodash/debounce";
 
   export let selectedAccount: MailAccount;
@@ -70,6 +72,7 @@
   let filtersOpen = false;
   let filtersAnchor: HTMLButtonElement;
   let usingAdvancedSearch = false;
+  let ribbonScroll: HorizontalScroll;
 
   $: searchMessages = usingAdvancedSearch
     ? advancedSearchMessages
@@ -211,8 +214,12 @@
     background-color: var(--hover-bg);
     color: var(--hover-fg);
   }
-  .mail-toolbar :global(.quick-filters) {
+  .mail-toolbar :global(.quick-filters-scroll) {
     flex: 1 1 auto;
+    min-width: 0;
+  }
+  .mail-toolbar :global(.quick-filters) {
+    flex: 0 0 auto;
     min-width: 0;
     min-height: 34px;
     padding: 0;
@@ -220,11 +227,6 @@
     border: none;
     background-color: transparent;
     flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .mail-toolbar :global(.quick-filters::-webkit-scrollbar) {
-    display: none;
   }
   .mail-toolbar :global(.quick-filters .pill) {
     flex: 0 0 auto;
@@ -238,6 +240,11 @@
     background-color: var(--selected-bg);
     border-color: transparent;
     color: var(--selected-fg);
+  }
+  .mail-toolbar :global(.ribbon-scroll) {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
   }
   .mail-toolbar :global(.classic-ribbon) {
     flex: 0 0 auto;
