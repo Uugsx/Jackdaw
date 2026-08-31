@@ -32,7 +32,7 @@
     "build:release:linux": "npm run build && npm run icon:icns && electron-builder --linux --config --publish always",
     "postinstall": "electron-builder install-app-deps",
     "icon:fix": "python3 build/fix-icon-alpha.py",
-    "icon:ico": "npm run icon:fix && npx icon-gen --input build/icon.png --output build --ico --ico-name icon --ico-sizes 16,24,32,48,64,128,256",
+    "icon:ico": "npx icon-gen --input build/icon.png --output build --ico --ico-name icon --ico-sizes 16,24,32,48,64,128,256",
     "icon:icns": "npx icon-gen --input build/icon.png --output build --icns --icns-name icon --icns-sizes 16,32,48,64,128,256,512"
   },
   "dependencies": {
