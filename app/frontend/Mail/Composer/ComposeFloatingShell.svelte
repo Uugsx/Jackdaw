@@ -215,8 +215,14 @@
     border-radius: var(--border-radius);
     /* Solid surface — no liquid-glass bleed-through from mail list behind */
     --main-bg: #FCFBF9;
-    --input-bg: #F7F6F3;
-    --headerbar-bg: #F5F4F1;
+    --input-bg: #FFFFFF;
+    --headerbar-bg: #EBE8E3;
+    --headerbar-fg: #1B1C1D;
+    --border: #C4BEB4;
+    --input-line: #C4BEB4;
+    --toolbar-control-bg: #FFFFFF;
+    --toolbar-control-border: #C4BEB4;
+    --toolbar-control-fg: #1B1C1D;
     background: var(--main-bg);
     color: var(--main-fg, var(--fg));
     backdrop-filter: none;
@@ -229,6 +235,12 @@
       --main-bg: #151718;
       --input-bg: #1B1D1E;
       --headerbar-bg: #181A1B;
+      --headerbar-fg: #EEEAE3;
+      --border: #3A3D3F;
+      --input-line: #434546;
+      --toolbar-control-bg: #232628;
+      --toolbar-control-border: #434546;
+      --toolbar-control-fg: #EEEAE3;
       background: var(--main-bg);
     }
   }

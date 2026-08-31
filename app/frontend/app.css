@@ -35,27 +35,27 @@
   /** Encryption, Island Selected faint */
   --offset-bg: #FEF3DC;
   --offset-fg: #0B0F14;
-  --leftbar-bg: #EEF0F3;
+  --leftbar-bg: #E8EBEF;
   --leftbar-fg: #0B0F14;
-  --headerbar-bg: #E8EAEE;
+  --headerbar-bg: #E2E5EA;
   --headerbar-fg: #0B0F14;
-  --windowheader-bg: #E8EAEE;
+  --windowheader-bg: #E2E5EA;
   --windowheader-fg: #0B0F14;
-  --appbar-bg: #E8EAEE;
+  --appbar-bg: #E2E5EA;
   --appbar-fg: #0B0F14;
-  --border: #D5DAE0;
+  --border: #C5CDD6;
   --outstanding-bg: #8892A0;
   --outstanding-fg: #FFFFFF;
   --input-bg: field;
   --input-fg: fieldtext;
-  --input-line: #D5DAE0;
+  --input-line: #B8BFC8;
   --input-placeholder: #6B7280;
   --input-focus: #F59E0B;
   --link-fg: #B45309;
   --link-hover-fg: #92400E;
   --button-bg: #EEF0F3;
   --button-fg: #0B0F14;
-  --button-border: #C5CDD6;
+  --button-border: #B8BFC8;
   --button-secondary-line: #FBBF24;
   --shadow-color: 11, 15, 20; /* #0B0F14 */
   --border-radius: 12px;
@@ -67,16 +67,16 @@
   /* Liquid glass surfaces (iOS / macOS style) */
   --glass-blur: 24px;
   --glass-saturate: 180%;
-  --glass-bg: rgba(255, 255, 255, 0.62);
-  --glass-bg-elevated: rgba(255, 255, 255, 0.78);
-  --glass-bg-subtle: rgba(255, 255, 255, 0.42);
-  --glass-border: rgba(255, 255, 255, 0.72);
-  --glass-border-subtle: rgba(255, 255, 255, 0.28);
-  --glass-shadow: 0 8px 32px rgba(var(--shadow-color), 0.10);
-  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-  --glass-hover-bg: rgba(255, 255, 255, 0.38);
-  --glass-selected-bg: rgba(255, 255, 255, 0.82);
-  --glass-selected-border: rgba(245, 158, 11, 0.42);
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-bg-elevated: rgba(255, 255, 255, 0.92);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.58);
+  --glass-border: rgba(197, 205, 214, 0.88);
+  --glass-border-subtle: rgba(197, 205, 214, 0.52);
+  --glass-shadow: 0 8px 32px rgba(var(--shadow-color), 0.12);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --glass-hover-bg: rgba(255, 255, 255, 0.52);
+  --glass-selected-bg: rgba(255, 255, 255, 0.94);
+  --glass-selected-border: rgba(245, 158, 11, 0.48);
 
   color: var(--fg);
   background-color: var(--bg);
@@ -435,49 +435,50 @@ a:hover {
   --selected-bg: #F2E3C8;
   --selected-fg: #4C3216;
   --icon-primary: #B97616;
-  --hover-bg: #F4EDDF;
+  --hover-bg: #EDE6D8;
   --hover-fg: #261F17;
   --selected-hover-bg: #E5C58E;
   --selected-hover-fg: #3A2815;
-  --main-bg: rgba(252, 251, 249, 0.72);
+  --main-bg: rgba(252, 251, 249, 0.90);
   --main-fg: #1B1C1D;
   --offset-bg: #F0EDE7;
   --offset-fg: #26221D;
-  --leftbar-bg: rgba(245, 244, 241, 0.68);
+  --leftbar-bg: rgba(241, 239, 234, 0.94);
   --leftbar-fg: #1B1C1D;
-  --headerbar-bg: rgba(252, 251, 249, 0.75);
+  --headerbar-bg: rgba(248, 246, 242, 0.96);
   --headerbar-fg: #1B1C1D;
-  --windowheader-bg: rgba(252, 251, 249, 0.75);
+  --windowheader-bg: rgba(248, 246, 242, 0.96);
   --windowheader-fg: #1B1C1D;
-  --appbar-bg: rgba(245, 244, 241, 0.68);
+  --appbar-bg: rgba(241, 239, 234, 0.94);
   --appbar-fg: #1B1C1D;
-  --border: rgba(227, 224, 217, 0.85);
-  --input-bg: rgba(247, 246, 243, 0.82);
+  --border: rgba(196, 190, 180, 0.96);
+  --input-bg: rgba(255, 255, 255, 0.94);
   --input-fg: #1B1C1D;
-  --input-line: #D9D5CD;
-  --input-placeholder: #77736C;
+  --input-line: #C4BEB4;
+  --input-placeholder: #6A655D;
   --input-focus: #D28A1B;
   --link-fg: #B36C12;
   --link-hover-fg: #8B500D;
-  --button-bg: rgba(252, 251, 249, 0.82);
+  --button-bg: rgba(255, 255, 255, 0.92);
   --button-fg: #1B1C1D;
-  --button-border: #D8D4CC;
+  --button-border: #C4BEB4;
   --button-secondary-line: #D39A3B;
   --shadow-color: 27, 28, 29;
   --border-radius: 12px;
   --radius-pill: 999px;
-  --toolbar-control-bg: rgba(247, 246, 243, 0.82);
-  --toolbar-control-border: #DDD9D1;
-  --toolbar-control-fg: #26231F;
+  --toolbar-control-bg: rgba(255, 255, 255, 0.96);
+  --toolbar-control-border: #C4BEB4;
+  --toolbar-control-fg: #1B1C1D;
   --danger-fg: #B84E3B;
-  --glass-bg: rgba(252, 251, 249, 0.58);
-  --glass-bg-elevated: rgba(255, 255, 255, 0.76);
-  --glass-bg-subtle: rgba(245, 244, 241, 0.42);
-  --glass-border: rgba(255, 255, 255, 0.68);
-  --glass-border-subtle: rgba(255, 255, 255, 0.32);
-  --glass-hover-bg: rgba(255, 255, 255, 0.42);
-  --glass-selected-bg: rgba(255, 255, 255, 0.86);
-  --glass-selected-border: rgba(185, 118, 22, 0.38);
+  --glass-bg: rgba(252, 251, 249, 0.82);
+  --glass-bg-elevated: rgba(255, 255, 255, 0.94);
+  --glass-bg-subtle: rgba(245, 244, 241, 0.68);
+  --glass-border: rgba(196, 190, 180, 0.82);
+  --glass-border-subtle: rgba(196, 190, 180, 0.48);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  --glass-hover-bg: rgba(255, 255, 255, 0.58);
+  --glass-selected-bg: rgba(255, 255, 255, 0.96);
+  --glass-selected-border: rgba(185, 118, 22, 0.48);
   background:
     radial-gradient(1200px 640px at -8% -18%, rgba(210, 138, 27, 0.14), transparent 58%),
     radial-gradient(900px 520px at 108% 108%, rgba(180, 170, 150, 0.16), transparent 52%),
@@ -576,8 +577,8 @@ a:hover {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   box-shadow:
     var(--glass-highlight),
-    0 0 0 1px rgba(var(--shadow-color), 0.06),
-    0 14px 30px rgba(var(--shadow-color), 0.22);
+    0 0 0 1px rgba(var(--shadow-color), 0.08),
+    0 14px 30px rgba(var(--shadow-color), 0.18);
 }
 .main-window:not(.mobile) .menu {
   min-width: 190px;
@@ -616,6 +617,10 @@ a:hover {
 }
 .main-window:not(.mobile) .menu .divider {
   margin-inline: 5px;
+}
+
+.main-window:not(.mobile) .splitter-bar {
+  background-color: var(--glass-border-subtle);
 }
 
 @media (prefers-color-scheme: dark) {

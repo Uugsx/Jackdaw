@@ -751,6 +751,11 @@
   }
   .ribbon-anchor {
     width: 100%;
+    min-width: 0;
+    align-self: stretch;
+  }
+  .ribbon-anchor :global(.compose-ribbon) {
+    flex: 1 1 auto;
   }
   .editor-wrapper :global(.paper) {
     background-color: var(--input-bg);

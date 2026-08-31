@@ -736,13 +736,21 @@
 
 <style>
   .compose-ribbon {
+    width: 100%;
+    min-width: 0;
+    align-self: stretch;
     gap: 0;
     border-block-end: 1px solid var(--border);
     background: var(--headerbar-bg);
     color: var(--headerbar-fg);
   }
+  .compose-ribbon :global(.h-scroll) {
+    width: 100%;
+    min-width: 0;
+  }
   .ribbon-tabs {
     gap: 0;
+    width: 100%;
     padding-inline: 8px;
     border-block-end: 1px solid var(--border);
   }
@@ -767,6 +775,9 @@
   }
   .ribbon-row {
     align-items: stretch;
+    width: 100%;
+    min-width: 100%;
+    box-sizing: border-box;
     gap: 2px;
     padding: 6px 8px 4px;
   }
