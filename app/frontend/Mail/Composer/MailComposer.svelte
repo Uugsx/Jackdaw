@@ -133,7 +133,7 @@
         <Paper>
           <Scroll visibleScrollbars={floating} allowHorizontalOverflow={floating}>
             <SMLComposer {mail} />
-            <vbox class="editor" spellcheck={$spellcheckEnabled.value}
+            <vbox class="editor" class:loading={loading} spellcheck={$spellcheckEnabled.value}
               style:zoom={editorZoom / 100}>
               <!-- The html in the mail passed in MUST already be sanitized HTML.
               Using `rawHTMLDangerous` avoids that we're sanitizing on every keypress. -->
@@ -193,6 +193,7 @@
   import { resolveComposeRecipients } from "../../../logic/Mail/composeResolveRecipients";
   import { closeFloatingCompose } from "./composeFloating";
   import { focusComposeTypingArea } from "./composeCursor";
+  import { editorHasNewComposeText } from "./composeBody";
   import UserCheckIcon from "lucide-svelte/icons/user-check";
   import { createEventDispatcher } from "svelte";
   import ComposeRibbon from "./ComposeRibbon.svelte";
@@ -292,6 +293,14 @@
     }
     if (!editor) {
       return;
+    }
+    // User may paste/type while loadBody/applySignature is still running — keep that text.
+    let editorHtml = editor.getHTML();
+    if (editorHasNewComposeText(editorHtml, mail.rawHTMLDangerous)) {
+      mail.rawHTMLDangerous = editorHtml;
+      if (!mail.isDraft) {
+        mail.compose.applySignature();
+      }
     }
     // Use raw HTML so DOMPurify WHOLE_DOCUMENT wrapping does not break TipTap
     editor.commands.setContent(mail.rawHTMLDangerous || "<p></p>");
@@ -739,6 +748,10 @@
     margin: 12px 12px;
     max-width: 50em;
     flex-shrink: 0;
+  }
+  .editor.loading {
+    pointer-events: none;
+    opacity: 0.72;
   }
   .editor-wrapper {
     flex: 3 0 0;

@@ -34,6 +34,34 @@ export class ComposeActions {
     return gt`{from} wrote on {date}:`({ from, date });
   }
 
+  /** Split user reply from quoted original (header + blockquote). */
+  protected splitReplyAndQuote(html: string): { reply: string; quote: string } {
+    let body = html ?? "";
+    let headerMatch = body.match(/<p\b[^>]*\bclass=(["'])quote-header\1[^>]*>[\s\S]*$/i);
+    if (headerMatch?.index != null) {
+      return {
+        reply: body.slice(0, headerMatch.index),
+        quote: body.slice(headerMatch.index),
+      };
+    }
+    let blockquoteMatch = body.match(/<blockquote\b[\s\S]*$/i);
+    if (blockquoteMatch?.index != null) {
+      return {
+        reply: body.slice(0, blockquoteMatch.index),
+        quote: body.slice(blockquoteMatch.index),
+      };
+    }
+    return { reply: body, quote: "" };
+  }
+
+  protected stripSignatureFooters(html: string): string {
+    let body = html ?? "";
+    body = body.replace(/<footer\b[^>]*\bclass=(["'])[^"']*\bsignature\b[^"']*\1[^>]*>[\s\S]*?<\/footer>/gi, "");
+    body = body.replace(/<footer\b[^>]*\bclass=(['"])?signature\1?\b[^>]*>[\s\S]*?<\/footer>/gi, "");
+    body = body.replace(/<footer\b(?![^>]*\bclass=)[^>]*>[\s\S]*?<\/footer>/gi, "");
+    return body;
+  }
+
   /** HTML blockquote for a reply, optionally with an attribution line above it. */
   protected buildReplyQuote(original: EMail): string {
     let showAttribution = getLocalStorage("mail.send.quote.attribution", false).value;
@@ -379,30 +407,23 @@ export class ComposeActions {
    * through DOMPurify WHOLE_DOCUMENT and can place the footer outside `</html>`.
    */
   applySignatureHTML(html: string | null | undefined, signatureHTML: string | null | undefined): string {
-    let body = html ?? "";
-    // Drop previous signature block(s) so identity switches don't stack footers.
-    // TipTap may omit class="signature" when re-serializing <footer>.
-    body = body.replace(/<footer\b[^>]*\bclass=(["'])[^"']*\bsignature\b[^"']*\1[^>]*>[\s\S]*?<\/footer>/gi, "");
-    body = body.replace(/<footer\b[^>]*\bclass=(['"])?signature\1?\b[^>]*>[\s\S]*?<\/footer>/gi, "");
-    body = body.replace(/<footer\b(?![^>]*\bclass=)[^>]*>[\s\S]*?<\/footer>/gi, "");
+    let { reply, quote } = this.splitReplyAndQuote(html ?? "");
+    reply = this.stripSignatureFooters(reply);
 
     let sig = signatureHTML?.trim();
     if (!sig || this.isEmptySignatureHTML(sig)) {
-      return body;
+      return reply + quote;
     }
-    // Image-only signatures are valid (no text)
     let footer = `<footer class="signature">${sig}</footer>`;
 
     let quoteSetting = getLocalStorage("mail.send.quote", "below").value;
-    if (quoteSetting == "below" && /<blockquote[\s>]/i.test(body)) {
-      let withSig = body.replace(/(<p\b[^>]*\bclass=(["'])quote-header\2[^>]*>)/i, footer + "$1");
-      if (withSig.includes('class="signature"') || withSig.includes("class='signature'")) {
-        return withSig;
-      }
-      // Quote without quote-header: put signature before first blockquote
-      return body.replace(/(<blockquote[\s>])/i, footer + "$1");
+    if (quoteSetting == "below" && quote) {
+      return reply + footer + quote;
     }
-    return body + footer;
+    if (quote) {
+      return quote + reply + footer;
+    }
+    return reply + footer;
   }
 
   protected isEmptySignatureHTML(sig: string): boolean {
