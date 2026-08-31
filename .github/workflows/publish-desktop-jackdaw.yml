@@ -51,6 +51,12 @@ jobs:
         run: |
           BASE=$(node -p "require('./app/package.json').version.replace(/-dev.*/, '')")
           TAG="v${BASE}-dev.${OTA_BUILD_SUFFIX}"
+          # Cancelled builds leave empty prereleases that break electron-updater (no latest.yml).
+          gh api "repos/Uugsx/Jackdaw/releases?per_page=100" --jq '.[] | select((.assets | length) == 0) | .tag_name' | while read -r EMPTY; do
+            [ -z "$EMPTY" ] && continue
+            echo "Removing empty release $EMPTY"
+            gh release delete "$EMPTY" --repo Uugsx/Jackdaw -y --cleanup-tag || true
+          done
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -f "$TAG" "$GITHUB_SHA"
