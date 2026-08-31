@@ -73,6 +73,8 @@
    * This does *not* limit user clicks on links like `<a href="https://...">`.
    */
   export let allowServerCalls: boolean | string = true;
+  /** Double-click / context menu: open inline images in the OS viewer */
+  export let allowImageOpen = false;
 
   $: partition = sessionID ? "persist:" + sessionID : undefined;
 
@@ -147,6 +149,9 @@
         } else {
           await addLinkListener();
         }
+        if (allowImageOpen) {
+          await addImageOpenListener();
+        }
         if (containNavigation) {
           let id = (webviewE as any).getWebContentsId();
           appGlobal.remoteApp.containWebContentsNavigation(id);
@@ -195,6 +200,32 @@
       }
       if (event.type == "mouseDown" && event.button == "left") {
         await openExternalURL(url);
+      }
+    });
+  }
+
+  async function addImageOpenListener() {
+    if (!webviewE) {
+      return;
+    }
+    let id = (webviewE as any).getWebContentsId();
+    await appGlobal.remoteApp.addEventListenerWebContents(id, "input-event", async (event) => {
+      if (event.type != "mouseDown" || event.button != "left" || event.clickCount != 2) {
+        return;
+      }
+      let srcURL = await webviewE.executeJavaScript(`
+        (function () {
+          const el = document.elementFromPoint(${event.x}, ${event.y});
+          if (!el) {
+            return null;
+          }
+          const img = el.closest("img");
+          return img?.src ?? null;
+        })()
+      `);
+      if (srcURL) {
+        const { openMailImageURL } = await import("../Mail/Message/openMailImage");
+        await openMailImageURL(srcURL, webviewE);
       }
     });
   }

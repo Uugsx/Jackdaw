@@ -746,7 +746,8 @@
   }
   .editor {
     margin: 12px 12px;
-    max-width: 50em;
+    max-width: none;
+    width: 100%;
     flex-shrink: 0;
   }
   .editor.loading {

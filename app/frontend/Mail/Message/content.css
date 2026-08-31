@@ -1,5 +1,8 @@
 body {
-  max-width: 50em;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  overflow-x: auto;
 }
 
 /* Preserve common Outlook / Word HTML email layout */
@@ -15,6 +18,7 @@ th {
 img {
   max-width: 100%;
   height: auto;
+  cursor: zoom-in;
 }
 hr {
   border: none;

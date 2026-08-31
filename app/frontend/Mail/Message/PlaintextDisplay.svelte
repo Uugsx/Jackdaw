@@ -15,7 +15,8 @@
     flex: 1 0 0;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    max-width: 50em;
+    width: 100%;
+    max-width: none;
     padding: 16px;
   }
 </style>

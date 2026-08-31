@@ -1,4 +1,4 @@
-<WebView html={displayHtml} {headHTML} {bodyClass} allowServerCalls={allowExternalImages} title={$t`Text`} on:webview />
+    <WebView html={displayHtml} {headHTML} {bodyClass} allowServerCalls={allowExternalImages} allowImageOpen title={$t`Text`} on:webview />
 
 <script lang="ts">
   import cssContent from "./content.css?inline";

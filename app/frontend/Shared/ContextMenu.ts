@@ -5,6 +5,7 @@ import { catchErrors } from "../Util/error";
 import { blobToDataURL, NotImplemented, type URLString } from "../../logic/util/util";
 import { gt } from "../../l10n/l10n";
 import { ArrayColl } from "svelte-collections";
+import { openMailImageURL } from "../Mail/Message/openMailImage";
 
 /**
  * Handles the Electron `<webview>` `"context-menu"` event.
@@ -65,6 +66,7 @@ export async function buildContextMenu(context: ContextInfo, win: any): Promise<
     } */
   }
   if (context.mediaType == "image") {
+    add("openImage", gt`Open`, null, openImage);
     add("copyImage", gt`Copy image`, null, copyImage);
     add("copyImageURL", gt`Copy image address`, null, copyImageURL);
     add("saveImage", gt`Save image...`, null, saveImage);
@@ -207,6 +209,10 @@ async function searchWeb(context: ContextInfo, win: any) {
 
 function lookUpSelection(context: ContextInfo, win: any) {
   win.showDefinitionForSelection();
+}
+
+async function openImage(context: ContextInfo, win: any) {
+  await openMailImageURL(context.srcURL, win, context.suggestedFilename);
 }
 
 async function saveImage(context: ContextInfo, win: any) {
