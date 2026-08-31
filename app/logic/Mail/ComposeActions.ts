@@ -31,7 +31,19 @@ export class ComposeActions {
     }
     let from = this.email.from.name || this.email.from.emailAddress;
     let date = getDate(this.email.sent);
-    return `${from} wrote on ${date}:`;
+    return gt`{from} wrote on {date}:`({ from, date });
+  }
+
+  /** HTML blockquote for a reply, optionally with an attribution line above it. */
+  protected buildReplyQuote(original: EMail): string {
+    let showAttribution = getLocalStorage("mail.send.quote.attribution", false).value;
+    let header = showAttribution
+      ? `<p class="quote-header">${this.quotePrefixLine()}</p>
+    `
+      : "";
+    return `${header}<blockquote cite="mid:${original.id}">
+      ${original.html}
+    </blockquote>`;
   }
 
   generateMessageID(): void {
@@ -79,10 +91,7 @@ export class ComposeActions {
       .catch(original.folder.account.errorCallback);
 
     let quoteSetting = getLocalStorage("mail.send.quote", "below").value;
-    let quote = `<p class="quote-header">${this.quotePrefixLine()}</p>
-    <blockquote cite="mid:${original.id}">
-      ${original.html}
-    </blockquote>`;
+    let quote = this.buildReplyQuote(original);
     reply.html = quoteSetting == "none" ? `<p></p>` :
       quoteSetting == "below" ? `<p></p>
     <p></p>

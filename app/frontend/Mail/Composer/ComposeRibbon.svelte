@@ -259,7 +259,10 @@
       <hbox class="ribbon-row options-row">
         <vbox class="group">
           <hbox class="group-row">
-            <button type="button" class="ribbon-btn option-chip on" disabled title={$t`HTML`}>
+            <button type="button" class="ribbon-btn option-chip"
+              class:on={sendAsHtml}
+              title={sendAsHtml ? $t`Send as HTML and Plaintext` : $t`Send as Plaintext only`}
+              on:click={toggleSendFormat}>
               HTML
             </button>
             <button type="button" class="ribbon-btn option-chip"
@@ -453,6 +456,7 @@
   import Menu from "../../Shared/Menu/Menu.svelte";
   import MenuItem from "../../Shared/Menu/MenuItem.svelte";
   import HorizontalScroll from "../../Shared/HorizontalScroll.svelte";
+  import { getLocalStorage } from "../../Util/LocalStorage";
   import type { MailImportanceLevel } from "../../../logic/Mail/EMail";
 
   export let editor: Editor;
@@ -486,6 +490,11 @@
 
   let activeTab: "message" | "options" = "message";
   const zoomLevels = [90, 100, 125];
+  let formatSetting = getLocalStorage("mail.send.format", "html");
+  $: sendAsHtml = formatSetting.value === "html";
+  function toggleSendFormat() {
+    formatSetting.value = sendAsHtml ? "plaintext" : "html";
+  }
   let pasteMenuOpen = false;
   let pasteMenuAnchor: HTMLButtonElement;
   let sendMenuOpen = false;

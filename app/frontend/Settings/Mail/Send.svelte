@@ -50,6 +50,14 @@
         <hbox />
       </vbox>
     </hbox>
+    {#if quoteSetting.value !== "none"}
+      <hbox class="quote-attribution">
+        <input type="checkbox" bind:checked={quoteAttributionSetting.value} id="quote-attribution" />
+        <label for="quote-attribution">
+          {$t`Show attribution line (who wrote and when)`}
+        </label>
+      </hbox>
+    {/if}
   </vbox>
 </HeaderGroupBox>
 
@@ -133,6 +141,7 @@
 
   let formatSetting = getLocalStorage("mail.send.format", "html");
   let quoteSetting = getLocalStorage("mail.send.quote", "below");
+  let quoteAttributionSetting = getLocalStorage("mail.send.quote.attribution", false);
   let spellcheckEnabledSetting = getLocalStorage("mail.send.spellcheck.enabled", false);
   let presentationSetting = getLocalStorage("mail.compose.presentation", "fullscreen");
 </script>
@@ -140,6 +149,14 @@
 <style>
   .subtitle {
     margin-block-end: 16px;
+  }
+  .quote-attribution {
+    align-items: center;
+    margin-block-start: 12px;
+    margin-inline-start: 8px;
+  }
+  .quote-attribution label {
+    margin-inline-start: 8px;
   }
   hbox.quote,
   hbox.format {
