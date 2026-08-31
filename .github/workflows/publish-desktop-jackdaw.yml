@@ -161,11 +161,25 @@ jobs:
     if: |
       always() &&
       needs.prepare.result == 'success' &&
-      github.event_name == 'workflow_dispatch' &&
-      (inputs.platform == 'mac' || inputs.platform == 'windows') &&
       (
-        (inputs.platform == 'mac' && needs.mac.result == 'success') ||
-        (inputs.platform == 'windows' && needs.windows.result == 'success')
+        (
+          github.event_name == 'workflow_dispatch' &&
+          (inputs.platform == 'mac' || inputs.platform == 'windows') &&
+          (
+            (inputs.platform == 'mac' && needs.mac.result == 'success') ||
+            (inputs.platform == 'windows' && needs.windows.result == 'success')
+          )
+        ) ||
+        (
+          (github.event_name == 'push' || inputs.platform == 'both') &&
+          needs.mac.result == 'success' &&
+          needs.windows.result != 'success'
+        ) ||
+        (
+          (github.event_name == 'push' || inputs.platform == 'both') &&
+          needs.windows.result == 'success' &&
+          needs.mac.result != 'success'
+        )
       )
     runs-on: ubuntu-latest
     permissions:
@@ -179,7 +193,14 @@ jobs:
         run: |
           BASE=$(node -p "require('./app/package.json').version.replace(/-dev.*/, '')")
           TAG="v${BASE}-dev.${OTA_BUILD_SUFFIX}"
-          bash app/build/ota-carry-forward.sh "$TAG" "${{ inputs.platform }}" Uugsx/Jackdaw
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BUILT="${{ inputs.platform }}"
+          elif [ "${{ needs.mac.result }}" = "success" ] && [ "${{ needs.windows.result }}" != "success" ]; then
+            BUILT="mac"
+          else
+            BUILT="windows"
+          fi
+          bash app/build/ota-carry-forward.sh "$TAG" "$BUILT" Uugsx/Jackdaw
 
   finalize:
     needs: [prepare, mac, windows, carry-forward]
@@ -224,6 +245,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v6
       - name: Remove empty prerelease after cancelled or failed build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

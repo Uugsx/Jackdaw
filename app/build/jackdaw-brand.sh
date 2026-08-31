@@ -45,7 +45,6 @@ perl -p -i \
 # Ensure Jackdaw icons are in place
 perl -MFile::Path -e "mkpath('../../mobile/assets')"
 if [ -f ../../desktop/build/icon-jackdaw.png ]; then
-  python3 ../../desktop/build/fix-icon-alpha.py ../../desktop/build/icon-jackdaw.png
   perl -MFile::Copy -e "copy('../../desktop/build/icon-jackdaw.png', '../../desktop/build/icon.png')"
   perl -MFile::Copy -e "copy('../../desktop/build/icon-jackdaw.png', '../../mobile/assets/icon.png')"
 fi
