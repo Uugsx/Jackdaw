@@ -177,7 +177,7 @@ Or push to `main` touching monitored paths.
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
 | Two GitHub releases, same version | Parallel publish without `prepare` release shell | Ensure `prepare` creates release first; run `finalize` dedupe |
-| Windows: `unsupported`, no update | Wrong release (Mac-only) or old build without token/yml | Install latest `setup.exe` once; verify single release has `latest.yml` + `setup.exe` |
+| Windows: metadata error, latest release empty | CI `prepare` created release; build **cancelled** (`concurrency`) before upload | Delete empty release; CI now runs `cleanup-empty-release`; retry check after a successful Actions run |
 | Mac: `unsupported` | Missing `app-update.yml` or token in `.app` | Reinstall from CI `.dmg` |
 | Mac: code signature / ShipIt error | Tried `quitAndInstall` on ad-hoc build | Use DMG install path (current code) |
 | Mac: app didn’t restart after update | Install ran while app still open | Use `scheduleMacDmgInstallAndQuit` (quit first, then script) |
