@@ -7,7 +7,7 @@
       <hbox>
         <vbox class="emojis">
           <GraphicSelector
-            on:select={onEmoji}
+            on:select={event => catchErrors(() => onGraphic(event))}
             on:backspace={() => catchErrors(onEmojiBackspace)}
             bind:isOpen={showEmojis}
             />
@@ -15,9 +15,9 @@
         <vbox class="emoji-empty" flex />
       </hbox>
     {/if}
-    {#if $attachments.hasItems}
+    {#if $attachments.some(attachment => !attachment.hidden)}
       <vbox class="attachments">
-        <AttachmentsPane message={to.draftMessage} />
+        <AttachmentsPane message={to.draftMessage} on:remove={onAttachmentRemove} />
       </vbox>
     {/if}
     <hbox flex>
@@ -42,7 +42,7 @@
         <vbox flex class="editor-scroll-wrapper">
           <Scroll>
             <vbox flex class="editor">
-              <HTMLEditor bind:html={to.draftMessage.rawHTMLDangerous} bind:editor />
+              <HTMLEditor bind:html={to.draftMessage.rawHTMLDangerous} bind:editor on:change={onEditorChange} />
             </vbox>
           </Scroll>
         </vbox>
@@ -63,13 +63,15 @@
 
 <script lang="ts">
   import type { ChatRoom } from "../../logic/Chat/ChatRoom";
-  import { insertImage } from "../Shared/Editor/InsertImage";
+  import { insertImage, removeImageForAttachment, removeOrphanedInlineAttachments } from "../Shared/Editor/InsertImage";
+  import type { Attachment } from "../../logic/Abstract/Attachment";
   import { selectedDraft, selectedEditor } from "./selected";
   import HTMLEditorToolbar from "../Shared/Editor/HTMLEditorToolbar.svelte";
   import HTMLEditor from "../Shared/Editor/HTMLEditor.svelte";
   import FileDropTarget from "../Mail/Composer/Attachments/FileDropTarget.svelte";
   import AttachmentsPane from "../Mail/Composer/Attachments/AttachmentsPane.svelte";
   import GraphicSelector from "./Emoji/GraphicSelector.svelte";
+  import type { GraphicSelection } from "./Emoji/media";
   import Scroll from "../Shared/Scroll.svelte";
   import RoundButton from "../Shared/RoundButton.svelte";
   import Button from "../Shared/Button.svelte";
@@ -124,11 +126,23 @@
     }
   }
 
-  function onEmoji(ev: CustomEvent) {
+  async function onGraphic(ev: CustomEvent<GraphicSelection>) {
+    if (ev.detail.file) {
+      await insertImage(editor, ev.detail.file, to.draftMessage, ev.detail.width);
+      return;
+    }
     let emoji = ev.detail.emoji;
     if (emoji) {
       editor.commands.insertContent(emoji);
     }
+  }
+
+  function onAttachmentRemove(event: CustomEvent<Attachment>) {
+    removeImageForAttachment(editor, event.detail);
+  }
+
+  function onEditorChange() {
+    removeOrphanedInlineAttachments(editor, to.draftMessage);
   }
 
   function onEmojiBackspace() {
@@ -145,6 +159,8 @@
   }
   .emojis {
     height: 300px;
+    min-height: 0;
+    min-width: 0;
     width: 600px;
   }
   .attachments {

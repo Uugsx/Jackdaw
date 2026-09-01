@@ -56,7 +56,7 @@
           allowBase64: true,
           inline: false,
           HTMLAttributes: {
-            style: "max-width: 90%; height: auto; margin: 10px;"
+            style: "max-width: 100%; height: auto; margin: 0; display: block;"
           },
         }),
         BoldStar,
@@ -126,10 +126,17 @@
   }
   .html-editor {
     min-height: 100%;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
   .html-editor :global(.ProseMirror) {
     min-height: 100%;
     height: auto;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
   }
   .html-editor :global(.ProseMirror:focus-visible) {
     outline: none;
@@ -159,6 +166,7 @@
   }
   .html-editor :global(img) {
     max-width: 100%;
+    height: auto;
   }
   .html-editor :global(table) {
     border-collapse: collapse;

@@ -3,11 +3,14 @@
     <RoundButton
       label={$t`Emoji`}
       onClick={() => showGraphicType = GraphicType.Emoji}
+      selected={showGraphicType == GraphicType.Emoji}
       icon={EmojiIcon}
       border={false} classes="plain"
       />
     <RoundButton
       label={$t`GIF`}
+      onClick={() => showGraphicType = GraphicType.GIF}
+      selected={showGraphicType == GraphicType.GIF}
       icon={GIFIcon}
       border={false} classes="plain"
       >
@@ -15,6 +18,8 @@
     </RoundButton>
     <RoundButton
       label={$t`Sticker`}
+      onClick={() => showGraphicType = GraphicType.Sticker}
+      selected={showGraphicType == GraphicType.Sticker}
       icon={StickerIcon}
       border={false} classes="plain"
       />
@@ -27,7 +32,7 @@
       />
   </vbox>
 
-  <vbox flex>
+  <vbox class="content" flex>
     <hbox class="search">
       <SearchField bind:searchTerm />
       <hbox flex />
@@ -42,9 +47,9 @@
     {#if showGraphicType == GraphicType.Emoji}
       <EmojiSelector {searchTerm} on:select />
     {:else if showGraphicType == GraphicType.GIF}
-      <GIFPicker {searchTerm} />
+      <GIFPicker bind:searchTerm on:select={forwardSelection} />
     {:else if showGraphicType == GraphicType.Sticker}
-      <StickerPicker {searchTerm} />
+      <StickerPicker bind:searchTerm on:select={forwardSelection} />
     {/if}
   </vbox>
 </hbox>
@@ -55,16 +60,15 @@
   import StickerPicker from "./StickerPicker.svelte";
   import SearchField from "../../Shared/SearchField.svelte";
   import RoundButton from "../../Shared/RoundButton.svelte";
-  import Button from "../../Shared/Button.svelte";
+  import type { GraphicSelection } from "./media";
   import EmojiIcon from "lucide-svelte/icons/smile";
   import GIFIcon from "lucide-svelte/icons/bird";
   import StickerIcon from "lucide-svelte/icons/heart";
   import BackspaceIcon from "lucide-svelte/icons/delete";
-  import CollapseIcon from "lucide-svelte/icons/chevron-down";
   import XIcon from "lucide-svelte/icons/x";
   import { t } from "../../../l10n/l10n";
   import { createEventDispatcher } from 'svelte';
-  const dispatchEvent = createEventDispatcher<{ backspace: void }>();
+  const dispatchEvent = createEventDispatcher<{ backspace: void, select: GraphicSelection }>();
 
   /** in/out */
   export let isOpen: boolean;
@@ -77,9 +81,22 @@
     Sticker,
   };
   let showGraphicType = GraphicType.Emoji;
+
+  function forwardSelection(event: CustomEvent<GraphicSelection>) {
+    dispatchEvent("select", event.detail);
+  }
 </script>
 
 <style>
+  .graphic-selector {
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+  }
+  .content {
+    min-height: 0;
+    min-width: 0;
+  }
   .search {
     margin: 4px 8px 8px 56px;
   }

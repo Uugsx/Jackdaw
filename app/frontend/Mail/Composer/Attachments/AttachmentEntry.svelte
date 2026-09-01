@@ -23,18 +23,20 @@
   import type { Attachment } from "../../../../logic/Abstract/Attachment";
   import FileIcon from "../../../Files/Thumbnail/FileIcon.svelte";
   import Button from "../../../Shared/Button.svelte";
-  import ChevronDownIcon from "lucide-svelte/icons/chevron-down";
   import DeleteIcon from "lucide-svelte/icons/trash-2";
   import { Collection } from "svelte-collections";
   import { t } from "../../../../l10n/l10n";
+  import { createEventDispatcher } from "svelte";
 
   export let attachment: Attachment;
   export let attachments: Collection<Attachment>;
+  const dispatchEvent = createEventDispatcher<{ remove: Attachment }>();
 
   $: ext = attachment.filename.split(".").pop();
 
-  async function onDelete() {
+  function onDelete() {
     attachments.remove(attachment);
+    dispatchEvent("remove", attachment);
   }
 </script>
 

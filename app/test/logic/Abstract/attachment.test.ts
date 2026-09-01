@@ -1,8 +1,9 @@
 // app first, to resolve the import cycle around Abstract/Account.ts
 import "../../../logic/app";
-import { Attachment } from "../../../logic/Abstract/Attachment";
+import { Attachment, ContentDisposition } from "../../../logic/Abstract/Attachment";
 import { UserError } from "../../../logic/util/util";
 import { InMemoryFileReader } from "../util/fileReader";
+import { ArrayColl } from "svelte-collections";
 import { beforeAll, expect, test } from "vitest";
 
 const kContent = new Uint8Array([1, 2, 3, 4]);
@@ -21,6 +22,19 @@ test("Attachment whose file is gone from disk reports the filename", async () =>
   attachment.content.arrayBuffer = () => Promise.reject(new Error("File not found"));
   await expect(attachment.contentAsBase64()).rejects.toThrow(UserError);
   await expect(attachment.contentAsBase64()).rejects.toThrow("agenda.pdf");
+});
+
+test("inline related media is not shown as a regular attachment", () => {
+  let inline = newAttachment();
+  inline.disposition = ContentDisposition.inline;
+  inline.related = true;
+  let regular = newAttachment();
+  regular.disposition = ContentDisposition.attachment;
+  regular.related = true;
+
+  let visible = new ArrayColl([inline, regular]).filterObservable(attachment => !attachment.hidden);
+
+  expect(visible.contents).toEqual([regular]);
 });
 
 function newAttachment(): Attachment {

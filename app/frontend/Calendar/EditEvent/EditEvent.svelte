@@ -133,7 +133,7 @@
   $: if ($event.isOnline) onlineMeetingOpen = true;
   $: showOnlineMeeting = onlineMeetingOpen;
   $: showDescription = !!$event.descriptionHTML;
-  $: showAttachments = $attachments.hasItems;
+  $: showAttachments = $attachments.some(attachment => !attachment.hidden);
 
   const freeBusyOptions = [
     { label: gt`Busy`, value: "Busy" },

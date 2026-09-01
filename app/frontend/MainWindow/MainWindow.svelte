@@ -7,7 +7,9 @@
   on:blur={() => catchErrors(saveWindowSettings)}
   on:visibilitychange={() => catchErrors(saveWindowSettings)}
   on:beforeunload={() => catchErrors(saveWindowSettings)}
-  on:click|capture={(event) => catchErrors(() => onClickTopLevel(event))} />
+  on:click|capture={(event) => catchErrors(() => onClickTopLevel(event))}
+  on:keydown|capture={(event) => catchErrors(() => onCategoryShortcutKeydown(event))}
+  on:mousedown|capture={(event) => catchErrors(() => onCategoryShortcutMouseDown(event))} />
 
 <vbox flex class="main-window"
   dir={rtl}
@@ -76,6 +78,12 @@
   // #endif
   import { notifications } from "./Notification";
   import { selectedAccount } from "../Mail/Selected";
+  import {
+    applyCategoryShortcut,
+    findCategoryShortcut,
+    keyboardCategoryShortcutFromEvent,
+    mouseCategoryShortcutFromEvent,
+  } from "../Mail/CategoryShortcuts";
   import { getLocalStorage } from "../Util/LocalStorage";
   import { loadApps, disableAppsBasedOnFeaturesXML } from "../AppsBar/loadApps";
   import { mailApp } from "../Mail/MailJackdawApp";
@@ -209,6 +217,53 @@
     }
     (appGlobal.remoteApp.focusMainWindow ?? appGlobal.remoteApp.unminimizeMainWindow)?.()
       .catch(backgroundError);
+  }
+
+  async function onCategoryShortcutKeydown(event: KeyboardEvent): Promise<void> {
+    if (!canHandleCategoryShortcut(event) || event.repeat || event.isComposing) {
+      return;
+    }
+    let shortcut = keyboardCategoryShortcutFromEvent(event);
+    if (!shortcut) {
+      return;
+    }
+    let target = findCategoryShortcut(shortcut);
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    await applyCategoryShortcut(target);
+  }
+
+  async function onCategoryShortcutMouseDown(event: MouseEvent): Promise<void> {
+    if (!canHandleCategoryShortcut(event)) {
+      return;
+    }
+    let shortcut = mouseCategoryShortcutFromEvent(event);
+    if (!shortcut) {
+      return;
+    }
+    let target = findCategoryShortcut(shortcut);
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    await applyCategoryShortcut(target);
+  }
+
+  function canHandleCategoryShortcut(event: Event): boolean {
+    if ($selectedApp?.id != "mail" || event.defaultPrevented) {
+      return false;
+    }
+    let target = event.target;
+    if (!(target instanceof Element)) {
+      return false;
+    }
+    return !target.closest(
+      ".mail-composer-window, input, textarea, select, [contenteditable=true], [role=textbox]",
+    );
   }
 
   async function onClickTopLevel(event: MouseEvent) {
