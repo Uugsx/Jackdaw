@@ -123,7 +123,7 @@
       {#if showEmojis}
         <vbox class="emojis">
           <GraphicSelector
-            on:select={onEmoji}
+            on:select={event => catchErrors(() => onGraphic(event))}
             on:backspace={() => catchErrors(onEmojiBackspace)}
             bind:isOpen={showEmojis}
             />
@@ -131,7 +131,7 @@
       {/if}
       <vbox flex class="editor-wrapper">
         <Paper>
-          <Scroll visibleScrollbars={floating} allowHorizontalOverflow={floating}>
+          <Scroll visibleScrollbars={floating}>
             <SMLComposer {mail} />
             <vbox class="editor" class:loading={loading} spellcheck={$spellcheckEnabled.value}
               style:zoom={editorZoom / 100}>
@@ -152,7 +152,7 @@
       </vbox>
       {#if showAttachments}
         <vbox class="attachments">
-          <AttachmentsPane message={mail} />
+          <AttachmentsPane message={mail} on:remove={onAttachmentRemove} />
         </vbox>
       {/if}
     </hbox>
@@ -181,7 +181,8 @@
   import type { EMail, MailImportanceLevel } from "../../../logic/Mail/EMail";
   import { PersonUID } from "../../../logic/Abstract/PersonUID";
   import { addFilesAsAttachments } from "../../../logic/Abstract/Attachment";
-  import { insertImage } from "../../Shared/Editor/InsertImage";
+  import { insertImage, removeImageForAttachment, removeOrphanedInlineAttachments } from "../../Shared/Editor/InsertImage";
+  import type { Attachment } from "../../../logic/Abstract/Attachment";
   import { MailIdentity } from "../../../logic/Mail/MailIdentity";
   import { WriteMailJackdawApp, mailApp } from "../MailJackdawApp";
   import { SpecialFolder } from "../../../logic/Mail/Folder";
@@ -210,6 +211,7 @@
   import EncryptionButtons from "./EncryptionButtons.svelte";
   import EncryptionDetails from "./EncryptionDetails.svelte";
   import GraphicSelector from "../../Chat/Emoji/GraphicSelector.svelte";
+  import type { GraphicSelection } from "../../Chat/Emoji/media";
   import SMLComposer from "./SMLComposer.svelte";
   import SMLAddKinds from "../SML/SMLAddKinds.svelte";
   import ComposerBarM from "./ComposerBarM.svelte";
@@ -341,6 +343,7 @@
       return;
     }
     syncComposeHtml();
+    removeOrphanedInlineAttachments(editor, mail);
   }
 
   async function waitForEditor(maxTicks = 40): Promise<boolean> {
@@ -580,11 +583,19 @@
 
   let showEmojis = false;
 
-  function onEmoji(ev: CustomEvent) {
+  async function onGraphic(ev: CustomEvent<GraphicSelection>) {
+    if (ev.detail.file) {
+      await insertImage(editor, ev.detail.file, mail, ev.detail.width);
+      return;
+    }
     let emoji = ev.detail.emoji;
     if (emoji) {
       editor.commands.insertContent(emoji);
     }
+  }
+
+  function onAttachmentRemove(event: CustomEvent<Attachment>) {
+    removeImageForAttachment(editor, event.detail);
   }
 
   function onEmojiBackspace() {
@@ -658,7 +669,7 @@
   $: attachmentsList = mail.attachments;
   $: hasCC = $ccList.hasItems;
   $: hasBCC = $bccList.hasItems;
-  $: hasAttachments = $attachmentsList.hasItems;
+  $: hasAttachments = $attachmentsList.some(attachment => !attachment.hidden);
   $: showCC = showCCForce;
   $: showBCC = showBCCForce;
   $: showAttachments = showAttachmentsForce || hasAttachments;
@@ -712,8 +723,9 @@
   }
   .mail-composer-window.floating .editor {
     max-width: none;
-    width: max-content;
-    min-width: 100%;
+    width: auto;
+    min-width: 0;
+    box-sizing: border-box;
   }
   .compose-header {
     gap: 2px;
@@ -833,18 +845,25 @@
     padding-block-start: 4px;
   }
   .editor {
-    margin: 12px 12px;
+    margin: 12px 0;
+    padding-inline: 12px;
     max-width: none;
-    width: 100%;
+    width: auto;
+    min-width: 0;
     flex-shrink: 0;
+    box-sizing: border-box;
   }
   .editor.loading {
     pointer-events: none;
     opacity: 0.72;
   }
   .editor :global(.ProseMirror) {
+    /* Оставляем прокрутку композера на внешней поверхности. Вложенная
+       горизонтальная прокрутка смещается браузером при фокусе на медиа,
+       из-за чего отступ пропадает и текст касается рамки письма. */
     overflow: visible;
     max-height: none;
+    max-width: 100%;
   }
   .compose-quote {
     margin: 0 12px 12px;
@@ -901,6 +920,8 @@
     opacity: 30%;
   }
   .emojis {
+    min-height: 0;
+    min-width: 0;
     width: 400px;
   }
   .sml-add-dialog {

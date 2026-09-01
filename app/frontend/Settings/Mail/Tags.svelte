@@ -130,6 +130,8 @@
       </hbox>
     </vbox>
   </HeaderGroupBox>
+
+  <CategoryShortcuts />
 </vbox>
 
 <script lang="ts">
@@ -145,6 +147,7 @@
     type TagCombination,
   } from "../../../logic/Abstract/TagCombination";
   import TagCombinationRow from "./TagCombinationRow.svelte";
+  import CategoryShortcuts from "./CategoryShortcuts.svelte";
   import { appGlobal } from "../../../logic/app";
   import type { OWAAccount } from "../../../logic/Mail/OWA/OWAAccount";
   import {
@@ -152,6 +155,7 @@
     resolveOWAAccountForTagSync,
     syncTagsFromOWAAccount,
   } from "../../../logic/Mail/tagSync";
+  import { clearCategoryShortcut, pruneCategoryShortcuts } from "../../Mail/CategoryShortcuts";
   import TagBubble from "../../Shared/Tag/TagBubble.svelte";
   import TagAdd from "../../Shared/Tag/TagAdd.svelte";
   import HeaderGroupBox from "../../Shared/HeaderGroupBox.svelte";
@@ -231,7 +235,10 @@
       return;
     }
     availableTags.remove(tag);
-    removeTagFromCombinations(tag.name).catch(catchErrors);
+    clearCategoryShortcut({ type: "tag", id: tag.name });
+    removeTagFromCombinations(tag.name)
+      .then(pruneCategoryShortcuts)
+      .catch(catchErrors);
     saveTagsList().catch(catchErrors);
   }
 
@@ -244,6 +251,7 @@
     if (!confirm($t`Delete this category combination?`)) {
       return;
     }
+    clearCategoryShortcut({ type: "combination", id: combination.id });
     await removeTagCombination(combination);
   }
 

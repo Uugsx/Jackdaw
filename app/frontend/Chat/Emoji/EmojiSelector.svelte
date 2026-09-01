@@ -17,10 +17,10 @@
       </vbox>
     </Scroll>
   </hbox>
-  <Scroll>
+  <Scroll bind:this={groupsScroll}>
     <vbox class="groups">
       {#each emojisList as group}
-        <vbox scroll={group.id}>
+        <vbox bind:this={groupElements[group.id]} data-emoji-group={group.id}>
           <hbox class="title font-small">
             {group.title}
           </hbox>
@@ -53,6 +53,9 @@
 
   export let searchTerm: string | null;
 
+  let groupsScroll: Scroll;
+  let groupElements: Record<string, HTMLElement> = {};
+
   $: emojisList = list(searchTerm);
 
   function list(searchTerm: string) {
@@ -77,13 +80,21 @@
     return list;
   }
 
-  function onScrollTo(group: any) {
-    let groupE = document.querySelector(`vbox[scroll=${group.id}]`);
-    groupE?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start'});
+  function onScrollTo(group: { id: string }) {
+    let groupE = groupElements[group.id];
+    if (!groupsScroll || !groupE) {
+      return;
+    }
+    groupsScroll.scrollTo(groupE.offsetTop, "smooth");
   }
 </script>
 
 <style>
+  .emoji-selector {
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+  }
   .groups {
     padding: 4px 8px;
   }
@@ -99,6 +110,8 @@
     margin-block-end: 8px;
   }
   .selector {
+    flex: 0 0 48px;
+    min-height: 0;
     width: 48px;
   }
 </style>

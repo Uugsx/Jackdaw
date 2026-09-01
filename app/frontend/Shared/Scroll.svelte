@@ -20,8 +20,12 @@
   export function scrollDown() {
     containerE.scrollTop = containerE.scrollHeight;
   }
-  export function scrollTo(y: number) {
-    containerE.scrollTop = y;
+  export function scrollTo(y: number, behavior: ScrollBehavior = "auto") {
+    if (behavior == "auto" || typeof containerE.scrollTo != "function") {
+      containerE.scrollTop = y;
+      return;
+    }
+    containerE.scrollTo({ top: y, behavior });
   }
 
   function onScrollWheel(event: MouseEvent) {

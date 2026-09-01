@@ -1,7 +1,7 @@
 <vbox flex class="attachments-pane">
   <Scroll>
-    {#each $attachments.each as attachment}
-      <AttachmentEntry {attachment} {attachments} />
+    {#each $visibleAttachments.each as attachment (attachment)}
+      <AttachmentEntry {attachment} attachments={allAttachments} on:remove />
     {/each}
     <hbox class="buttons">
       <RoundButton
@@ -25,13 +25,14 @@
 
   /** The email, chat message or calendar event to attach the files to */
   export let message: MessageWithAttachments;
-  $: attachments = message.attachments;
+  $: allAttachments = message.attachments;
+  /** Inline/related-части входят в MIME письма, но не являются вложениями пользователя. */
+  $: visibleAttachments = allAttachments.filterObservable(attachment => !attachment.hidden);
 
   let fileSelector: FileSelector;
   export async function onAdd() {
     let file = await fileSelector.selectFile();
     if (!file) {
-      console.log("no file selected");
       return;
     }
     addFilesAsAttachments(message, [file]);
