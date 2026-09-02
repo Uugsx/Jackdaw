@@ -91,11 +91,15 @@
 
   let replyAllRev = 0;
   let replyAllUnsub: (() => void) | null = null;
+  let canReplyAll = false;
   $: {
     replyAllUnsub?.();
     replyAllUnsub = subscribeCanReplyAll(message, () => replyAllRev++);
   }
-  $: canReplyAll = (replyAllRev, computeCanReplyAll(message));
+  $: {
+    replyAllRev;
+    canReplyAll = computeCanReplyAll(message);
+  }
 
   async function toggleRead() {
     await message.markRead(!message.isRead);

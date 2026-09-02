@@ -1,14 +1,15 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <hbox flex
   class="message"
-  class:incoming={!$message.outgoing}
-  class:outgoing={$message.outgoing}
+  class:incoming={!displayOutgoing}
+  class:outgoing={displayOutgoing}
+  class:wide={wideBubble}
   class:followup
   deliveryStatus={$message instanceof ChatMessage ? $message.deliveryStatus : DeliveryStatus.Unknown}
   on:pointerenter={onHoverStart}
   on:pointerleave={onHoverEnd}
   >
-  {#if !$message.outgoing}
+  {#if !displayOutgoing}
     <vbox class="avatar"  from={author?.name}>
       {#if author?.picture && !followup}
         <PersonPicture person={author} size={32} />
@@ -18,7 +19,7 @@
   <vbox class="right">
     {#if !(fastFollowup && hideHeaderFollowup)}
       <hbox class="meta font-smallest" class:singlechat={!isGroupChat}>
-        {#if !$message.outgoing && !followup}
+        {#if !displayOutgoing && !followup}
           <hbox class="from value">{author?.name}</hbox>
         {/if}
         <hbox flex>
@@ -35,7 +36,7 @@
       </vbox>
     {/if}
     <Attachments message={$message} />
-    {#if $message.rawText || $message.hasHTML}
+    {#if $message.rawText || $message.hasHTML || $$slots.bubble}
       <vbox class="bubble">
         {#if $$slots.menu}
           <hbox class="menu" class:openMenuOnMessageHover>
@@ -44,7 +45,9 @@
         {/if}
         <slot name="inner-top" />
           <div class="text value font-normal">
-            {@html $message.html || ""}
+            {#if renderHTML}
+              {@html $message.html || ""}
+            {/if}
             <!-- TODO Security: Jail HTML into untrusted <iframe> for additional protection.
             <WebView title={$t`Text`} html={$message.html || ""} {headHTML} autoSize />
             -->
@@ -53,14 +56,14 @@
         <slot name="inner-bottom" />
       </vbox>
     {/if}
-    {#if $reactions.length > 0}
+    {#if showReactions && $reactions.length > 0}
       <hbox class="reactions" class:cloak={showActions}>
         {#each [...$reactions.entries()] as [sender, emoji]}
           <hbox class="reaction" title={emoji + " " + sender?.name}>{emoji}</hbox>
         {/each}
       </hbox>
     {/if}
-    {#if showActions}
+    {#if showReactions && showActions}
       <vbox class="hover-popup-anchor" class:haveReaction={$reactions.length}>
         <vbox class="hover-after-msg">
           <ReactionBar {message} bind:isOpen={showActions} />
@@ -90,12 +93,23 @@
   export let previousMessage: Message = null;
   export let hideHeaderFollowup = false;
   export let openMenuOnMessageHover = false;
+  export let showReactions = true;
+  /** Allow a caller to render sanitized content in a dedicated renderer. */
+  export let renderHTML = true;
+  /** Optional display-only direction for messages whose model flag is incomplete. */
+  export let outgoingOverride: boolean | null = null;
+  /** Optional display-only direction for the previous message. */
+  export let previousOutgoingOverride: boolean | null = null;
+  /** Give rich mail cards a stable width so embedded HTML cannot collapse them. */
+  export let wideBubble = false;
 
   $: isGroupChat = ($message as ChatMessage).to?.contact instanceof Group;
   $: author = (($message instanceof ChatMessage && $message.from) || $message.contact) as ChatPersonUID | Person | Group;
   $: previousAuthor = (previousMessage instanceof ChatMessage && previousMessage.from) || previousMessage?.contact;
+  $: displayOutgoing = outgoingOverride ?? $message.outgoing;
+  $: previousDisplayOutgoing = previousOutgoingOverride ?? previousMessage?.outgoing;
   $: followup = author == previousAuthor && // same author
-    $message.outgoing == previousMessage?.outgoing;
+    displayOutgoing == previousDisplayOutgoing;
   $: fastFollowup = followup &&
     $message.sent.getTime() - previousMessage.sent.getTime() < 5 * 60 * 1000; // < 5 mins apart
   $: reactions = $message.reactions;
@@ -124,6 +138,35 @@
   .message {
     margin: 16px 32px 0 20px;
     max-width: 75%;
+    min-width: 0;
+    /* Override the global hbox[flex] rule: message rows must size to their content. */
+    flex: 0 1 auto;
+  }
+  .message.wide {
+    flex: 0 0 75%;
+    width: 75%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .message.wide.incoming {
+    margin-inline-start: 20px;
+    margin-inline-end: auto;
+  }
+  .message.wide.outgoing {
+    margin-inline-start: auto;
+    margin-inline-end: 32px;
+  }
+  .message.wide > .right {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .message.wide .bubble {
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .body-state {
+    display: block;
+    min-height: 1.2em;
   }
   .incoming {
     align-self: flex-start;
@@ -272,7 +315,7 @@
   .reactions.cloak {
     visibility: hidden;
   }
-  .hover-after-msg.haveReactions {
+  .hover-after-msg.haveReaction {
     margin-block-start: -24px;
   }
 

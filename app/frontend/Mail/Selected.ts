@@ -10,6 +10,9 @@ export const selectedAccount = writable<MailAccount>();
 export const selectedFolder = writable<Folder>();
 export const selectedMessage = writable<EMail>();
 
+/** Message whose correspondent should be opened when switching to Mail Chat. */
+export const mailChatEntryMessage = writable<EMail | null>(null);
+
 /** Never allow null — FastList/drag/ribbon all call `.contains` on this collection. */
 function writableArrayColl<T>(): Writable<ArrayColl<T>> {
   const inner = writable(new ArrayColl<T>());

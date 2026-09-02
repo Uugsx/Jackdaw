@@ -54,8 +54,17 @@
     background-blend-mode: soft-light;
     background-color: var(--offset-bg);
     color: var(--offset-fg);
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
   }
   .editor {
-    height: 112px;
+    flex: 0 0 auto;
+    height: max-content;
+    min-height: 126px;
+    min-width: 0;
+  }
+  .editor > :global(.container) {
+    flex: 0 0 auto;
   }
 </style>

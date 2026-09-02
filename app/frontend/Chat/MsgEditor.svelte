@@ -20,7 +20,7 @@
         <AttachmentsPane message={to.draftMessage} on:remove={onAttachmentRemove} />
       </vbox>
     {/if}
-    <hbox flex>
+    <hbox flex class="editor-row">
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <vbox flex class="editor-wrapper" on:keydown|capture={ev => isEnterSend && onKeyEnter(ev, () => catchErrors(send))}>
         <HTMLEditorToolbar {editor}>
@@ -156,6 +156,10 @@
     background-color: var(--leftbar-bg);
     color: var(--leftbar-fg);
     padding: 4px 4px 10px 10px;
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    min-height: 126px;
+    min-width: 0;
   }
   .emojis {
     height: 300px;
@@ -178,14 +182,23 @@
     margin-inline-start: 12px;
   }
   .editor-wrapper {
-    flex: 3 0 0;
+    flex: 3 1 0;
     height: 112px;
+    min-height: 112px;
+    min-width: 0;
+  }
+  .editor-row {
+    flex: 0 0 auto;
+    min-height: 112px;
+    min-width: 0;
   }
   .editor-scroll-wrapper {
     background-color: var(--main-bg);
     color: var(--main-bf);
     border: 1px solid var(--border);
     border-radius: 8px;
+    min-height: 0;
+    min-width: 0;
   }
   .editor {
     font-family: unset;

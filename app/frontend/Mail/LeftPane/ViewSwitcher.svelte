@@ -35,6 +35,8 @@
   import ThreePaneIcon from "lucide-svelte/icons/layout-panel-left";
   import WideTableIcon from "lucide-svelte/icons/columns-4";
   import { t } from "../../../l10n/l10n";
+  import { get } from "svelte/store";
+  import { mailChatEntryMessage, selectedMessage } from "../Selected";
 
   export let large = false;
 
@@ -52,6 +54,9 @@
   $: view = $viewSetting.value;
 
   function switchTo(newView: string) {
+    if (newView == "chat" && view != "chat") {
+      mailChatEntryMessage.set(get(selectedMessage) ?? null);
+    }
     viewSetting.value = newView;
   }
 </script>

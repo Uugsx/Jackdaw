@@ -1,7 +1,7 @@
 import type { EMail } from "../EMail";
 import { computeEMailContact } from "../EMail";
 import { PersonUID, findOrCreatePersonUID, kDummyPerson } from "../../Abstract/PersonUID";
-import type { Folder } from "../Folder";
+import { SpecialFolder, type Folder } from "../Folder";
 import { Attachment, ContentDisposition } from "../../Abstract/Attachment";
 import { getTagByName, Tag } from "../../Abstract/Tag";
 import { JSONEMail } from "../JSON/JSONEMail";
@@ -659,6 +659,25 @@ export class SQLEMail {
       $${limit ? sql` LIMIT ${limit} ` : sql``}
       $${startWith ? sql` OFFSET ${startWith} ` : sql``}
     `) as any;
+    let isOutgoingFolder = folder.specialFolder == SpecialFolder.Sent ||
+      folder.specialFolder == SpecialFolder.Drafts ||
+      folder.specialFolder == SpecialFolder.Outbox;
+    // The denormalized contact columns can be stale for old sent messages.
+    // Read only their recipient metadata here so chat can classify them without
+    // downloading and parsing every MIME body in the folder.
+    let outgoingRecipientRows = isOutgoingFolder
+      ? await (await getDatabase()).all(sql`
+        SELECT
+          emailID, name, emailAddress, recipientType
+        FROM emailPersonRel
+          LEFT JOIN emailPerson ON (emailPersonRel.emailPersonID = emailPerson.id)
+        WHERE emailID IN (
+          SELECT id
+          FROM email
+          WHERE folderID = ${folder.dbID}
+        ) AND recipientType IN (2, 3, 4)
+      `) as any[]
+      : [];
     let folderTagRows = await (await getDatabase()).all(sql`
         SELECT
           emailID, tagName
@@ -669,6 +688,7 @@ export class SQLEMail {
     let newEmails = new ArrayColl<EMail>();
     for (let row of emailRows) {
       let email = folder.messages.find(email => email.dbID == row.id);
+      let recipients = outgoingRecipientRows.filter(recipient => recipient.emailID == row.id);
       if (email) {
         email.outgoing = sanitize.boolean(row.outgoing, email.outgoing);
         email.isReplied = sanitize.boolean(row.isReplied, email.isReplied);
@@ -686,11 +706,19 @@ export class SQLEMail {
             email.contact = contact;
           }
         }
+        if (isOutgoingFolder && recipients.length) {
+          await this.readRecipients(email, recipients);
+          email.contact = computeEMailContact(email);
+        }
         await SQLEMail.readTags(email, folderTagRows.filter(r => r.emailID == row.id));
         continue;
       }
       email = folder.newEMail();
       await SQLEMail.readMainProperties(row.id, email, row);
+      if (isOutgoingFolder && recipients.length) {
+        await this.readRecipients(email, recipients);
+        email.contact = computeEMailContact(email);
+      }
       await SQLEMail.readTags(email, folderTagRows.filter(r => r.emailID == row.id));
       newEmails.add(email);
     }

@@ -174,7 +174,11 @@ export class MailAccount extends TCPAccount {
   }
 
   isMyEMailAddress(emailAddress: string): boolean {
-    return this.emailAddress == emailAddress ||
+    if (!emailAddress) {
+      return false;
+    }
+    let normalizedAddress = emailAddress.toLowerCase();
+    return this.emailAddress?.toLowerCase() == normalizedAddress ||
       this.identities.some(id => id.isEMailAddress(emailAddress));
   }
 
