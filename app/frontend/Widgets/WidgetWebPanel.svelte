@@ -387,9 +387,9 @@
 
     element.addEventListener("did-start-loading", () => {
       clearFailDebounce();
-      loadSettled = false;
       loadFailed = false;
-      loadFinishedForAttempt = 0;
+      // Не сбрасываем loadSettled: SPA (YouTube и др.) шлёт did-start-loading
+      // после первой отрисовки без нового did-finish-load — оверлей зависает.
     });
     element.addEventListener("did-navigate", () => {
       syncNavigationState(element);
