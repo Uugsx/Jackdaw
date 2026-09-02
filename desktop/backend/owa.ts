@@ -1,10 +1,16 @@
 import { session as Session, net as Net } from "electron";
 import { text as textFromStream } from 'node:stream/consumers';
 import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 
 function logOWADiagnostic(message: string): void {
+  if (!process.env.JACKDAW_OWA_DEBUG) {
+    return;
+  }
   try {
-    fs.appendFileSync("/tmp/jackdaw-owa-debug.log", `[${new Date().toISOString()}] ${message}\n`);
+    const logFile = path.join(os.tmpdir(), "jackdaw-owa-debug.log");
+    fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${message}\n`);
   } catch {
   }
 }

@@ -116,8 +116,6 @@
 </script>
 
 <style>
-  @import url("../Message/content.css");
-
   .compose-quote-html {
     margin: 0;
     padding: 0;

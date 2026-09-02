@@ -81,7 +81,7 @@ export async function startupBackend(jpcSecret: string) {
 
 export async function shutdownBackend() {
   await OWA.stopAllNotificationStreams();
-  await jpc.stopListening();
+  await jpc?.stopListening();
   jpc = null;
 }
 
@@ -852,7 +852,6 @@ async function downloadMacDmgUpdate(version: string | null | undefined) {
     macDmgPendingPath = dmgPath;
     updateState.phase = "downloaded";
     updateState.progress = 100;
-    await scheduleMacDmgInstallAndQuit(dmgPath);
   });
 }
 
@@ -1179,7 +1178,7 @@ function getSQLiteDatabase(filename: string, options: any, buffer?: Uint8Array):
   if (buffer) {
     return new Database(Buffer.from(buffer), options);
   }
-  if (!filename.startsWith("/")) {
+  if (!path.isAbsolute(filename)) {
     filename = path.join(getConfigDir(), filename);
   }
   return new Database(filename, options);
@@ -1251,7 +1250,7 @@ function waitForWidgetWindowClose(win: BrowserWindow): Promise<void> {
 function wireWidgetWindowNavigation(win: BrowserWindow) {
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https://") || url.startsWith("http://")) {
-      win.loadURL(url).catch(console.error);
+      shell.openExternal(url).catch(console.error);
     }
     return { action: "deny" };
   });

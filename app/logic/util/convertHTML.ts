@@ -92,7 +92,11 @@ function urlAttribute(url: URLString, includeExternal = false) {
 function addStyles(output: string[], styles: CSSStyleDeclaration) {
   for (let style of [...styles].reverse()) {
     if (styles[style]) {
-      styles[style] = styles[style].replace(cssURLRegex, `$1${proxy}`);
+      if (cssURLRegex.test(styles[style])) {
+        styles[style] = includeExternal
+          ? styles[style].replace(cssURLRegex, `$1${proxy}`)
+          : styles[style].replace(cssURLRegex, `$1about:blank`);
+      }
       output.push(`${style}: ${styles[style]};`);
     }
   }
@@ -190,7 +194,9 @@ DOMPurify.addHook('afterSanitizeAttributes', node => {
     const output = [];
     for (let style of [...styles].reverse()) {
       if (styles[style] && cssURLRegex.test(styles[style])) {
-        styles[style] = styles[style].replace(cssURLRegex, `$1${proxy}`);
+        styles[style] = includeExternal
+          ? styles[style].replace(cssURLRegex, `$1${proxy}`)
+          : styles[style].replace(cssURLRegex, `$1about:blank`);
       }
       output.push(`${style}: ${styles[style]};`);
     }
