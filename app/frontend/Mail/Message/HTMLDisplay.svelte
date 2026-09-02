@@ -1,4 +1,4 @@
-    <WebView html={displayHtml} {headHTML} {bodyClass} allowServerCalls={allowExternalImages} {allowImageOpen} autoSize={fitContent} title={$t`Text`} on:webview />
+    <WebView html={displayHtml} {headHTML} {bodyClass} allowServerCalls={allowExternalImages} {allowImageOpen} autoSize={fitContent} title={$t`Text`} enableZoomWheel on:webview on:zoomwheel />
 
 <script lang="ts">
   import cssContent from "./content.css?inline";
@@ -10,6 +10,8 @@
   import { getLocalStorage } from "../../Util/LocalStorage";
   import { t } from "../../../l10n/l10n";
 
+  import { messageZoomHeadStyle } from "./messageZoom";
+
   /** DANGER Attention: You must sanitize the HTML. It comes from untrusted sources.
    * @see also Chat Message.svelte */
   export let html: string;
@@ -18,6 +20,7 @@
   export let fitContent = false;
   /** Double-click / context menu: open inline images */
   export let allowImageOpen = false;
+  export let zoom = 100;
   /** out only */
   export let webviewE: HTMLIFrameElement = null;
 
@@ -37,5 +40,5 @@
   $: darkEmail = resolveDarkTheme($themeSetting.value);
   $: bodyClass = darkEmail ? "jackdaw-email-dark" : "jackdaw-email-light";
   $: displayHtml = darkEmail ? adaptEmailHtmlForDarkMode(html) : html;
-  $: headHTML = `<style>\n${cssBody}\n${fitContent ? cssBodyEmbed + "\n" : ""}${cssContent}\n${cssBodyDark}\n</style>`;
+  $: headHTML = `${messageZoomHeadStyle(zoom)}<style>\n${cssBody}\n${fitContent ? cssBodyEmbed + "\n" : ""}${cssContent}\n${cssBodyDark}\n</style>`;
 </script>

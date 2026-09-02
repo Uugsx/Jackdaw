@@ -222,6 +222,9 @@
       }
       if (folder.account.protocol == "owa") {
         let owaFolder = folder as OWAFolder;
+        // Показать кеш до серверной синхронизации — иначе список пуст и крутится спиннер.
+        await owaFolder.readFolder();
+        folder.notifyObservers();
         folderSyncing.set(true);
         try {
           await owaFolder.syncOnFolderOpen();

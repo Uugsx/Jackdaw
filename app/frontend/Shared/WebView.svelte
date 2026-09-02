@@ -75,6 +75,8 @@
   export let allowServerCalls: boolean | string = true;
   /** Double-click / context menu: open inline images in the OS viewer */
   export let allowImageOpen = false;
+  /** ⌘/Ctrl + scroll over email body adjusts zoom */
+  export let enableZoomWheel = false;
 
   $: partition = sessionID ? "persist:" + sessionID : undefined;
 
@@ -178,6 +180,11 @@
           appGlobal.remoteApp.containWebContentsNavigation(id);
         }
       }
+      if (enableZoomWheel) {
+        let webview = webviewE as HTMLElement & { __jackdawZoomWheel?: boolean };
+        webview.__jackdawZoomWheel = false;
+        await addZoomWheelListener();
+      }
       if (autoSize) {
         catchErrors(onLoadResize);
       }
@@ -253,6 +260,74 @@
       const { openMailImageFromContext } = await import("../Mail/Message/openMailImage");
       await openMailImageFromContext(webviewE, event.x, event.y);
     });
+  }
+
+  async function addZoomWheelListener() {
+    if (!webviewE) {
+      return;
+    }
+    try {
+      let doc = webviewE.contentDocument;
+      if (doc) {
+        attachDocumentZoomWheel(doc);
+        return;
+      }
+    } catch {
+      // Electron <webview> has no contentDocument
+    }
+    let webview = webviewE as HTMLElement & {
+      addEventListener: (type: string, listener: (event: { message?: string }) => void) => void;
+      executeJavaScript: (code: string) => Promise<unknown>;
+      __zoomConsoleListener?: boolean;
+      __jackdawZoomWheel?: boolean;
+    };
+    if (!webview.__zoomConsoleListener) {
+      webview.__zoomConsoleListener = true;
+      webview.addEventListener("console-message", event => {
+        let message = event.message ?? "";
+        if (!message.startsWith("jackdaw-zoom:")) {
+          return;
+        }
+        let direction = Number.parseInt(message.slice("jackdaw-zoom:".length), 10);
+        if (direction == 1 || direction == -1) {
+          dispatch("zoomwheel", { direction });
+        }
+      });
+    }
+    if (webview.__jackdawZoomWheel) {
+      return;
+    }
+    webview.__jackdawZoomWheel = true;
+    await webview.executeJavaScript(`
+      (function () {
+        if (window.__jackdawZoomWheel) {
+          return;
+        }
+        window.__jackdawZoomWheel = true;
+        document.addEventListener("wheel", function (event) {
+          if (!(event.ctrlKey || event.metaKey)) {
+            return;
+          }
+          event.preventDefault();
+          console.log("jackdaw-zoom:" + (event.deltaY > 0 ? -1 : 1));
+        }, { passive: false });
+      })()
+    `);
+  }
+
+  function attachDocumentZoomWheel(doc: Document) {
+    let marked = doc as Document & { __jackdawZoomWheel?: boolean };
+    if (marked.__jackdawZoomWheel) {
+      return;
+    }
+    marked.__jackdawZoomWheel = true;
+    doc.addEventListener("wheel", event => {
+      if (!(event.ctrlKey || event.metaKey)) {
+        return;
+      }
+      event.preventDefault();
+      dispatch("zoomwheel", { direction: (event.deltaY > 0 ? -1 : 1) as 1 | -1 });
+    }, { passive: false });
   }
 
   function addContainedNavigationListeners() {

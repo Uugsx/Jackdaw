@@ -13,7 +13,7 @@ import {
   owaDownloadMsgsRequest, owaFindMsgsInFolderRequest, owaFindMsgsByQueryRequest,
   owaSyncFolderItemsRequest,
   owaFolderCountsRequest, owaFolderMarkAllMsgsReadRequest,
-  owaGetNewMsgHeadersRequest, owaMoveEntireFolderRequest,
+  owaGetNewMsgHeadersRequest, owaGetMessageActionFlagsRequest, owaMoveEntireFolderRequest,
   owaMoveOrCopyMsgsIntoFolderRequest, owaRenameFolderRequest,
   owaSetFolderPermissionsRequest, owaGetPermissionsRequest
 } from "./Request/OWAFolderRequests";
@@ -34,6 +34,13 @@ const kMaxSyncPages = 200;
 /** How long a moved or deleted ItemId stays suppressed, to outlast Exchange's
  * eventually consistent FindItem. Matches the `preserveMovedUntil` window. */
 const kDeletionGracePeriodMs = 180_000;
+/** Не допускать всплеска запросов флагов, покрывая при этом видимый кеш. */
+const kActionFlagsBackfillLimit = 200;
+/** Общие ящики: только видимая страница, после основной синхронизации. */
+const kActionFlagsBackfillLimitShared = 40;
+/** Пауза перед необязательным backfill, чтобы не блокировать FindItem/GetItem. */
+const kActionFlagsBackfillDelayMs = 2_500;
+const kActionFlagsBackfillDelaySharedMs = 4_000;
 
 export class OWAFolder extends ExchangeFolder {
   declare account: OWAAccount;
@@ -52,6 +59,10 @@ export class OWAFolder extends ExchangeFolder {
   protected hasCompletedInitialSync = false;
   /** Пометить письма следующей синхронизации как пришедшие по push-событию. */
   protected notifyNextSyncMessagesAsNew = false;
+  /** Запрос списка намеренно не содержит нестабильные дополнительные свойства. */
+  protected actionFlagsCheckedIDs = new Set<string>();
+  protected actionFlagsBackfillTimer: ReturnType<typeof setTimeout> | null = null;
+  protected actionFlagsBackfillRunning = false;
 
   newEMail(): OWAEMail {
     return new OWAEMail(this);
@@ -249,6 +260,7 @@ export class OWAFolder extends ExchangeFolder {
     } finally {
       if (completed) {
         this.completeInitialSync();
+        this.backfillMessageActionFlags();
       }
     }
   }
@@ -268,6 +280,7 @@ export class OWAFolder extends ExchangeFolder {
       || this.isBehindServer();
     if (!needsFetch) {
       this.completeInitialSync();
+      this.backfillMessageActionFlags();
       return this.messages;
     }
     let msgs = await this.getNewMessages(true);
@@ -283,6 +296,7 @@ export class OWAFolder extends ExchangeFolder {
     }
     this.dirty = false;
     this.completeInitialSync();
+    this.backfillMessageActionFlags();
     this.notifyObservers();
     return msgs;
   }
@@ -475,6 +489,7 @@ export class OWAFolder extends ExchangeFolder {
         }
       }
       this.completeInitialSync();
+      this.backfillMessageActionFlags();
       return newMsgs;
     } finally {
       lock.release();
@@ -585,6 +600,7 @@ export class OWAFolder extends ExchangeFolder {
           if (!id || this.deletions.has(id)) {
             continue;
           }
+          this.markActionFlagsChecked(id);
           let existing = this.getEmailByItemID(id);
           if (existing) {
             if (existing.setFlags(item, "full")) {
@@ -628,6 +644,7 @@ export class OWAFolder extends ExchangeFolder {
     let missingMessages: OWAEMail[] = [];
     for (let item of items ?? []) {
       let id = sanitize.nonemptystring(item?.ItemId?.Id, null);
+      this.markActionFlagsChecked(id);
       let email = id ? (this.getEmailByItemID(id) ?? this.account.getEmailByItemID(id)) : undefined;
       if (email) {
         email.fromJSON(item);
@@ -981,6 +998,105 @@ export class OWAFolder extends ExchangeFolder {
       return undefined;
     }
     return this.messages.find((m: OWAEMail) => m.itemID == id) as OWAEMail | undefined;
+  }
+
+  /**
+   * Заполняет стрелки ответа/пересылки для строк кеша, не добавляя нестабильные
+   * свойства обратно в FindItem. Обогащение выполняется необязательно: сервер,
+   * отклонивший дополнительные поля GetItem, всё равно должен синхронизировать почту.
+   */
+  protected backfillMessageActionFlags(): void {
+    let delay = this.account.isDependentAccount
+      ? kActionFlagsBackfillDelaySharedMs
+      : kActionFlagsBackfillDelayMs;
+    this.scheduleActionFlagsBackfill(delay);
+  }
+
+  protected scheduleActionFlagsBackfill(delayMs: number): void {
+    if (this.actionFlagsBackfillTimer) {
+      clearTimeout(this.actionFlagsBackfillTimer);
+    }
+    this.actionFlagsBackfillTimer = setTimeout(() => {
+      this.actionFlagsBackfillTimer = null;
+      void this.runActionFlagsBackfillWhenIdle().catch(() => undefined);
+    }, delayMs);
+  }
+
+  protected async runActionFlagsBackfillWhenIdle(): Promise<void> {
+    if (this.actionFlagsBackfillRunning || this.listMessagesLock.haveWaiting) {
+      this.scheduleActionFlagsBackfill(this.account.isDependentAccount ? 3_000 : 1_500);
+      return;
+    }
+    let limit = this.account.isDependentAccount
+      ? kActionFlagsBackfillLimitShared
+      : kActionFlagsBackfillLimit;
+    let messages = this.messages.contents
+      .filter(message => {
+        let id = message.pID == null ? "" : String(message.pID);
+        return id && !this.actionFlagsCheckedIDs.has(id);
+      })
+      .slice(0, limit);
+    if (!messages.length) {
+      return;
+    }
+    this.actionFlagsBackfillRunning = true;
+    try {
+      await this.refreshMessageActionFlags(messages);
+    } finally {
+      this.actionFlagsBackfillRunning = false;
+    }
+  }
+
+  protected markActionFlagsChecked(id: string | null | undefined): void {
+    if (id) {
+      this.actionFlagsCheckedIDs.add(id);
+    }
+  }
+
+  protected actionFlagItemsFromResponse(result: any): any[] {
+    if (result?.ResponseMessages?.Items) {
+      return this.account.itemsFromResponses(result.ResponseMessages.Items);
+    }
+    if (result?.Items) {
+      return ensureArray(result.Items);
+    }
+    return [];
+  }
+
+  protected async refreshMessageActionFlags(messages: EMail[]): Promise<void> {
+    let ids = [...new Set(messages
+      .map(message => message.pID == null ? "" : String(message.pID))
+      .filter(Boolean))];
+    let changed = false;
+    for (let i = 0; i < ids.length; i += kMaxFetchCount) {
+      let batch = ids.slice(i, i + kMaxFetchCount);
+      let items: any[] = [];
+      try {
+        let result = await this.account.callOWA(owaGetMessageActionFlagsRequest(batch, true));
+        items = this.actionFlagItemsFromResponse(result);
+      } catch {
+        try {
+          let result = await this.account.callOWA(owaGetMessageActionFlagsRequest(batch, false));
+          items = this.actionFlagItemsFromResponse(result);
+        } catch {
+          continue;
+        }
+      }
+      for (let id of batch) {
+        this.markActionFlagsChecked(id);
+      }
+      for (let item of items) {
+        let id = sanitize.nonemptystring(item?.ItemId?.Id ?? item?.ItemId, "");
+        let email = id ? this.getEmailByItemID(id) : undefined;
+        if (email && email.setFlags(item, "partial")) {
+          await email.saveWritablePropsLocally();
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      this.notifyObservers();
+    }
   }
 
   protected async moveOrCopyMessagesHere(action: "move" | "copy", messages: Collection<EMail>) {

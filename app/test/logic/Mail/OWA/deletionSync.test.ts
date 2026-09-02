@@ -44,6 +44,10 @@ test("полностью сверяет список после уменьшен
   folder.id = "inbox";
   folder.name = "Входящие";
   (folder as any).haveReadFolder = true;
+  // Оставляем этот тест про сверку папки; необязательное обогащение метаданных
+  // и загрузка признаков вложений проверяются отдельно.
+  (folder as any).actionFlagsCheckedIDs = new Set(["kept-message", "deleted-message"]);
+  (folder as any).attachmentFlagsSynced = true;
   folder.countTotal = 2;
   folder.countUnread = 0;
 

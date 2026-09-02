@@ -11,13 +11,16 @@
   bind:this={popupAnchor}
   >
   <hbox class="top-row">
-    <hbox class="direction">
+    <hbox class="direction" title={actionTitle}>
       {#if $message.isReplied}
         <ReplyIcon size={16} class="reply" />
       {:else if $message.isForwarded}
         <ForwardIcon size={16} class="forward" />
       {:else if $message.isImportant}
         <ImportantIcon size={16} class="important" />
+      {/if}
+      {#if actionDate}
+        <hbox class="action-date font-smallest">{actionDate}</hbox>
       {/if}
     </hbox>
     {#if dayLabel}
@@ -110,6 +113,16 @@
 
   $: tags = message.tags;
   $: contactName = personDisplayName($message.contact);
+  let lastVerbAt: Date | null;
+  $: lastVerbAt = $message.lastVerbAt;
+  $: actionDate = lastVerbAt && ($message.isReplied || $message.isForwarded)
+    ? getDateTimeString(lastVerbAt)
+    : "";
+  $: actionTitle = $message.isReplied
+    ? actionDate ? $t`Replied: ${actionDate}` : $t`Replied`
+    : $message.isForwarded
+      ? actionDate ? $t`Forwarded: ${actionDate}` : $t`Forwarded`
+      : "";
 
   async function toggleRead() {
     await message.markRead(!message.isRead);
@@ -262,6 +275,18 @@
   }
   .direction > :global(*) {
     margin-inline-end: 4px;
+  }
+  .action-date {
+    max-width: 7rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.68;
+  }
+  :global(.row.selected) .action-date {
+    opacity: 0.82;
   }
 
   /* <copied from="TableMessageListItem.svelte"> */

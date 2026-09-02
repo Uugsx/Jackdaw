@@ -57,6 +57,9 @@ export class EMail extends Message {
   /** The user has forwarded this message to somebody else */
   @notifyChangedProperty
   isForwarded = false;
+  /** Время последнего ответа или пересылки, зафиксированного сервером или клиентом. */
+  @notifyChangedProperty
+  lastVerbAt: Date | null = null;
   /** The sender or the server marked this message as important,
    * e.g. `Importance: high` or IMAP keyword `$Important` */
   @notifyChangedProperty
@@ -248,12 +251,16 @@ export class EMail extends Message {
     this.isSpam = isSpam;
   }
 
-  async markReplied() {
+  async markReplied(actionAt = new Date()) {
     this.isReplied = true;
+    this.isForwarded = false;
+    this.lastVerbAt = actionAt;
   }
 
-  async markForwarded() {
+  async markForwarded(actionAt = new Date()) {
+    this.isReplied = false;
     this.isForwarded = true;
+    this.lastVerbAt = actionAt;
   }
 
   async markImportant(isImportant = true) {
@@ -724,6 +731,7 @@ export class EMail extends Message {
     other.isSpam = this.isSpam;
     other.isReplied = this.isReplied;
     other.isForwarded = this.isForwarded;
+    other.lastVerbAt = this.lastVerbAt ? new Date(this.lastVerbAt) : null;
     other.isImportant = this.isImportant;
     other.isDraft = this.isDraft;
     other.isDeleted = this.isDeleted;

@@ -1,4 +1,4 @@
-<vbox flex class="message-body">
+<vbox flex class="message-body" style:zoom={plaintextZoom}>
   {#if !$message.loadedBody}
     {#await message.loadBody()}
       {#await sleep(1)}
@@ -10,9 +10,9 @@
       <ErrorMessage {ex} />
     {/await}
   {:else if mode == DisplayMode.HTML}
-    <HTMLDisplay html={$message.html} allowExternalImages={false} allowImageOpen />
+    <HTMLDisplay html={$message.html} allowExternalImages={false} allowImageOpen {zoom} on:zoomwheel />
   {:else if mode == DisplayMode.HTMLWithExternal}
-    <HTMLDisplay html={$message.html} allowExternalImages={true} allowImageOpen />
+    <HTMLDisplay html={$message.html} allowExternalImages={true} allowImageOpen {zoom} on:zoomwheel />
   {:else if mode == DisplayMode.Plaintext}
     <PlaintextDisplay plaintext={$message.text} />
     <!--<HTMLDisplay html={convertTextToHTML($message.text)} />-->
@@ -24,7 +24,7 @@
     {/await}
   {:else if mode == DisplayMode.Thread}
     <!-- Thread view unfinished; show HTML until implemented -->
-    <HTMLDisplay html={$message.html} allowExternalImages={false} allowImageOpen />
+    <HTMLDisplay html={$message.html} allowExternalImages={false} allowImageOpen {zoom} on:zoomwheel />
   {:else}
     {$t`Unknown display mode`}
   {/if}
@@ -40,10 +40,12 @@
   import { t } from "../../../l10n/l10n";
 
   export let message: EMail;
+  export let zoom = 100;
 
   let modeSetting = getLocalStorage("mail.contentRendering", "html");
   $: mode = $modeSetting.value as DisplayMode;
   $: message.loadExternalImages = mode == DisplayMode.HTMLWithExternal;
+  $: plaintextZoom = mode == DisplayMode.Plaintext || mode == DisplayMode.Source ? zoom / 100 : undefined;
 
   function getSource(message: EMail): string {
     if (!message.mime) {
