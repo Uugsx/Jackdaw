@@ -91,4 +91,22 @@
     background-color: var(--leftbar-bg);
     color: var(--leftbar-fg);
   }
+  .right-pane {
+    min-height: 0;
+    min-width: 0;
+  }
+  .messages {
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+  }
+  .editor {
+    flex: 0 0 auto;
+    height: max-content;
+    min-height: 126px;
+    min-width: 0;
+  }
+  .editor > :global(.container) {
+    flex: 0 0 auto;
+  }
 </style>
