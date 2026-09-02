@@ -24,6 +24,7 @@
   // #if [!WEBMAIL]
   import { buildContextMenu, MenuItem, type ContextInfo } from "./ContextMenu";
   import { newElectronKeyboardEvent, onKeyOnMessage } from "../Mail/Message/MessageKeyboard";
+  import { isMailPaneFocused } from "../MainWindow/paneFocus";
   import { appGlobal } from "../../logic/app";
   // import { Menu } from "@svelteuidev/core";
   // #endif
@@ -77,6 +78,8 @@
   export let allowImageOpen = false;
   /** ⌘/Ctrl + scroll over email body adjusts zoom */
   export let enableZoomWheel = false;
+  /** Forward keyboard shortcuts to the mail reader (not widget webviews). */
+  export let forwardKeysToMail = false;
   /** Scale untrusted HTML content (percent, 100 = default). */
   export let contentZoom = 100;
 
@@ -181,7 +184,9 @@
       // #if [!WEBMAIL]
       if (listenersAttachedTo !== webviewE) {
         listenersAttachedTo = webviewE;
-        await addInputListener();
+        if (forwardKeysToMail) {
+          await addInputListener();
+        }
         if (containNavigation) {
           addContainedNavigationListeners();
         } else {
@@ -219,6 +224,9 @@
       if (event.type == "mouseDown" && event.clickCount == 1) {
         webviewE.click();
       } else if (event.type == "rawKeyDown") {
+        if (!isMailPaneFocused()) {
+          return;
+        }
         onKeyOnMessage(newElectronKeyboardEvent(event))
           .catch(showError);
       }

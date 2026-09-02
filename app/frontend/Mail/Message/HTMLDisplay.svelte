@@ -1,4 +1,4 @@
-    <WebView html={displayHtml} {headHTML} {bodyClass} allowServerCalls={allowExternalImages} {allowImageOpen} autoSize={fitContent} title={$t`Text`} enableZoomWheel contentZoom={zoom} on:webview on:zoomwheel />
+    <WebView html={displayHtml} {headHTML} {bodyClass} allowServerCalls={allowExternalImages} {allowImageOpen} autoSize={fitContent} title={$t`Text`} enableZoomWheel forwardKeysToMail contentZoom={zoom} on:webview on:zoomwheel />
 
 <script lang="ts">
   import cssContent from "./content.css?inline";

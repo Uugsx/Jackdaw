@@ -24,7 +24,7 @@
     {#if !appGlobal.isMobile}
       <AppBar bind:selectedApp={$selectedApp} showApps={apps} />
     {/if}
-    <vbox flex class="content-shell">
+    <vbox flex class="content-shell" on:pointerdown|capture={onContentPointerDown}>
       <NotificationBar notifications={$notifications} />
       {#if appGlobal.isMobile}
         <Router primary={false} {history}>
@@ -115,6 +115,7 @@
     widgetSplitterResetKey,
   } from "../Widgets/widgetState";
   import { catchErrors, backgroundError } from "../Util/error";
+import { updatePaneFocusFromPointer } from "./paneFocus";
   import { startUpdateNotificationWatcher } from "./UpdateNotification";
   import { assert } from "../../logic/util/util";
   import { getUILocale, t } from "../../l10n/l10n";
@@ -217,6 +218,10 @@
     }
     (appGlobal.remoteApp.focusMainWindow ?? appGlobal.remoteApp.unminimizeMainWindow)?.()
       .catch(backgroundError);
+  }
+
+  function onContentPointerDown(event: PointerEvent) {
+    updatePaneFocusFromPointer(event);
   }
 
   async function onCategoryShortcutKeydown(event: KeyboardEvent): Promise<void> {
