@@ -7,12 +7,14 @@
   <!-- svelte-ignore a11y_label_has_associated_control -->
   <slot><label>{label}</label></slot>
   {#each items as item, i}
-    <Checkbox {size} {radius} {...item} bind:checked={item.checked} {disabled} />
+    <label>
+      <input type="checkbox" {...item} bind:checked={item.checked} {disabled} />
+      {#if item.label}<span>{item.label}</span>{/if}
+    </label>
   {/each}
 </hbox>
 
 <script lang="ts">
-  import { Checkbox } from "@svelteuidev/core";
   export let label = "";
   export let size = undefined;
   export let radius = undefined;

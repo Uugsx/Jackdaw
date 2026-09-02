@@ -16,13 +16,13 @@
   import AccountIcon from "lucide-svelte/icons/rabbit";
   import type { ConstructorOfATypedSvelteComponent } from 'svelte';
 
-  export let account: Account;
+  export let account: Account | any;
   export let defaultIcon: ConstructorOfATypedSvelteComponent = AccountIcon;
   /**
    * Default handler for `goToAccount()`
    * @param account
    * @returns e.g. "/mail/folder/account45/inbox/" */
-  export let page: (account: Account) => string | null = null;
+  export let page: (account: any) => string | null = null;
   export let params: PageParams = null;
   export let goToAccount = goToAccountDefault;
 

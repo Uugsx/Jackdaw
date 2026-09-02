@@ -11,7 +11,7 @@ export async function svelteExtract(code: string, filename: string) {
   }
   try {
     // Preprocess Svelte files to remove any unnecessary code
-    let pre = (await preprocess(code, vitePreprocess())).code;
+    let pre = (await preprocess(code, vitePreprocess(), { filename })).code;
     let ast = parse(pre, { filename: filename });
     walk(ast, {
       enter(node, _parent, _prop, _index) {

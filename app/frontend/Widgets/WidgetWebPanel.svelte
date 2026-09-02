@@ -127,7 +127,7 @@
   };
 
   const LOAD_TIMEOUT_MS = 45000;
-  const FAIL_DEBOUNCE_MS = 1800;
+  const FAIL_DEBOUNCE_MS = 4000;
 
   $: if (url && url !== activeUrl) {
     activeUrl = url;
@@ -151,8 +151,10 @@
 
   let prevSuspended = suspended;
   $: {
-    if (prevSuspended && !suspended && webviewElement && loadFailed) {
-      catchErrors(() => onLoadFinished(webviewElement!));
+    if (prevSuspended && !suspended && webviewElement) {
+      if (loadFailed || !loadSettled) {
+        catchErrors(() => onLoadFinished(webviewElement!));
+      }
     }
     prevSuspended = suspended;
   }
@@ -222,12 +224,16 @@
     embedBlocked = blocked;
   }
 
-  function isIgnorableLoadError(detail: Record<string, unknown>, errorDescription: string): boolean {
-    let errorCode = detail?.errorCode as number | undefined;
-    // Считаем ошибкой только явный main frame. Подресурсы (реклама, CDN) падают постоянно.
-    if (detail?.isMainFrame !== true) {
+  function isIgnorableLoadError(
+    errorCode: number | undefined,
+    errorDescription: string,
+    isMainFrame: boolean | undefined
+  ): boolean {
+    // Подресурсы (реклама, аналитика, вспомогательные фреймы) сбоят штатно — никогда не блокируем сайт
+    if (isMainFrame === false) {
       return true;
     }
+    // ERR_ABORTED (-3) возникает при любых клиентских и HTTP редиректах, смене URL
     if (errorCode === -3 || errorDescription.includes("ERR_ABORTED")) {
       return true;
     }
@@ -244,6 +250,11 @@
       if (loadFinishedForAttempt >= attempt) {
         return;
       }
+      // Не объявляем ошибку, если страница всё ещё активно в процессе загрузки
+      let webview = webviewElement as (HTMLElement & { isLoading?: () => boolean }) | null;
+      if (typeof webview?.isLoading === "function" && webview.isLoading()) {
+        return;
+      }
       embedBlocked = blocked;
       settleFailed(blocked);
     }, FAIL_DEBOUNCE_MS);
@@ -254,9 +265,11 @@
       return;
     }
     let detail = (event as CustomEvent | undefined)?.detail ?? {};
-    let errorCode = detail?.errorCode ?? (event as any)?.errorCode;
+    let errorCode = (detail?.errorCode ?? (event as any)?.errorCode) as number | undefined;
     let errorDescription = String(detail?.errorDescription ?? (event as any)?.errorDescription ?? "");
-    if (isIgnorableLoadError(detail as Record<string, unknown>, errorDescription)) {
+    let isMainFrame = (detail?.isMainFrame ?? (event as any)?.isMainFrame) as boolean | undefined;
+
+    if (isIgnorableLoadError(errorCode, errorDescription, isMainFrame)) {
       return;
     }
     let blocked = errorCode === -27
@@ -275,15 +288,17 @@
     try {
       return await webview.executeJavaScript(`
         (() => {
+          if (location.href.startsWith("chrome-error://")) {
+            return true;
+          }
           const text = (document.body?.innerText ?? "").trim();
-          if (text.length > 500) {
+          if (text.length === 0 || text.length > 500) {
             return false;
           }
           const lower = text.toLowerCase();
-          return lower.includes("cannot be shown")
-            || lower.includes("can't be shown")
-            || lower.includes("нельзя показать")
-            || lower.includes("refused to connect");
+          return lower.includes("refused to connect")
+            || lower.includes("cannot be shown in a frame")
+            || lower.includes("нельзя показать во фрейме");
         })()
       `) as boolean;
     } catch {
@@ -390,8 +405,10 @@
     element.addEventListener("did-start-loading", () => {
       clearFailDebounce();
       loadFailed = false;
-      // Не сбрасываем loadSettled: SPA (YouTube и др.) шлёт did-start-loading
-      // после первой отрисовки без нового did-finish-load — оверлей зависает.
+      // Если попытка загрузки ещё не завершена (новая страница, рефреш):
+      if (loadFinishedForAttempt < loadAttempt) {
+        loadSettled = false;
+      }
     });
     element.addEventListener("did-navigate", () => {
       syncNavigationState(element);
@@ -402,11 +419,23 @@
     element.addEventListener("did-fail-load", (evt) => {
       markLoadFailed(evt as Event);
     });
+    element.addEventListener("dom-ready", () => {
+      loadFinishedForAttempt = loadAttempt;
+      clearFailDebounce();
+      syncNavigationState(element);
+      catchErrors(() => onLoadFinished(element));
+    });
     element.addEventListener("did-finish-load", () => {
       loadFinishedForAttempt = loadAttempt;
       clearFailDebounce();
       syncNavigationState(element);
       catchErrors(() => onLoadFinished(element));
+    });
+    element.addEventListener("did-stop-loading", () => {
+      syncNavigationState(element);
+      if (loadFinishedForAttempt < loadAttempt && !loadSettled) {
+        catchErrors(() => onLoadFinished(element));
+      }
     });
     if (element instanceof HTMLIFrameElement) {
       element.addEventListener("error", () => {
@@ -420,6 +449,14 @@
       });
     } else {
       syncNavigationState(element);
+      let webview = element as HTMLElement & { isLoading?: () => boolean };
+      if (typeof webview.isLoading === "function" && !webview.isLoading()) {
+        setTimeout(() => {
+          if (!loadSettled) {
+            catchErrors(() => onLoadFinished(element));
+          }
+        }, 150);
+      }
     }
   }
 

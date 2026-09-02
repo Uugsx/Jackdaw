@@ -196,6 +196,11 @@ export class SignalChatMessage extends ChatMessage {
     await this.save();
   }
 
+  /** Send an emoji reaction to this message. Alias for setMyReaction. */
+  async sendReaction(emoji: string | null): Promise<void> {
+    return this.setMyReaction(emoji);
+  }
+
   /** Send this message to its room (the 1:1 partner, or every group member). */
   async send(): Promise<void> {
     let account = this.to.account;

@@ -120,6 +120,8 @@
 </script>
 
 <style>
+  @import url(../../Mail/Message/content.css);
+
   /** Fix app.css, see .value */
   .html-editor :global(*) {
     user-select: text;
@@ -149,11 +151,6 @@
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
   }
-
-
-  /* Content styles
-     TODO @import url(../Message/content.css); into iframe */
-  @import url(../../Mail/Message/content.css);
 
   .html-editor :global(blockquote) {
     border-left: 3px solid var(--selected-bg);

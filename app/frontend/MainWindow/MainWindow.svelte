@@ -69,12 +69,12 @@
   import { selectedApp, sidebarApp, apps, goTo, openApp, history } from "../AppsBar/selectedApp";
   import { appGlobal } from "../../logic/app";
   // #if [!WEBMAIL]
-  // @ts-ignore ts2300
   import { getStartObjects, loginOnStartup } from "../../logic/startup";
   import { predefinedConfig } from "../../logic/Mail/AutoConfig/predefinedConfig";
   // #else
-  // @ts-ignore ts2300
-  import { getStartObjects, loginOnStartup } from "../../logic/WebMail/startup";
+  import { getStartObjects as getWebMailStartObjects, loginOnStartup as loginWebMailOnStartup } from "../../logic/WebMail/startup";
+  const getStartObjects = getWebMailStartObjects;
+  const loginOnStartup = loginWebMailOnStartup;
   // #endif
   import { notifications } from "./Notification";
   import { selectedAccount } from "../Mail/Selected";
