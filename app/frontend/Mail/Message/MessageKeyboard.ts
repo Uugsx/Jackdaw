@@ -4,6 +4,7 @@ import type { EMail } from "../../../logic/Mail/EMail";
 import { selectedMessage, selectedMessages, listVisibleMessages } from "../Selected";
 import { openComposer } from "../open";
 import { get } from "svelte/store";
+import { isMailPaneFocused } from "../../MainWindow/paneFocus";
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) {
@@ -41,7 +42,7 @@ function selectAllVisibleMessages(event: KeyboardEvent): boolean {
 }
 
 export async function onKeyOnList(event: KeyboardEvent) {
-  if (event.defaultPrevented) {
+  if (event.defaultPrevented || !isMailPaneFocused()) {
     return;
   }
   if (selectAllVisibleMessages(event)) {
@@ -194,12 +195,18 @@ export async function onKeyOnMessage(event: KeyboardEvent, onZoomKey?: (event: K
   if (onZoomKey?.(event)) {
     return;
   }
+  if (!isMailPaneFocused()) {
+    return;
+  }
   await onKeyOnList(event);
 
   let message = get(selectedMessage);
   let selectedMessagesColl = get(selectedMessages);
   if (!event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
     if (event.key == "ArrowDown" || event.key == "ArrowUp") {
+      if (!message) {
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       let next = message.nextMessage(event.key == "ArrowUp");

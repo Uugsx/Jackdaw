@@ -224,7 +224,8 @@
 
   function isIgnorableLoadError(detail: Record<string, unknown>, errorDescription: string): boolean {
     let errorCode = detail?.errorCode as number | undefined;
-    if (detail?.isMainFrame === false) {
+    // Считаем ошибкой только явный main frame. Подресурсы (реклама, CDN) падают постоянно.
+    if (detail?.isMainFrame !== true) {
       return true;
     }
     if (errorCode === -3 || errorDescription.includes("ERR_ABORTED")) {
@@ -260,8 +261,9 @@
     }
     let blocked = errorCode === -27
       || errorDescription.includes("X-Frame-Options")
-      || errorDescription.includes("frame")
-      || errorDescription.includes("CSP");
+      || errorDescription.includes("Refused to display")
+      || errorDescription.includes("refused to connect")
+      || errorDescription.includes("Content Security Policy");
     scheduleLoadFailure(event, blocked);
   }
 
@@ -401,6 +403,8 @@
       markLoadFailed(evt as Event);
     });
     element.addEventListener("did-finish-load", () => {
+      loadFinishedForAttempt = loadAttempt;
+      clearFailDebounce();
       syncNavigationState(element);
       catchErrors(() => onLoadFinished(element));
     });
@@ -409,6 +413,8 @@
         markLoadFailed();
       });
       element.addEventListener("load", () => {
+        loadFinishedForAttempt = loadAttempt;
+        clearFailDebounce();
         syncNavigationState(element);
         catchErrors(() => onLoadFinished(element));
       });
