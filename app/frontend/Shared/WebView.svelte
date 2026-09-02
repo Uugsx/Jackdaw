@@ -77,8 +77,11 @@
   export let allowImageOpen = false;
   /** ⌘/Ctrl + scroll over email body adjusts zoom */
   export let enableZoomWheel = false;
+  /** Scale untrusted HTML content (percent, 100 = default). */
+  export let contentZoom = 100;
 
   $: partition = sessionID ? "persist:" + sessionID : undefined;
+  $: webviewE, contentZoom, blobURL, catchErrors(() => applyGuestContentZoom(contentZoom));
 
   onMount(() =>{
     if (autoSize) {
@@ -185,6 +188,7 @@
         webview.__jackdawZoomWheel = false;
         await addZoomWheelListener();
       }
+      await applyGuestContentZoom(contentZoom);
       if (autoSize) {
         catchErrors(onLoadResize);
       }
@@ -260,6 +264,31 @@
       const { openMailImageFromContext } = await import("../Mail/Message/openMailImage");
       await openMailImageFromContext(webviewE, event.x, event.y);
     });
+  }
+
+  async function applyGuestContentZoom(zoom: number) {
+    if (!webviewE) {
+      return;
+    }
+    let cssValue = zoom == 100 ? "" : String(zoom / 100);
+    try {
+      let doc = webviewE.contentDocument;
+      if (doc?.documentElement) {
+        doc.documentElement.style.zoom = cssValue;
+        return;
+      }
+    } catch {
+      // Electron <webview> has no contentDocument
+    }
+    // #if [!WEBMAIL]
+    try {
+      await webviewE.executeJavaScript(`
+        document.documentElement.style.zoom = ${JSON.stringify(cssValue)};
+      `);
+    } catch (ex) {
+      backgroundError(ex);
+    }
+    // #endif
   }
 
   async function addZoomWheelListener() {
