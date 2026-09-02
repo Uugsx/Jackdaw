@@ -15,6 +15,7 @@
       </vbox>
     {/if}
   </hbox>
+  <ShowReplyBanner {message} />
   <hbox>
     {#if $message.contact instanceof Person && $message.contact.picture}
       <PersonPicture person={$message.contact} />
@@ -104,6 +105,7 @@
   import EncryptionButtons from "./EncryptionButtons.svelte";
   import EncryptionDetails from "./EncryptionDetails.svelte";
   import ErrorMessageInline from "../../Shared/ErrorMessageInline.svelte";
+  import ShowReplyBanner from "./ShowReplyBanner.svelte";
   import RoundButton from "../../Shared/RoundButton.svelte";
   import RemoveIcon from "lucide-svelte/icons/x";
   import { getLocalStorage } from "../../Util/LocalStorage";

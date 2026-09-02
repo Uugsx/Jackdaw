@@ -201,13 +201,13 @@ export class JMAPEMail extends EMail {
     await this.setFlagServer("$junk", spam);
   }
 
-  async markReplied() {
-    await super.markReplied();
+  async markReplied(actionAt?: Date) {
+    await super.markReplied(actionAt);
     await this.setFlagServer("$answered", true);
   }
 
-  async markForwarded() {
-    await super.markForwarded();
+  async markForwarded(actionAt?: Date) {
+    await super.markForwarded(actionAt);
     await this.setFlagServer("$forwarded", true);
   }
 

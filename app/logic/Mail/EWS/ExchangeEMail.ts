@@ -5,13 +5,13 @@ import { sanitize } from "../../../../lib/util/sanitizeDatatypes";
 import { exchangeAttachmentEntriesFromJSON } from "./exchangeAttachments";
 
 export abstract class ExchangeEMail extends EMail {
-  async markReplied() {
-    await super.markReplied();
+  async markReplied(actionAt?: Date) {
+    await super.markReplied(actionAt);
     await this.setFlagOnServer(EMailFlag.ReplyToSender, IconIndex.Replied);
   }
 
-  async markForwarded() {
-    await super.markForwarded();
+  async markForwarded(actionAt?: Date) {
+    await super.markForwarded(actionAt);
     await this.setFlagOnServer(EMailFlag.Forward, IconIndex.Forwarded);
   }
 

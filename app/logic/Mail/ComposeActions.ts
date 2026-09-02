@@ -582,14 +582,21 @@ export class ComposeActions {
     if (!source) {
       return;
     }
+    let actionAt = this.email.sent ?? new Date();
+    let marked = false;
     try {
       if (this.email.inReplyTo) {
-        await source.markReplied();
+        marked = true;
+        await source.markReplied(actionAt);
       } else if (this.email.subject?.startsWith("Fwd: ")) {
-        await source.markForwarded();
+        marked = true;
+        await source.markForwarded(actionAt);
       }
     } catch (ex) {
       backgroundError(ex);
+    }
+    if (marked) {
+      await source.saveWritablePropsLocally().catch(backgroundError);
     }
   }
 }

@@ -172,13 +172,13 @@ export class IMAPEMail extends EMail {
     await this.setFlagServer("$Junk", spam);
   }
 
-  async markReplied() {
-    await super.markReplied();
+  async markReplied(actionAt?: Date) {
+    await super.markReplied(actionAt);
     await this.setFlagServer("\\Answered", true);
   }
 
-  async markForwarded() {
-    await super.markForwarded();
+  async markForwarded(actionAt?: Date) {
+    await super.markForwarded(actionAt);
     await this.setFlagServer("$Forwarded", true);
   }
 

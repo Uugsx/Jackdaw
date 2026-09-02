@@ -190,7 +190,10 @@ export async function onKeyOnList(event: KeyboardEvent) {
   }
 }
 
-export async function onKeyOnMessage(event: KeyboardEvent) {
+export async function onKeyOnMessage(event: KeyboardEvent, onZoomKey?: (event: KeyboardEvent) => boolean) {
+  if (onZoomKey?.(event)) {
+    return;
+  }
   await onKeyOnList(event);
 
   let message = get(selectedMessage);

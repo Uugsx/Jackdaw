@@ -35,6 +35,9 @@ export class SearchEMail extends Observable {
 
   @notifyChangedProperty
   messageID: string | null = null;
+  /** Искать письма, у которых In-Reply-To равен этому Message-ID. */
+  @notifyChangedProperty
+  inReplyToOf: string | null = null;
   @notifyChangedProperty
   threadID: string | null = null;
   @notifyChangedProperty
@@ -87,6 +90,7 @@ export class SearchEMail extends Observable {
     this.sizeMin = sanitize.integer(json.sizeMin, null) ?? null;
     this.sizeMax = sanitize.integer(json.sizeMax, null) ?? null;
     this.messageID = sanitize.string(json.messageID, null) ?? null;
+    this.inReplyToOf = sanitize.string(json.inReplyToOf, null) ?? null;
     this.threadID = sanitize.string(json.threadID, null) ?? null;
     this.sentDateMin = sanitize.date(json.sentDateMin, null) ?? null;
     this.sentDateMax = sanitize.date(json.sentDateMax, null) ?? null;
@@ -111,6 +115,7 @@ export class SearchEMail extends Observable {
       sizeMin: this.sizeMin,
       sizeMax: this.sizeMax,
       messageID: this.messageID,
+      inReplyToOf: this.inReplyToOf,
       threadID: this.threadID,
       sentDateMin: this.sentDateMin?.toISOString(),
       sentDateMax: this.sentDateMax?.toISOString(),
@@ -129,6 +134,9 @@ export class SearchEMail extends Observable {
 
   matches(email: EMail): boolean {
     if (this.messageID && this.messageID != email.messageID) {
+      return false;
+    }
+    if (this.inReplyToOf && this.inReplyToOf != email.inReplyTo) {
       return false;
     }
     if (this.threadID && this.threadID != email.threadID) {

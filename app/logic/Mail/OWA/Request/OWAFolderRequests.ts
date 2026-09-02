@@ -1,7 +1,7 @@
 import { OWARequest } from "./OWARequest";
 import type { OWAEMail } from "../OWAEMail";
 import type { ExchangePermission } from "../../EWS/ExchangePermission";
-import { IconIndexPidTag } from "../../EWS/ExchangeEMail";
+import { EMailFlagTimePidTag, IconIndexPidTag } from "../../EWS/ExchangeEMail";
 
 /** Shared AdditionalProperties for FindItem / SyncFolderItems / search.
  * Keep this shape minimal — ExtendedPropertyUri (IconIndex) broke FindItem
@@ -199,6 +199,38 @@ export function owaGetNewMsgHeadersRequest(newMessageIDs: string[]): OWARequest 
       }],
     },
     ItemIds: newMessageIDs.map(id => ({
+      __type: "ItemId:#Exchange",
+      Id: id,
+    })),
+  });
+}
+
+/**
+ * Загружает метаданные ответа/пересылки для сообщений из локального кеша.
+ * Некоторые общие папки OWA отклоняют эти дополнительные свойства в FindItem,
+ * но принимают их в GetItem, который уже используется для новых писем.
+ */
+export function owaGetMessageActionFlagsRequest(messageIDs: string[], includeActionTime = true): OWARequest {
+  let additionalProperties: object[] = [{
+    __type: "ExtendedPropertyUri:#Exchange",
+    PropertyTag: IconIndexPidTag,
+    PropertyType: "Integer",
+  }];
+  if (includeActionTime) {
+    additionalProperties.push({
+      __type: "ExtendedPropertyUri:#Exchange",
+      PropertyTag: EMailFlagTimePidTag,
+      PropertyType: "SystemTime",
+    });
+  }
+  return new OWARequest("GetItem", {
+    __type: "GetItemRequest:#Exchange",
+    ItemShape: {
+      __type: "ItemResponseShape:#Exchange",
+      BaseShape: "IdOnly",
+      AdditionalProperties: additionalProperties,
+    },
+    ItemIds: messageIDs.map(id => ({
       __type: "ItemId:#Exchange",
       Id: id,
     })),

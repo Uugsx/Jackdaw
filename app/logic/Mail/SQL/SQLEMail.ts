@@ -392,6 +392,7 @@ export class SQLEMail {
     email.isSpam = sanitize.boolean(row.isSpam, false);
     email.threadID = sanitize.string(row.threadID ?? row.parentMsgID, null);
     email.downloadComplete = sanitize.boolean(row.downloadComplete, false);
+    JSONEMail.readLastVerbAt(email, sanitize.json(row.json, {}));
 
     if (row.contactName || row.contactEmail) {
       email.contact = findOrCreatePersonUID(
@@ -428,6 +429,7 @@ export class SQLEMail {
     email.threadID = sanitize.string(row.threadID ?? row.parentMsgID, null);
     email.downloadComplete = sanitize.boolean(row.downloadComplete, false);
     let json = sanitize.json(row.json, {});
+    JSONEMail.readLastVerbAt(email, json);
     JSONEMail.readExtraData(email, json);
     await this.readTags(email);
   }
@@ -651,6 +653,7 @@ export class SQLEMail {
         id, pID, messageID, parentMsgID,
         size, dateSent, dateReceived, outgoing,
         subject, threadID, downloadComplete,
+        json,
         contactEmail, contactName,
         isRead, isStarred, isReplied, isForwarded, isImportant, isSpam
       FROM email
@@ -696,6 +699,7 @@ export class SQLEMail {
         email.isImportant = sanitize.boolean(row.isImportant, email.isImportant);
         email.isStarred = sanitize.boolean(row.isStarred, email.isStarred);
         email.isRead = sanitize.boolean(row.isRead, email.isRead);
+        JSONEMail.readLastVerbAt(email, sanitize.json(row.json, {}));
         if (row.contactName || row.contactEmail) {
           email.contact = findOrCreatePersonUID(
             sanitize.emailAddress(row.contactEmail, kDummyPerson.emailAddress),

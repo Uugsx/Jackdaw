@@ -78,6 +78,10 @@ export class JSONEMail {
       json.invitationMessage = email.invitationMessage;
     }
 
+    // Сохраняем время действия в локальном JSON, чтобы список мог показать его
+    // без загрузки полного сообщения.
+    json.lastVerbAt = email.lastVerbAt?.getTime() ?? null;
+
     if (email.signedByKeyID || email.wasEncrypted || email.mustEncrypt || email.shouldEncrypt) {
       let e = json.encryption = {} as any;
       e.system = email.system;
@@ -198,6 +202,7 @@ export class JSONEMail {
     email.isSpam = sanitize.boolean(json.isSpam, false);
     email.threadID = sanitize.string(json.threadID ?? json.inReplyTo, null);
     email.downloadComplete = sanitize.boolean(json.downloadComplete);
+    this.readLastVerbAt(email, json);
 
     // email.contact = findOrCreatePersonUID("foo45@example.com", sanitize.label(json.contactName, null));
   }
@@ -215,7 +220,15 @@ export class JSONEMail {
     email.isSpam = sanitize.boolean(json.isSpam, false);
     email.threadID = sanitize.string(json.threadID ?? json.inReplyTo, null);
     email.downloadComplete = sanitize.boolean(json.downloadComplete, false);
+    this.readLastVerbAt(email, json);
     this.readTags(email, json);
+  }
+
+  static readLastVerbAt(email: EMail, json: any): void {
+    if (!("lastVerbAt" in (json ?? {}))) {
+      return;
+    }
+    email.lastVerbAt = sanitize.date(json.lastVerbAt, null);
   }
 
   static readExtraData(email: EMail, json: any): void {

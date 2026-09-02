@@ -148,6 +148,7 @@
   "aAIQg2": "Appearance",
   "DB8zMK": "Apply",
   "2W9Eat": "Apply category combination",
+  "l0rok4": "Show reply",
   "lLYiPQ": "Apply or remove this category on the message",
   "+js8Gv": "Apply several categories to a message with one click. Click categories below to build each combination.",
   "MS7kHC": "Apply this category combination",
@@ -1469,5 +1470,15 @@
   "IWdJMb": "Your real name, as shown to other people when you are sending messages",
   "CN8qvD": "Your S/MIME key does not have a certificate yet. Please add it, in Settings | Mail | Identity | Encryption",
   "Jp2AY/": "Your work-life balance: Mute some accounts at times to focus or relax. You can choose the workspace in the window header.",
-  "ACjxWW": "Zoom"
+  "ACjxWW": "Zoom",
+  "AWOSPo": "Zoom in",
+  "FjkaiT": "Zoom out",
+  "KNNQTw": "Text scale: {0}%",
+  "MWWDL0": "Minimum scale reached",
+  "ZeMPGk": "Ctrl + scroll up",
+  "ZeMPGkMac": "⌘ + scroll up",
+  "l7fhT/": "Maximum scale reached",
+  "twQNl4": "Ctrl + scroll down",
+  "twQNl4Mac": "⌘ + scroll down",
+  "xdC+HN": "Text scale"
 }

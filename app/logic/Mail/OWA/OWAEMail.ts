@@ -125,9 +125,18 @@ export class OWAEMail extends ExchangeEMail {
     let iconIndex = extendedPropertyValue(json, IconIndexPidTag) ?? propertyValue(json.IconIndex);
     let isReplied = this.isReplied;
     let isForwarded = this.isForwarded;
+    let lastVerbAt = this.lastVerbAt;
     if (iconIndex != null) {
       isReplied = Number(iconIndex) == IconIndex.Replied;
       isForwarded = Number(iconIndex) == IconIndex.Forwarded;
+      if (isReplied || isForwarded) {
+        let rawLastVerbAt = extendedPropertyValue(json, EMailFlagTimePidTag);
+        if (rawLastVerbAt != null) {
+          lastVerbAt = sanitize.date(rawLastVerbAt as string | number, this.lastVerbAt);
+        }
+      } else {
+        lastVerbAt = null;
+      }
     }
     // Not `=`: The sender's `Importance:` header is not in the response
     let isImportant = "Importance" in json ? propertyValue(json.Importance) == "High" : this.isImportant;
@@ -135,13 +144,15 @@ export class OWAEMail extends ExchangeEMail {
       oldTagNames.some((name, i) => name != tagNames[i]) ||
       tagNames.some((name, i) => name != oldTagNames[i]);
     let attachmentsFlagChanged = this.applyHasAttachmentsFromJSON(json);
+    let lastVerbAtChanged = this.lastVerbAt?.getTime() != lastVerbAt?.getTime();
     let changed = this.isRead != isRead || this.isReplied != isReplied ||
       this.isForwarded != isForwarded || this.isImportant != isImportant ||
       this.isStarred != isStarred || this.isDraft != isDraft ||
-      tagsChanged || datesChanged || attachmentsFlagChanged;
+      tagsChanged || datesChanged || attachmentsFlagChanged || lastVerbAtChanged;
     this.isRead = isRead;
     this.isReplied = isReplied;
     this.isForwarded = isForwarded;
+    this.lastVerbAt = lastVerbAt;
     this.isImportant = isImportant;
     this.isStarred = isStarred;
     // can't work out how to find junk status
@@ -387,7 +398,15 @@ export class OWAEMail extends ExchangeEMail {
 function extendedPropertyValue(json: Record<string, any>, propertyTag: string): unknown {
   let properties = ensureArray(json.ExtendedProperty);
   let property = properties.find(item => String(item?.ExtendedFieldURI?.PropertyTag ?? "").toLowerCase() == propertyTag.toLowerCase());
-  return propertyValue(property?.Value ?? (properties.length == 1 ? properties[0]?.Value : undefined));
+  if (property) {
+    return propertyValue(property.Value);
+  }
+  // Некоторые ответы OWA не содержат ExtendedFieldURI, если запрошено ровно
+  // одно дополнительное свойство. Для нескольких свойств fallback не применяем:
+  // время действия нельзя ошибочно принять за IconIndex.
+  return properties.length == 1 && !properties[0]?.ExtendedFieldURI
+    ? propertyValue(properties[0]?.Value)
+    : undefined;
 }
 
 function propertyValue(value: any): any {
