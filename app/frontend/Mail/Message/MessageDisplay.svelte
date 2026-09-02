@@ -9,7 +9,6 @@
   <MessageAttachments attachments={message.attachments} />
   <SMLDisplayKinds {message} sml={message.sml} />
   <vbox class="body" flex>
-    <MessageZoomControls {zoom} on:change={event => setZoom(event.detail)} />
     <Paper>
       <MessageBody {message} {zoom} on:zoomwheel={onZoomWheelFromBody} />
     </Paper>
@@ -26,7 +25,6 @@
   import MessageHeader from "./MessageHeader.svelte";
   import MessageAttachments from "./AttachmentsUI.svelte";
   import MessageBody from "./MessageBody.svelte";
-  import MessageZoomControls from "./MessageZoomControls.svelte";
   import SMLDisplayKinds from "../SML/SMLDisplayKinds.svelte";
   import MessageDisplayBarM from "./MessageDisplayBarM.svelte";
   import Paper from "../../Shared/Paper.svelte";
@@ -85,7 +83,6 @@
     outline: none;
   }
   .body {
-    position: relative;
     margin-inline: 8px 16px;
     margin-block-end: 2px;
   }

@@ -2,7 +2,7 @@
 <webview bind:this={webviewE} src={url ?? blobURL} {title} class:hidden class:autosize={autoSize} {partition} useragent={userAgent || undefined} />
 // #else
 <!-- TODO Security: Test that this <webview> is untrusted and jailed -->
-<iframe bind:this={webviewE} src={url ?? blobURL} {title} class:hidden class:autosize={autoSize} />
+<iframe bind:this={webviewE} src={url ?? blobURL} {title} class:hidden class:autosize={autoSize} style:zoom={hostZoomStyle} />
 // #endif
 
 <!--
@@ -81,7 +81,13 @@
   export let contentZoom = 100;
 
   $: partition = sessionID ? "persist:" + sessionID : undefined;
-  $: webviewE, contentZoom, blobURL, catchErrors(() => applyGuestContentZoom(contentZoom));
+  $: hostZoomStyle = contentZoom == 100 ? undefined : contentZoom / 100;
+
+  /** Electron setZoomFactor requires dom-ready; iframe can zoom on load. */
+  let guestDomReady = false;
+  $: if (guestDomReady && webviewE) {
+    applyGuestContentZoom(contentZoom);
+  }
 
   onMount(() =>{
     if (autoSize) {
@@ -133,6 +139,7 @@
     }
     // console.log("html", displayHTML);
     blobURL = stringToBlobURL("text/html", displayHTML);
+    guestDomReady = false;
   }
 
   onDestroy(() => {
@@ -146,6 +153,7 @@
   let boundWebview: HTMLIFrameElement = null;
   $: if (webviewE && webviewE !== boundWebview) {
     boundWebview = webviewE;
+    guestDomReady = false;
     attachWebviewListeners(webviewE);
   }
 
@@ -155,7 +163,11 @@
       catchErrors(() => onContextMenu((event as any).params)));
     // #endif
     el.addEventListener("dom-ready", () => {
+      guestDomReady = true;
       catchErrors(() => setupWebViewContents(++webviewSetupToken));
+    });
+    el.addEventListener("load", () => {
+      guestDomReady = true;
     });
   }
 
@@ -188,7 +200,6 @@
         webview.__jackdawZoomWheel = false;
         await addZoomWheelListener();
       }
-      await applyGuestContentZoom(contentZoom);
       if (autoSize) {
         catchErrors(onLoadResize);
       }
@@ -266,29 +277,37 @@
     });
   }
 
-  async function applyGuestContentZoom(zoom: number) {
+  function applyGuestContentZoom(zoom: number) {
     if (!webviewE) {
       return;
     }
-    let cssValue = zoom == 100 ? "" : String(zoom / 100);
+    let factor = zoom / 100;
+    let cssValue = factor == 1 ? "" : String(factor);
+    let webview = webviewE as HTMLElement & { setZoomFactor?: (factor: number) => void };
+    if (typeof webview.setZoomFactor == "function") {
+      if (!guestDomReady) {
+        return;
+      }
+      try {
+        webview.setZoomFactor(factor);
+      } catch (ex) {
+        backgroundError(ex);
+      }
+      return;
+    }
     try {
       let doc = webviewE.contentDocument;
       if (doc?.documentElement) {
         doc.documentElement.style.zoom = cssValue;
+        if (doc.body) {
+          doc.body.style.zoom = cssValue;
+        }
         return;
       }
     } catch {
       // Electron <webview> has no contentDocument
     }
-    // #if [!WEBMAIL]
-    try {
-      await webviewE.executeJavaScript(`
-        document.documentElement.style.zoom = ${JSON.stringify(cssValue)};
-      `);
-    } catch (ex) {
-      backgroundError(ex);
-    }
-    // #endif
+    webviewE.style.zoom = cssValue;
   }
 
   async function addZoomWheelListener() {

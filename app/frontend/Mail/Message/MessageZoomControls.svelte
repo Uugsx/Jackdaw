@@ -27,18 +27,18 @@
   import Button from "../../Shared/Button.svelte";
   import ZoomInIcon from "lucide-svelte/icons/zoom-in";
   import ZoomOutIcon from "lucide-svelte/icons/zoom-out";
-  import { createEventDispatcher } from "svelte";
   import { t, translateString } from "../../../l10n/l10n";
   import {
+    clampMessageZoom,
+    getMessageZoomSetting,
     isMacPlatform,
     kMessageZoomMax,
     kMessageZoomMin,
     stepMessageZoom,
   } from "./messageZoom";
 
-  export let zoom: number;
-
-  const dispatch = createEventDispatcher<{ change: number }>();
+  let zoomSetting = getMessageZoomSetting();
+  $: zoom = clampMessageZoom($zoomSetting.value);
   $: zoomInHint = isMacPlatform()
     ? translateString({ id: "ZeMPGkMac", defaultMessage: "⌘ + scroll up" }, {})
     : translateString({ id: "ZeMPGk", defaultMessage: "Ctrl + scroll up" }, {});
@@ -47,23 +47,15 @@
     : translateString({ id: "twQNl4", defaultMessage: "Ctrl + scroll down" }, {});
 
   function changeZoom(direction: 1 | -1) {
-    dispatch("change", stepMessageZoom(zoom, direction));
+    zoomSetting.value = stepMessageZoom(zoom, direction);
   }
 </script>
 
 <style>
   .message-zoom {
-    position: absolute;
-    top: 4px;
-    inset-inline-end: 8px;
-    z-index: 1;
     align-items: center;
     gap: 0;
-    opacity: 0.72;
-    pointer-events: auto;
-  }
-  .message-zoom:hover {
-    opacity: 1;
+    margin-inline-end: 4px;
   }
   .message-zoom :global(.zoom-btn) {
     min-width: 0;

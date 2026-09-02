@@ -10,6 +10,7 @@
       {getDateTimeString($message.sent)}
     </value>
     {#if !$appGlobal.isSmall}
+      <MessageZoomControls />
       <vbox class="display-mode">
         <DisplayModeSwitcher />
       </vbox>
@@ -101,6 +102,7 @@
   import Recipient from "./Recipient.svelte";
   import PersonPicture from "../../Contacts/Person/PersonPicture.svelte";
   import DisplayModeSwitcher from "./DisplayModeSwitcher.svelte";
+  import MessageZoomControls from "./MessageZoomControls.svelte";
   import TagSelector from "../../Shared/Tag/TagSelector.svelte";
   import EncryptionButtons from "./EncryptionButtons.svelte";
   import EncryptionDetails from "./EncryptionDetails.svelte";
