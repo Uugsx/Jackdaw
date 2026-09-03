@@ -2,7 +2,9 @@ body {
   width: 100%;
   max-width: none;
   box-sizing: border-box;
-  overflow-x: auto;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Preserve common Outlook / Word HTML email layout */

@@ -2,7 +2,7 @@
 <webview bind:this={webviewE} src={url ?? blobURL} {title} class:hidden class:autosize={autoSize} {partition} useragent={userAgent || undefined} />
 // #else
 <!-- TODO Security: Test that this <webview> is untrusted and jailed -->
-<iframe bind:this={webviewE} src={url ?? blobURL} {title} class:hidden class:autosize={autoSize} style:zoom={hostZoomStyle} />
+<iframe bind:this={webviewE} src={url ?? blobURL} {title} class:hidden class:autosize={autoSize} />
 // #endif
 
 <!--
@@ -34,6 +34,10 @@
   import type { ArrayColl } from "svelte-collections";
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
   import { openExternalURL } from "../../logic/util/os-integration";
+  import {
+    messageZoomFactor,
+    messageZoomReflowCss,
+  } from "../Mail/Message/messageZoom";
   const dispatch = createEventDispatcher();
 
   /**
@@ -84,7 +88,6 @@
   export let contentZoom = 100;
 
   $: partition = sessionID ? "persist:" + sessionID : undefined;
-  $: hostZoomStyle = contentZoom == 100 ? undefined : contentZoom / 100;
 
   /** Electron setZoomFactor requires dom-ready; iframe can zoom on load. */
   let guestDomReady = false;
@@ -289,8 +292,7 @@
     if (!webviewE) {
       return;
     }
-    let factor = zoom / 100;
-    let cssValue = factor == 1 ? "" : String(factor);
+    let factor = messageZoomFactor(zoom);
     let webview = webviewE as HTMLElement & { setZoomFactor?: (factor: number) => void };
     if (typeof webview.setZoomFactor == "function") {
       if (!guestDomReady) {
@@ -301,21 +303,55 @@
       } catch (ex) {
         backgroundError(ex);
       }
+      applyGuestZoomReflowStyles(factor, "text-wrap");
       return;
     }
+    if (applyGuestZoomReflowStyles(factor, "css-zoom")) {
+      webviewE.style.zoom = "";
+      webviewE.style.width = "";
+      return;
+    }
+    webviewE.style.zoom = factor == 1 ? "" : String(factor);
+    webviewE.style.width = factor == 1 ? "" : `calc(100% / ${factor})`;
+  }
+
+  function applyGuestZoomReflowStyles(
+    factor: number,
+    mode: "css-zoom" | "text-wrap",
+  ): boolean {
     try {
       let doc = webviewE.contentDocument;
-      if (doc?.documentElement) {
-        doc.documentElement.style.zoom = cssValue;
-        if (doc.body) {
-          doc.body.style.zoom = cssValue;
-        }
-        return;
+      if (!doc?.documentElement) {
+        return false;
       }
+      let styleEl = doc.getElementById("jackdaw-message-zoom") as HTMLStyleElement | null;
+      if (factor == 1) {
+        styleEl?.remove();
+        doc.documentElement.style.zoom = "";
+        if (doc.body) {
+          doc.body.style.width = "";
+          doc.body.style.maxWidth = "";
+          doc.body.style.zoom = "";
+        }
+        return true;
+      }
+      if (!styleEl) {
+        styleEl = doc.createElement("style");
+        styleEl.id = "jackdaw-message-zoom";
+        doc.head.appendChild(styleEl);
+      }
+      styleEl.textContent = messageZoomReflowCss(factor, mode);
+      doc.documentElement.style.zoom = "";
+      if (doc.body) {
+        doc.body.style.zoom = "";
+        doc.body.style.width = "";
+        doc.body.style.maxWidth = "";
+      }
+      return true;
     } catch {
       // Electron <webview> has no contentDocument
+      return false;
     }
-    webviewE.style.zoom = cssValue;
   }
 
   async function addZoomWheelListener() {
@@ -532,6 +568,9 @@
     flex: 1 0 0;
     width: 100%;
     height: auto;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
   webview.autosize, iframe.autosize {
     flex: 0 0 auto;

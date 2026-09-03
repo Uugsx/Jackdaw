@@ -1,4 +1,4 @@
-<vbox flex class="message-body" style:zoom={plaintextZoom}>
+<vbox flex class="message-body" style:zoom={plaintextZoom} style:width={plaintextZoomWidth}>
   {#if !$message.loadedBody}
     {#await message.loadBody()}
       {#await sleep(1)}
@@ -46,6 +46,7 @@
   $: mode = $modeSetting.value as DisplayMode;
   $: message.loadExternalImages = mode == DisplayMode.HTMLWithExternal;
   $: plaintextZoom = mode == DisplayMode.Plaintext || mode == DisplayMode.Source ? zoom / 100 : undefined;
+  $: plaintextZoomWidth = plaintextZoom && plaintextZoom != 1 ? `calc(100% / ${plaintextZoom})` : undefined;
 
   function getSource(message: EMail): string {
     if (!message.mime) {
@@ -64,3 +65,12 @@
     Thread = "thread",
   }
 </script>
+
+<style>
+  .message-body {
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    overflow-wrap: anywhere;
+  }
+</style>
