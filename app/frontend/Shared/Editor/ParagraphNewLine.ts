@@ -4,10 +4,9 @@ declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     paragraphNewLine: {
       /**
-       * Adds standard enter key behavior on paragraphs `<p>`
-       * 1. If there's a `<br>` before or after the cursor
-       * create a new paragraph
-       * 2. Else insert a `<br>`
+       * Enter in a paragraph always starts a new paragraph.
+       * Shift+Enter still inserts a line break (StarterKit HardBreak).
+       * If the cursor sits next to a stray `<br>`, remove it while splitting.
        */
       onParagraphEnter: () => ReturnType;
     }
@@ -22,7 +21,7 @@ export const ParagraphNewLine = Paragraph.extend({
   },
   addCommands() {
     return {
-      onParagraphEnter: () => ({ tr, commands, chain }) => {
+      onParagraphEnter: () => ({ tr, chain }) => {
         let { $from, $to } = tr.selection;
         if ($from.parent.type.name != 'paragraph' || $from.depth > 1) {
           return false;
@@ -46,7 +45,7 @@ export const ParagraphNewLine = Paragraph.extend({
               to: $to.pos + $to.nodeAfter.nodeSize
             }).splitBlock().scrollIntoView().run();
         }
-        return commands.setHardBreak();
+        return chain().splitBlock().scrollIntoView().run();
       },
     }
   },
