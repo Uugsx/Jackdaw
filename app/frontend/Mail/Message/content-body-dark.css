@@ -10,6 +10,12 @@ body.jackdaw-email-dark a {
   color: #6cb4ff;
 }
 
+body.jackdaw-email-dark a,
+body.jackdaw-email-dark a span,
+body.jackdaw-email-dark a font {
+  color: #6cb4ff !important;
+}
+
 body.jackdaw-email-dark blockquote {
   border-inline-start-color: #6cb4ff;
 }

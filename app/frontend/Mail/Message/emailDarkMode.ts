@@ -33,6 +33,20 @@ function adaptStyleElement(style: HTMLStyleElement): void {
 }
 
 function adaptElementColors(el: HTMLElement): void {
+  if (el.hasAttribute("data-ogsc")) {
+    let adapted = adaptTextColor(el.getAttribute("data-ogsc")!);
+    if (adapted) {
+      mergeInlineColor(el, adapted);
+    }
+  }
+  if (el.hasAttribute("data-ogsb")) {
+    let adapted = adaptBackgroundColor(el.getAttribute("data-ogsb")!);
+    if (adapted == "transparent") {
+      mergeInlineBackground(el, "transparent");
+    } else if (adapted) {
+      mergeInlineBackground(el, adapted);
+    }
+  }
   if (el.hasAttribute("color")) {
     let adapted = adaptTextColor(el.getAttribute("color")!);
     if (adapted) {
@@ -62,38 +76,67 @@ export function adaptInlineStyle(style: string): string {
 
 export function adaptCssText(css: string): string {
   return css.replace(
-    /\b(color|background-color|background)\s*:\s*([^;}{]+)/gi,
+    /\b(color|-webkit-text-fill-color|background-color|background)\s*:\s*([^;}{]+)/gi,
     (match, prop, value) => adaptCssColorDeclaration(prop, value.trim()) ?? match,
   );
 }
 
 function adaptCssColorDeclaration(prop: string, trimmed: string): string | null {
-  if (/^(inherit|currentcolor|transparent|none|windowtext|window)$/i.test(trimmed)) {
-    if (/^color$/i.test(prop) && /^windowtext$/i.test(trimmed)) {
-      return "color: #e5e7eb";
-    }
+  let value = stripColorModifiers(trimmed);
+  if (/^(inherit|currentcolor|transparent|none|window|canvas)$/i.test(value)) {
     return null;
   }
-  if (/^background$/i.test(prop) && !/^#[0-9a-f]{3,8}$/i.test(trimmed) &&
-      !/^rgb/i.test(trimmed) && !/^[a-z]+$/i.test(trimmed)) {
+  if (/^color$/i.test(prop) && /^windowtext$/i.test(value)) {
+    return "color: #e5e7eb";
+  }
+  if (/^background$/i.test(prop) && !/^#[0-9a-f]{3,8}$/i.test(value) &&
+      !/^rgb/i.test(value) && !/^[a-z]+$/i.test(value)) {
     return null;
   }
   if (/^background-color$|^background$/i.test(prop)) {
-    let adapted = adaptBackgroundColor(trimmed);
+    let adapted = adaptBackgroundColor(value);
     if (adapted == "transparent") {
-      return "background-color: transparent";
+      return `${prop}: transparent`;
     }
     if (adapted) {
       return `${prop}: ${adapted}`;
     }
     return null;
   }
-  let adapted = adaptTextColor(trimmed);
+  let adapted = adaptTextColor(value);
   return adapted ? `${prop}: ${adapted}` : null;
 }
 
+function stripColorModifiers(value: string): string {
+  return value.trim().replace(/\s*!important\s*$/i, "").trim();
+}
+
+function mergeInlineColor(el: HTMLElement, color: string): void {
+  let style = el.getAttribute("style") ?? "";
+  if (/\bcolor\s*:/i.test(style)) {
+    style = style.replace(/\bcolor\s*:\s*[^;]+;?/gi, `color: ${color};`);
+  } else {
+    style = `color: ${color};${style}`;
+  }
+  el.setAttribute("style", style);
+}
+
+function mergeInlineBackground(el: HTMLElement, background: string): void {
+  let style = el.getAttribute("style") ?? "";
+  if (/\bbackground-color\s*:/i.test(style)) {
+    style = style.replace(/\bbackground-color\s*:\s*[^;]+;?/gi, `background-color: ${background};`);
+  } else {
+    style = `background-color: ${background};${style}`;
+  }
+  el.setAttribute("style", style);
+}
+
 export function adaptTextColor(input: string): string | null {
-  let rgb = parseCssColor(input);
+  let trimmed = stripColorModifiers(input);
+  if (/^windowtext$/i.test(trimmed)) {
+    return "#e5e7eb";
+  }
+  let rgb = parseCssColor(trimmed);
   if (!rgb) {
     return null;
   }
@@ -104,7 +147,7 @@ export function adaptTextColor(input: string): string | null {
 
   let hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
   if (hsl.s < 0.12) {
-    return lum < 0.35 ? "#e5e7eb" : null;
+    return "#e5e7eb";
   }
 
   hsl.s = Math.min(0.92, Math.max(hsl.s, 0.42));
@@ -143,7 +186,7 @@ export function adaptBackgroundColor(input: string): string | null {
 }
 
 export function parseCssColor(input: string): RGB | null {
-  let trimmed = input.trim().replace(/^['"]|['"]$/g, "");
+  let trimmed = stripColorModifiers(input).replace(/^['"]|['"]$/g, "");
   if (!trimmed) {
     return null;
   }
@@ -159,13 +202,23 @@ export function parseCssColor(input: string): RGB | null {
       b: clamp255(Number(rgbMatch[3])),
     };
   }
+  let rgbPctMatch = trimmed.match(/^rgba?\(\s*([\d.]+)%[,\s]+([\d.]+)%[,\s]+([\d.]+)%/i);
+  if (rgbPctMatch) {
+    return {
+      r: clamp255(Number(rgbPctMatch[1]) * 2.55),
+      g: clamp255(Number(rgbPctMatch[2]) * 2.55),
+      b: clamp255(Number(rgbPctMatch[3]) * 2.55),
+    };
+  }
   if (typeof document != "undefined") {
     let probe = document.createElement("span");
     probe.style.color = trimmed;
     document.documentElement.append(probe);
     let parsed = parseRgbString(getComputedStyle(probe).color);
     probe.remove();
-    return parsed;
+    if (parsed) {
+      return parsed;
+    }
   }
   return parseNamedColor(trimmed);
 }
@@ -206,12 +259,19 @@ function parseNamedColor(name: string): RGB | null {
     navy: { r: 0, g: 0, b: 128 },
     blue: { r: 0, g: 0, b: 255 },
     darkblue: { r: 0, g: 0, b: 139 },
+    darkslategray: { r: 47, g: 79, b: 79 },
+    darkslategrey: { r: 47, g: 79, b: 79 },
+    dimgray: { r: 105, g: 105, b: 105 },
+    dimgrey: { r: 105, g: 105, b: 105 },
+    gray: { r: 128, g: 128, b: 128 },
+    grey: { r: 128, g: 128, b: 128 },
+    darkgray: { r: 169, g: 169, b: 169 },
+    darkgrey: { r: 169, g: 169, b: 169 },
     red: { r: 255, g: 0, b: 0 },
     maroon: { r: 128, g: 0, b: 0 },
     orange: { r: 255, g: 165, b: 0 },
-    gray: { r: 128, g: 128, b: 128 },
-    grey: { r: 128, g: 128, b: 128 },
     white: { r: 255, g: 255, b: 255 },
+    windowtext: { r: 0, g: 0, b: 0 },
   };
   return map[name.toLowerCase()] ?? null;
 }
