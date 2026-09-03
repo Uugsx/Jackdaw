@@ -37,6 +37,58 @@ test("помечает потерю сети временной и запуск�
   expect(recoveryCount).toBe(1);
 });
 
+test("помечает timeout сети временной ошибкой", async () => {
+  appGlobal.remoteApp = {
+    OWA: {
+      fetchJSON: async () => {
+        throw new Error("net::ERR_TIMED_OUT");
+      },
+    },
+  };
+  let account = new OWAAccount();
+  account.storage = new DummyMailStorage();
+  (account as any).hasLoggedIn = true;
+  let recoveryCount = 0;
+  account.recoverAfterNetworkRestored = async () => {
+    recoveryCount++;
+  };
+
+  let error: any;
+  try {
+    await account.callOWAShared("https://owa.example.test/service.svc", {
+      method: "POST",
+    });
+  } catch (ex) {
+    error = ex;
+  }
+  await Promise.resolve();
+
+  expect(error?.message).toBe("net::ERR_TIMED_OUT");
+  expect(error?.doNotShow).toBe(true);
+  expect(recoveryCount).toBe(1);
+});
+
+test("refreshMessages не показывает ошибку при timeout GetItem", async () => {
+  appGlobal.remoteApp = { OWA: {} };
+  let account = new OWAAccount();
+  account.storage = new DummyMailStorage();
+  let folder = account.newFolder();
+  let message = folder.newEMail();
+  message.itemID = "message-1";
+  folder.messages.add(message);
+
+  let shownErrors: unknown[] = [];
+  account.errorCallback = ex => shownErrors.push(ex);
+  account.recoverAfterNetworkRestored = async () => {};
+  (account as any).hasLoggedIn = true;
+  (account as any).callOWA = async () => {
+    throw new Error("net::ERR_TIMED_OUT");
+  };
+
+  await expect(folder.refreshMessages([message.itemID!])).resolves.toBeUndefined();
+  expect(shownErrors).toEqual([]);
+});
+
 test("после восстановления сети синхронизирует Inbox и запускает уведомления", async () => {
   appGlobal.remoteApp = { OWA: {} };
   let account = new OWAAccount();

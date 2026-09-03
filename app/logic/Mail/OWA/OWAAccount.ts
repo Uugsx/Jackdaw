@@ -1340,6 +1340,11 @@ export class OWAAccount extends ExchangeMailAccount {
     }
   }
 
+  /** Best-effort background fetch (metadata poll, push refresh). No toast for transient failures. */
+  handleBackgroundSyncError(ex: unknown): void {
+    this.handlePollingError(ex);
+  }
+
   protected handlePollingError(ex: unknown): void {
     // The poller runs every few seconds. Toasting each failure would flood the
     // user with the same message while offline or during a server hiccup.

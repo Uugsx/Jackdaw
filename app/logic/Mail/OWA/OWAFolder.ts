@@ -677,8 +677,16 @@ export class OWAFolder extends ExchangeFolder {
     for (let id of ids) {
       this.invalidateMetadataBackfill(id);
     }
-    let results = await this.account.callOWA(owaGetNewMsgHeadersRequest(ids));
-    let items = results.ResponseMessages ? this.account.itemsFromResponses(results.ResponseMessages.Items) : results.Items;
+    let items: any[];
+    try {
+      let results = await this.account.callOWA(owaGetNewMsgHeadersRequest(ids));
+      items = results.ResponseMessages
+        ? this.account.itemsFromResponses(results.ResponseMessages.Items)
+        : results.Items;
+    } catch (ex) {
+      this.account.handleBackgroundSyncError(ex);
+      return;
+    }
     let missingMessages: OWAEMail[] = [];
     let changed = false;
     for (let item of items ?? []) {

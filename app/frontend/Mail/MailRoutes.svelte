@@ -225,7 +225,7 @@
         });
       };
       let metadataTick = () => {
-        catchErrors(() => refreshOpenFolderMetadata(folder as OWAFolder));
+        void refreshOpenFolderMetadata(folder as OWAFolder);
       };
       if (folder.account.isDependentAccount) {
         sharedWatchTimer = setInterval(tick, 3_000);
