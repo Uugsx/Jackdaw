@@ -38,49 +38,16 @@
     <vbox flex class="state-panel state-overlay">
       <JackdawChaseLoader compact label={$t`Loading website…`} />
     </vbox>
-  {:else if !suspended && loadFailed}
-    <vbox flex class="state-panel state-overlay">
-      <AlertCircleIcon size="28px" class="state-icon" />
-      <span class="state-title font-smallest">
-        {embedBlocked ? $t`This site cannot be shown in the panel` : $t`This website cannot be shown here`}
-      </span>
-      <p class="state-text font-smallest">
-        {#if embedBlocked}
-          {$t`Some sites block the side panel even after sign-in. Open the site in a Jackdaw window with the same session.`}
-        {:else}
-          {$t`Sign in through Jackdaw to reuse the session in this panel. Safari and Chrome cannot share login with the app.`}
-        {/if}
-      </p>
-      {#if url}
-        <Button
-          label={signInBusy ? $t`Signing in…` : $t`Sign in`}
-          disabled={signInBusy}
-          onClick={() => catchErrors(signInAndRetry)} />
-        <Button
-          label={popoutOpen ? $t`Show Jackdaw window` : $t`Open in Jackdaw window`}
-          onClick={() => catchErrors(openPopoutView)} />
-        <Button plain label={$t`Open in browser`} onClick={() => catchErrors(() => openExternalURL(url))} />
-      {/if}
-      <Button plain label={$t`Retry`} onClick={retryLoad} />
-    </vbox>
   {/if}
 </vbox>
 
 <script lang="ts">
   import WebView from "../Shared/WebView.svelte";
   import JackdawChaseLoader from "../Shared/JackdawChaseLoader.svelte";
-  import Button from "../Shared/Button.svelte";
-  import AlertCircleIcon from "lucide-svelte/icons/circle-alert";
   import ArrowLeftIcon from "lucide-svelte/icons/arrow-left";
   import ArrowRightIcon from "lucide-svelte/icons/arrow-right";
   import RotateCwIcon from "lucide-svelte/icons/rotate-cw";
   import HouseIcon from "lucide-svelte/icons/house";
-  import { openExternalURL } from "../../logic/util/os-integration";
-  import {
-    focusWidgetPopout,
-    openWidgetPopout,
-    openWidgetSignIn,
-  } from "../../logic/util/widgetBrowser";
   import { catchErrors } from "../Util/error";
   import { t } from "../../l10n/l10n";
   import { onDestroy } from "svelte";
@@ -101,15 +68,10 @@
   let webviewElement: HTMLElement | null = null;
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-  /** Bird animation until load succeeds or failure is confirmed */
+  /** Bird animation until the page finishes loading */
   let loadSettled = false;
-  let loadFailed = false;
-  let embedBlocked = false;
-  let signInBusy = false;
-  let popoutOpen = false;
   let reloadKey = 0;
   let loadTimer: ReturnType<typeof setTimeout> | null = null;
-  let failDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let lastReloadTick = 0;
   let activeUrl = "";
   let loadAttempt = 0;
@@ -127,17 +89,14 @@
   };
 
   const LOAD_TIMEOUT_MS = 45000;
-  const FAIL_DEBOUNCE_MS = 4000;
 
   $: if (url && url !== activeUrl) {
     activeUrl = url;
-    popoutOpen = false;
     beginLoad();
   }
 
   onDestroy(() => {
     clearLoadTimer();
-    clearFailDebounce();
     clearRefreshTimer();
   });
 
@@ -151,10 +110,8 @@
 
   let prevSuspended = suspended;
   $: {
-    if (prevSuspended && !suspended && webviewElement) {
-      if (loadFailed || !loadSettled) {
-        catchErrors(() => onLoadFinished(webviewElement!));
-      }
+    if (prevSuspended && !suspended && webviewElement && !loadSettled) {
+      catchErrors(() => onLoadFinished(webviewElement!));
     }
     prevSuspended = suspended;
   }
@@ -163,13 +120,6 @@
     if (loadTimer) {
       clearTimeout(loadTimer);
       loadTimer = null;
-    }
-  }
-
-  function clearFailDebounce() {
-    if (failDebounceTimer) {
-      clearTimeout(failDebounceTimer);
-      failDebounceTimer = null;
     }
   }
 
@@ -196,119 +146,22 @@
     loadAttempt += 1;
     let attempt = loadAttempt;
     clearLoadTimer();
-    clearFailDebounce();
     loadSettled = false;
-    loadFailed = false;
-    embedBlocked = false;
     loadFinishedForAttempt = 0;
     loadTimer = setTimeout(() => {
       if (attempt === loadAttempt && !loadSettled) {
-        settleFailed(embedBlocked);
+        settleSuccess();
       }
     }, LOAD_TIMEOUT_MS);
   }
 
   function settleSuccess() {
     clearLoadTimer();
-    clearFailDebounce();
     loadSettled = true;
-    loadFailed = false;
-    embedBlocked = false;
-  }
-
-  function settleFailed(blocked: boolean) {
-    clearLoadTimer();
-    clearFailDebounce();
-    loadSettled = true;
-    loadFailed = true;
-    embedBlocked = blocked;
-  }
-
-  function isIgnorableLoadError(
-    errorCode: number | undefined,
-    errorDescription: string,
-    isMainFrame: boolean | undefined
-  ): boolean {
-    // Подресурсы (реклама, аналитика, вспомогательные фреймы) сбоят штатно — никогда не блокируем сайт
-    if (isMainFrame === false) {
-      return true;
-    }
-    // ERR_ABORTED (-3) возникает при любых клиентских и HTTP редиректах, смене URL
-    if (errorCode === -3 || errorDescription.includes("ERR_ABORTED")) {
-      return true;
-    }
-    return false;
-  }
-
-  function scheduleLoadFailure(event: Event | undefined, blocked: boolean) {
-    let attempt = loadAttempt;
-    clearFailDebounce();
-    failDebounceTimer = setTimeout(() => {
-      if (attempt !== loadAttempt || loadSettled) {
-        return;
-      }
-      if (loadFinishedForAttempt >= attempt) {
-        return;
-      }
-      // Не объявляем ошибку, если страница всё ещё активно в процессе загрузки
-      let webview = webviewElement as (HTMLElement & { isLoading?: () => boolean }) | null;
-      if (typeof webview?.isLoading === "function" && webview.isLoading()) {
-        return;
-      }
-      embedBlocked = blocked;
-      settleFailed(blocked);
-    }, FAIL_DEBOUNCE_MS);
-  }
-
-  function markLoadFailed(event?: Event) {
-    if (loadFinishedForAttempt === loadAttempt) {
-      return;
-    }
-    let detail = (event as CustomEvent | undefined)?.detail ?? {};
-    let errorCode = (detail?.errorCode ?? (event as any)?.errorCode) as number | undefined;
-    let errorDescription = String(detail?.errorDescription ?? (event as any)?.errorDescription ?? "");
-    let isMainFrame = (detail?.isMainFrame ?? (event as any)?.isMainFrame) as boolean | undefined;
-
-    if (isIgnorableLoadError(errorCode, errorDescription, isMainFrame)) {
-      return;
-    }
-    let blocked = errorCode === -27
-      || errorDescription.includes("X-Frame-Options")
-      || errorDescription.includes("Refused to display")
-      || errorDescription.includes("refused to connect")
-      || errorDescription.includes("Content Security Policy");
-    scheduleLoadFailure(event, blocked);
-  }
-
-  async function pageLooksEmbedBlocked(element: HTMLElement): Promise<boolean> {
-    let webview = element as HTMLElement & { executeJavaScript?: (code: string) => Promise<unknown> };
-    if (!webview.executeJavaScript) {
-      return false;
-    }
-    try {
-      return await webview.executeJavaScript(`
-        (() => {
-          if (location.href.startsWith("chrome-error://")) {
-            return true;
-          }
-          const text = (document.body?.innerText ?? "").trim();
-          if (text.length === 0 || text.length > 500) {
-            return false;
-          }
-          const lower = text.toLowerCase();
-          return lower.includes("refused to connect")
-            || lower.includes("cannot be shown in a frame")
-            || lower.includes("нельзя показать во фрейме");
-        })()
-      `) as boolean;
-    } catch {
-      return false;
-    }
   }
 
   async function onLoadFinished(element: HTMLElement) {
     let attempt = loadAttempt;
-    clearFailDebounce();
     if (attempt !== loadAttempt) {
       return;
     }
@@ -317,10 +170,6 @@
       return;
     }
     loadFinishedForAttempt = attempt;
-    if (await pageLooksEmbedBlocked(element)) {
-      settleFailed(true);
-      return;
-    }
     settleSuccess();
   }
 
@@ -403,9 +252,6 @@
     syncWebviewVisibility(webviewElement, suspended && !frozen);
 
     element.addEventListener("did-start-loading", () => {
-      clearFailDebounce();
-      loadFailed = false;
-      // Если попытка загрузки ещё не завершена (новая страница, рефреш):
       if (loadFinishedForAttempt < loadAttempt) {
         loadSettled = false;
       }
@@ -416,18 +262,13 @@
     element.addEventListener("did-navigate-in-page", () => {
       syncNavigationState(element);
     });
-    element.addEventListener("did-fail-load", (evt) => {
-      markLoadFailed(evt as Event);
-    });
     element.addEventListener("dom-ready", () => {
       loadFinishedForAttempt = loadAttempt;
-      clearFailDebounce();
       syncNavigationState(element);
       catchErrors(() => onLoadFinished(element));
     });
     element.addEventListener("did-finish-load", () => {
       loadFinishedForAttempt = loadAttempt;
-      clearFailDebounce();
       syncNavigationState(element);
       catchErrors(() => onLoadFinished(element));
     });
@@ -438,12 +279,8 @@
       }
     });
     if (element instanceof HTMLIFrameElement) {
-      element.addEventListener("error", () => {
-        markLoadFailed();
-      });
       element.addEventListener("load", () => {
         loadFinishedForAttempt = loadAttempt;
-        clearFailDebounce();
         syncNavigationState(element);
         catchErrors(() => onLoadFinished(element));
       });
@@ -458,30 +295,6 @@
         }, 150);
       }
     }
-  }
-
-  async function signInAndRetry() {
-    if (!url || signInBusy) {
-      return;
-    }
-    signInBusy = true;
-    try {
-      await openWidgetSignIn(sessionID, url, title);
-      retryLoad();
-    } finally {
-      signInBusy = false;
-    }
-  }
-
-  async function openPopoutView() {
-    if (!url) {
-      return;
-    }
-    if (popoutOpen && await focusWidgetPopout(sessionID)) {
-      return;
-    }
-    await openWidgetPopout(sessionID, url, title);
-    popoutOpen = true;
   }
 
   function retryLoad() {
@@ -554,17 +367,5 @@
     inset: 0;
     z-index: 1;
     background: var(--main-bg, var(--leftbar-bg));
-  }
-  .state-panel :global(.state-icon) {
-    color: color-mix(in srgb, var(--leftbar-fg) 58%, transparent);
-  }
-  .state-title {
-    font-weight: 650;
-  }
-  .state-text {
-    margin: 0;
-    max-width: 260px;
-    line-height: 1.35;
-    color: color-mix(in srgb, var(--leftbar-fg) 68%, transparent);
   }
 </style>
