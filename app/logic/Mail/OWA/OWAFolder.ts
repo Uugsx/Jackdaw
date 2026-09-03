@@ -46,6 +46,9 @@ const kCategoryBackfillRetryMs = 3_000;
 const kCategoryBackfillRetrySharedMs = 5_000;
 /** Сколько верхних писем проверять при открытии папки из кеша. */
 const kRecentCategoryRefreshCount = 50;
+/** GetItem-обновление видимой страницы, пока папка открыта (Outlook rules/push). */
+const kVisibleMetadataRefreshMs = 12_000;
+const kVisibleMetadataRefreshSharedMs = 8_000;
 /** Не считать «без категорий» окончательным для свежих писем (Exchange rules). */
 const kRecentCategoryGraceMs = 15 * 60_000;
 
@@ -287,10 +290,10 @@ export class OWAFolder extends ExchangeFolder {
       || this.isBehindServer();
     if (!needsFetch) {
       this.completeInitialSync();
-      // Как кнопка «получить почту»: FindItem для свежих строк без категорий.
       if (this.recentMessagesNeedCategoryRefresh()) {
         return this.syncRecentArrivals();
       }
+      await this.refreshVisibleMessageMetadata();
       this.backfillMessageActionFlags();
       return this.messages;
     }
@@ -307,9 +310,32 @@ export class OWAFolder extends ExchangeFolder {
     }
     this.dirty = false;
     this.completeInitialSync();
+    await this.refreshVisibleMessageMetadata();
     this.backfillMessageActionFlags();
     this.notifyObservers();
     return msgs;
+  }
+
+  /**
+   * GetItem для видимой страницы — единственный надёжный способ подтянуть
+   * категории после правки в Outlook (FindItem на shared часто пустой).
+   */
+  async refreshVisibleMessageMetadata(limit = kRecentCategoryRefreshCount): Promise<void> {
+    let ids = this.messages.contents
+      .slice(0, limit)
+      .map(message => message.pID == null ? "" : String(message.pID))
+      .filter(Boolean);
+    if (!ids.length) {
+      return;
+    }
+    await this.refreshMessages(ids);
+  }
+
+  /** Интервал фонового GetItem для открытой папки (shared чаще — слабее push). */
+  visibleMetadataRefreshIntervalMs(): number {
+    return this.account.isDependentAccount || this.account.sharedFolderRoot
+      ? kVisibleMetadataRefreshSharedMs
+      : kVisibleMetadataRefreshMs;
   }
 
   protected async finishNewMessages(newMsgs: Collection<OWAEMail>, recentOnly: boolean): Promise<Collection<OWAEMail>> {

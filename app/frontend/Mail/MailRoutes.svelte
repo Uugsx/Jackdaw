@@ -103,6 +103,7 @@
     watchSharedFolder(null);
     clearSharedWatchTimer();
     clearPrimaryWatchTimer();
+    clearMetadataWatchTimer();
     teardownOpenFolderWatch();
   });
 
@@ -174,6 +175,8 @@
   /** While a shared folder is open, refresh it on a short interval (delegate access, one folder). */
   let sharedWatchTimer: ReturnType<typeof setInterval> | null = null;
   let primaryWatchTimer: ReturnType<typeof setInterval> | null = null;
+  let metadataWatchTimer: ReturnType<typeof setInterval> | null = null;
+  let metadataWatchInitialTimer: ReturnType<typeof setTimeout> | null = null;
   function clearSharedWatchTimer(): void {
     if (sharedWatchTimer) {
       clearInterval(sharedWatchTimer);
@@ -186,9 +189,27 @@
       primaryWatchTimer = null;
     }
   }
+  function clearMetadataWatchTimer(): void {
+    if (metadataWatchTimer) {
+      clearInterval(metadataWatchTimer);
+      metadataWatchTimer = null;
+    }
+    if (metadataWatchInitialTimer) {
+      clearTimeout(metadataWatchInitialTimer);
+      metadataWatchInitialTimer = null;
+    }
+  }
+  async function refreshOpenFolderMetadata(folder: OWAFolder): Promise<void> {
+    if ($selectedFolder !== folder || !folder.account.isLoggedIn) {
+      return;
+    }
+    await folder.refreshVisibleMessageMetadata();
+    folder.notifyObservers();
+  }
   $: {
     clearSharedWatchTimer();
     clearPrimaryWatchTimer();
+    clearMetadataWatchTimer();
     let folder = $selectedFolder;
     if (folder instanceof OWAFolder && folder.account instanceof OWAAccount && folder.account.isLoggedIn) {
       let tick = () => {
@@ -203,11 +224,16 @@
           folder.notifyObservers();
         });
       };
+      let metadataTick = () => {
+        catchErrors(() => refreshOpenFolderMetadata(folder as OWAFolder));
+      };
       if (folder.account.isDependentAccount) {
         sharedWatchTimer = setInterval(tick, 3_000);
       } else if (folder.account.protocol == "owa") {
         primaryWatchTimer = setInterval(tick, 2_000);
       }
+      metadataWatchTimer = setInterval(metadataTick, folder.visibleMetadataRefreshIntervalMs());
+      metadataWatchInitialTimer = setTimeout(metadataTick, 2_000);
     }
   }
 

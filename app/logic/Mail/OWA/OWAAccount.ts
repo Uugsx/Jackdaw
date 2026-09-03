@@ -2089,7 +2089,36 @@ export class OWAAccount extends ExchangeMailAccount {
           if (targetFolder.account instanceof OWAAccount &&
               !targetFolder.account.shouldBackgroundSyncBodies(targetFolder)) {
             let hasCachedMessage = !!(itemID && targetFolder.getEmailByItemID(itemID));
-            if (!(eventType == "RowDeleted" && hasCachedMessage)) {
+            if (eventType == "RowDeleted" && hasCachedMessage) {
+              // Ниже — deleteMessageLocally.
+            } else if (hasCachedMessage && itemID && eventType != "RowAdded") {
+              // Категории/флаги на lazy-папке: GetItem, без полного body sync.
+              let email = targetFolder.getEmailByItemID(itemID) ??
+                this.getEmailByItemID(itemID);
+              if (email && itemData && typeof itemData === "object") {
+                if (owaCategoriesPresent(itemData)) {
+                  if (email.setFlags({
+                    Categories: itemData.Categories ?? itemData.categories,
+                  }, "full")) {
+                    email.saveWritablePropsLocally().catch(this.errorCallback);
+                    email.storage.saveMessageTags(email).catch(this.errorCallback);
+                  }
+                  targetFolder.invalidateMetadataBackfill(itemID);
+                }
+                let partial = { ...itemData };
+                delete partial.Categories;
+                delete partial.categories;
+                if (email.setFlags(partial, "partial")) {
+                  email.saveWritablePropsLocally().catch(this.errorCallback);
+                }
+              }
+              let ids = refreshes.get(targetFolder) ?? [];
+              if (!ids.includes(itemID)) {
+                ids.push(itemID);
+              }
+              refreshes.set(targetFolder, ids);
+              continue;
+            } else {
               targetFolder.account.lazyFolderBadgeOnly(targetFolder);
               continue;
             }

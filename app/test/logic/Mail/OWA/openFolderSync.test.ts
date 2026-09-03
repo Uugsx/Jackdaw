@@ -211,6 +211,18 @@ test("при открытии из кеша подтягивает катего�
         },
       };
     }
+    if (request.action == "GetItem") {
+      return {
+        Items: [{
+          ItemId: { Id: "recent-message" },
+          Categories: { String: ["Переписка (мы в копии)"] },
+          Subject: "Test",
+          DateTimeSent: "2026-09-03T07:00:00Z",
+          DateTimeReceived: "2026-09-03T07:00:00Z",
+          ItemClass: "IPM.Note",
+        }],
+      };
+    }
     throw new Error(`Неожиданный запрос OWA: ${request.action}`);
   };
 
