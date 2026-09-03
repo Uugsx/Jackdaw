@@ -29,8 +29,10 @@
     <svelte:fragment slot="header">
     </svelte:fragment>
     <svelte:fragment slot="row" let:item>
-      {#if item.kind == "message"}
-        <VerticalMessageListItem message={item.message} dayLabel={item.dayLabel} on:click />
+      {#if item.kind == "day"}
+        <MailListDaySeparator label={item.label} />
+      {:else if item.kind == "message"}
+        <VerticalMessageListItem message={item.message} on:click />
       {/if}
     </svelte:fragment>
   </FastList>
@@ -48,6 +50,7 @@
   import { mailListSort } from "../LeftPane/quickFilters";
   import FastList from "../../Shared/FastList.svelte";
   import VerticalMessageListItem from "./VerticalMessageListItem.svelte";
+  import MailListDaySeparator from "./MailListDaySeparator.svelte";
   import {
     MailListRows, findMailListRowForMessage, mailListRowSelectable,
     type MailListMessageRow, type MailListRow,
@@ -165,6 +168,13 @@
   .message-list :global(.row.odd:not(.selected):not(:hover) .message) {
     background-color: var(--leftbar-bg);
     color: var(--leftbar-fg);
+  }
+  .message-list :global(.row:has(.mail-list-day-separator)) {
+    cursor: default;
+  }
+  .message-list :global(.row:has(.mail-list-day-separator).odd .mail-list-day-separator),
+  .message-list :global(.row:has(.mail-list-day-separator):hover .mail-list-day-separator) {
+    background-color: transparent;
   }
   .empty-list {
     flex: 1;

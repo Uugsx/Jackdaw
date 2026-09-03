@@ -23,9 +23,6 @@
         <hbox class="action-date font-smallest">{actionDate}</hbox>
       {/if}
     </hbox>
-    {#if dayLabel}
-      <hbox class="day-caption">{dayLabel}</hbox>
-    {/if}
     <hbox class="contact font-small">{contactName}</hbox>
     <hbox flex />
     <hbox class="date font-smallest">{getDateTimeString($message.listDisplayDate())}</hbox>
@@ -109,7 +106,6 @@
   import { t } from "../../../l10n/l10n";
 
   export let message: EMail;
-  export let dayLabel: string | undefined = undefined;
 
   $: tags = message.tags;
   $: contactName = personDisplayName($message.contact);
@@ -197,20 +193,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--msg-list-fs, inherit);
-  }
-  .day-caption {
-    flex-shrink: 0;
-    margin-inline-end: 8px;
-    font-size: var(--msg-list-fs-sm, 11px);
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    opacity: 0.62;
-    font-variant-numeric: tabular-nums;
-    min-width: 5.75rem;
-    white-space: nowrap;
-  }
-  :global(.row.selected) .day-caption {
-    opacity: 0.8;
   }
   .subject,
   .date {

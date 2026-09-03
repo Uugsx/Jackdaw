@@ -220,8 +220,7 @@ export class OWAFolder extends ExchangeFolder {
         let email = this.getEmailByItemID(id);
         if (email) {
           if (email.setFlags(message, "list")) {
-            await email.saveWritablePropsLocally();
-            await email.storage.saveMessageTags(email);
+            await this.persistEmailFlags(email);
           }
         } else {
           newMessageIDs.push(id);
@@ -458,8 +457,7 @@ export class OWAFolder extends ExchangeFolder {
           let email = this.getEmailByItemID(id);
           if (email) {
             if (email.setFlags(message, "list")) {
-              await email.saveWritablePropsLocally();
-              await email.storage.saveMessageTags(email);
+              await this.persistEmailFlags(email);
             }
             allMsgs.add(email);
           } else {
@@ -640,8 +638,7 @@ export class OWAFolder extends ExchangeFolder {
           let existing = this.getEmailByItemID(id);
           if (existing) {
             if (existing.setFlags(item, "full")) {
-              await existing.saveWritablePropsLocally();
-              await existing.storage.saveMessageTags(existing);
+              await this.persistEmailFlags(existing);
             }
             this.markMetadataBackfillComplete(id, item, existing);
             existing.contact = computeEMailContact(existing);
@@ -688,15 +685,18 @@ export class OWAFolder extends ExchangeFolder {
       let id = sanitize.nonemptystring(item?.ItemId?.Id, null);
       let email = id ? (this.getEmailByItemID(id) ?? this.account.getEmailByItemID(id)) : undefined;
       if (email) {
-        let oldTagNames = email.tags.contents.map(tag => tag.name);
-        email.fromJSON(item);
-        await email.saveMetadataLocally();
-        await email.storage.saveMessageTags(email);
-        this.markMetadataBackfillComplete(id, item, email);
-        let newTagNames = email.tags.contents.map(tag => tag.name);
-        if (oldTagNames.length != newTagNames.length ||
-            oldTagNames.some((name, i) => name != newTagNames[i])) {
-          changed = true;
+        try {
+          let oldTagNames = email.tags.contents.map(tag => tag.name);
+          email.fromJSON(item);
+          await email.saveMetadataLocally();
+          this.markMetadataBackfillComplete(id, item, email);
+          let newTagNames = email.tags.contents.map(tag => tag.name);
+          if (oldTagNames.length != newTagNames.length ||
+              oldTagNames.some((name, i) => name != newTagNames[i])) {
+            changed = true;
+          }
+        } catch (ex) {
+          this.account.errorCallback(ex);
         }
       } else if (id) {
         try {
@@ -920,8 +920,7 @@ export class OWAFolder extends ExchangeFolder {
 
   protected async processSyncUpdate(email: OWAEMail, update: any) {
     if (email.setFlags(update, "list")) {
-      await email.saveWritablePropsLocally();
-      await email.storage.saveMessageTags(email);
+      await this.persistEmailFlags(email);
     }
   }
 
@@ -1141,6 +1140,18 @@ export class OWAFolder extends ExchangeFolder {
   }
 
   /**
+   * Сохраняет флаги/метки после setFlags. saveWritableProps и save() уже
+   * вызывают saveTags — отдельный saveMessageTags не нужен и падает без dbID.
+   */
+  protected async persistEmailFlags(email: OWAEMail): Promise<void> {
+    if (!email.dbID) {
+      await email.saveMetadataLocally();
+    } else {
+      await email.saveWritablePropsLocally();
+    }
+  }
+
+  /**
    * Письма без категорий остаются в очереди backfill: Exchange-правила часто
    * проставляют категории через несколько секунд после доставки.
    */
@@ -1203,8 +1214,7 @@ export class OWAFolder extends ExchangeFolder {
         let item = items.find(entry => sanitize.nonemptystring(entry?.ItemId?.Id ?? entry?.ItemId, "") == id);
         let email = this.getEmailByItemID(id);
         if (email && item && email.setFlags(item, "full")) {
-          await email.saveWritablePropsLocally();
-          await email.storage.saveMessageTags(email);
+          await this.persistEmailFlags(email);
           changed = true;
         }
         if (item && email) {

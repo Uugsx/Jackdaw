@@ -4,6 +4,7 @@ import { OWAAccount } from "../../../../logic/Mail/OWA/OWAAccount";
 import { OWAEMail } from "../../../../logic/Mail/OWA/OWAEMail";
 import { SpecialFolder } from "../../../../logic/Mail/Folder";
 import { DummyMailStorage } from "../../../../logic/Mail/Store/DummyMailStorage";
+import type { EMail } from "../../../../logic/Mail/EMail";
 import { ArrayColl } from "svelte-collections";
 import { expect, test } from "vitest";
 
@@ -271,4 +272,38 @@ test("refreshMessages подтягивает изменённые категор
   await folder.refreshMessages([message.itemID!]);
 
   expect(message.tags.contents.map(tag => tag.name)).toEqual(["Новая метка"]);
+});
+
+/** Как SQLMailStorage: saveTags требует dbID, а saveMessage мог ещё не выставить его. */
+class TagAssertStorage extends DummyMailStorage {
+  async saveMessageTags(email: EMail): Promise<void> {
+    if (!email.dbID) {
+      throw new Error("Need Email DB ID");
+    }
+  }
+}
+
+test("refreshVisibleMessageMetadata не падает на письме без dbID", async () => {
+  appGlobal.remoteApp = { OWA: {} };
+  let account = new OWAAccount();
+  account.storage = new TagAssertStorage();
+
+  let folder = account.newFolder();
+  let message = folder.newEMail();
+  message.itemID = "message-no-db";
+  folder.messages.add(message);
+
+  (account as any).callOWA = async () => ({
+    Items: [{
+      ItemId: { Id: message.itemID },
+      Categories: { String: ["Метка"] },
+      Subject: message.subject,
+      DateTimeSent: "2026-09-03T07:00:00Z",
+      DateTimeReceived: "2026-09-03T07:00:00Z",
+      ItemClass: "IPM.Note",
+    }],
+  });
+
+  await expect(folder.refreshVisibleMessageMetadata()).resolves.toBeUndefined();
+  expect(message.tags.contents.map(tag => tag.name)).toEqual(["Метка"]);
 });

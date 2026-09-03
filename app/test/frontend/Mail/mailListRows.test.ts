@@ -1,7 +1,7 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ArrayColl } from "svelte-collections";
 import type { EMail } from "../../../logic/Mail/EMail";
-import { MailListRows, type MailListMessageRow } from "../../../frontend/Mail/mailListRows";
+import { MailListRows, mailListSectionLabels, type MailListMessageRow } from "../../../frontend/Mail/mailListRows";
 
 // The day-header labels go through the l10n date formatter, which reads the
 // user's locale from localStorage.
@@ -30,15 +30,23 @@ function subjects(rows: ArrayColl<any>): string[] {
     .map(row => row.message.subject);
 }
 
-function dayLabels(rows: ArrayColl<any>): string[] {
-  return rows.contents
-    .filter((row): row is MailListMessageRow => row.kind == "message" && !!row.dayLabel)
-    .map(row => row.dayLabel as string);
+function sectionLabels(rows: ArrayColl<any>): string[] {
+  return mailListSectionLabels(rows.contents);
 }
 
 const jan1 = new Date(2026, 0, 1, 9, 0);
 const jan1Later = new Date(2026, 0, 1, 17, 0);
 const jan2 = new Date(2026, 0, 2, 9, 0);
+const jan3 = new Date(2026, 0, 3, 9, 0);
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(jan3);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("MailListRows", () => {
   test("picks up mail that arrives in the folder after the list was built", () => {
@@ -81,7 +89,7 @@ describe("MailListRows", () => {
     model.dispose();
   });
 
-  test("groups by day under date sorts, one header per day", () => {
+  test("groups by period under date sorts, one header per section", () => {
     let messages = new ArrayColl<EMail>([
       fakeMail("morning", jan1),
       fakeMail("evening", jan1Later),
@@ -91,7 +99,21 @@ describe("MailListRows", () => {
     model.setSource(messages, "date-asc");
 
     expect(subjects(model.rows)).toEqual(["morning", "evening", "next day"]);
-    expect(dayLabels(model.rows)).toHaveLength(2);
+    // Jan 1 (Thu) and Jan 2 (Fri) are separate weekday sections; today is Jan 3.
+    expect(sectionLabels(model.rows)).toHaveLength(2);
+    model.dispose();
+  });
+
+  test("omits header for today's mail", () => {
+    let messages = new ArrayColl<EMail>([
+      fakeMail("today early", jan3),
+      fakeMail("today later", new Date(2026, 0, 3, 18, 0)),
+      fakeMail("yesterday", jan2),
+    ]);
+    let model = new MailListRows();
+    model.setSource(messages, "date-desc");
+
+    expect(sectionLabels(model.rows)).toEqual(["Yesterday"]);
     model.dispose();
   });
 
@@ -106,11 +128,11 @@ describe("MailListRows", () => {
     // would appear above nearly every message.
     model.setSource(messages, "sender");
     expect(subjects(model.rows)).toEqual(["b", "a"]);
-    expect(dayLabels(model.rows)).toEqual([]);
+    expect(sectionLabels(model.rows)).toEqual([]);
 
     model.setSource(messages, "subject");
     expect(subjects(model.rows)).toEqual(["a", "b"]);
-    expect(dayLabels(model.rows)).toEqual([]);
+    expect(sectionLabels(model.rows)).toEqual([]);
     model.dispose();
   });
 

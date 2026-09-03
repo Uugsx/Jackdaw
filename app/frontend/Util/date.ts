@@ -30,23 +30,122 @@ export function getDateTimeString(date: Date): string {
   return date.toLocaleString(getDateTimeLocale(), dateDetails);
 }
 
-/** Day separator label in the message list (Today / Yesterday / date). */
+/** Calendar day key for comparisons. */
+export function calendarDayKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function startOfDay(date: Date): Date {
+  let day = new Date(date);
+  day.setHours(0, 0, 0, 0);
+  return day;
+}
+
+/**
+ * Group key for mail list section headers. Messages with the same key share
+ * one caption (e.g. all of last week under «На прошлой неделе»).
+ */
+export function getMailListGroupKey(date: Date): string {
+  if (!date) {
+    return "";
+  }
+  let day = startOfDay(date);
+  let today = getToday();
+
+  if (day.getTime() >= today.getTime()) {
+    return "today";
+  }
+
+  let yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (day.getTime() == yesterday.getTime()) {
+    return "yesterday";
+  }
+
+  let thisWeekStart = getWeekStart(today);
+  if (day.getTime() >= thisWeekStart.getTime()) {
+    return `weekday:${calendarDayKey(day)}`;
+  }
+
+  let lastWeekStart = new Date(thisWeekStart);
+  lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  let lastWeekEnd = new Date(thisWeekStart);
+  lastWeekEnd.setDate(lastWeekEnd.getDate() - 1);
+  if (day.getTime() >= lastWeekStart.getTime() && day.getTime() <= lastWeekEnd.getTime()) {
+    return "last-week";
+  }
+
+  let year = today.getFullYear();
+  let month = today.getMonth();
+  let prevMonthStart = startOfDay(new Date(year, month - 1, 1));
+  let prevMonthEnd = startOfDay(new Date(year, month, 0));
+  if (day.getFullYear() == year &&
+      day.getTime() >= prevMonthStart.getTime() &&
+      day.getTime() <= prevMonthEnd.getTime()) {
+    return "last-month";
+  }
+
+  if (day.getFullYear() == year) {
+    return `month:${year}-${day.getMonth()}`;
+  }
+
+  if (day.getFullYear() == year - 1) {
+    return "last-year";
+  }
+
+  return `year:${day.getFullYear()}`;
+}
+
+/** Section caption in the message list (no header for today). */
 export function getMailDayGroupLabel(date: Date): string {
   if (!date) {
     return "";
   }
+  let day = startOfDay(date);
   let today = getToday();
-  let day = new Date(date);
-  day.setHours(0, 0, 0, 0);
-  if (day.getTime() == today.getTime()) {
-    return gt`Today`;
+
+  if (day.getTime() >= today.getTime()) {
+    return "";
   }
+
   let yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   if (day.getTime() == yesterday.getTime()) {
     return gt`Yesterday`;
   }
-  return getDateString(date);
+
+  let thisWeekStart = getWeekStart(today);
+  if (day.getTime() >= thisWeekStart.getTime()) {
+    return date.toLocaleString(getDateTimeLocale(), { weekday: "long" });
+  }
+
+  let lastWeekStart = new Date(thisWeekStart);
+  lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  let lastWeekEnd = new Date(thisWeekStart);
+  lastWeekEnd.setDate(lastWeekEnd.getDate() - 1);
+  if (day.getTime() >= lastWeekStart.getTime() && day.getTime() <= lastWeekEnd.getTime()) {
+    return gt`Last week`;
+  }
+
+  let year = today.getFullYear();
+  let month = today.getMonth();
+  let prevMonthStart = startOfDay(new Date(year, month - 1, 1));
+  let prevMonthEnd = startOfDay(new Date(year, month, 0));
+  if (day.getFullYear() == year &&
+      day.getTime() >= prevMonthStart.getTime() &&
+      day.getTime() <= prevMonthEnd.getTime()) {
+    return gt`Last month`;
+  }
+
+  if (day.getFullYear() == year) {
+    return date.toLocaleString(getDateTimeLocale(), { month: "long" });
+  }
+
+  if (day.getFullYear() == year - 1) {
+    return gt`Last year`;
+  }
+
+  return String(day.getFullYear());
 }
 
 /**

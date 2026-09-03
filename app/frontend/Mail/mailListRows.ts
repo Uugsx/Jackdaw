@@ -1,6 +1,6 @@
 import type { EMail } from "../../logic/Mail/EMail";
 import type { MailListSort } from "./LeftPane/quickFilters";
-import { getMailDayGroupLabel } from "../Util/date";
+import { getMailDayGroupLabel, getMailListGroupKey } from "../Util/date";
 import { ArrayColl, CollectionObserver, type Collection } from "svelte-collections";
 
 export type MailListDayRow = {
@@ -13,18 +13,9 @@ export type MailListMessageRow = {
   kind: "message";
   id: string;
   message: EMail;
-  /** Set on the first message of each calendar day when grouping by date. */
-  dayLabel?: string;
 };
 
 export type MailListRow = MailListDayRow | MailListMessageRow;
-
-function dayKey(date: Date | null | undefined): string {
-  if (!date) {
-    return "";
-  }
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
 
 function messageRowID(message: EMail): string {
   return String(message.dbID ?? message.pID ?? message.id ?? message.subject);
@@ -42,21 +33,29 @@ function listDisplayDate(message: EMail): Date {
  * by-sender list would put a header above nearly every message. */
 export function buildMailListRows(messages: readonly EMail[], withDayHeaders = true): MailListRow[] {
   let rows: MailListRow[] = [];
-  let lastDay = "";
+  let lastGroup = "";
   for (let message of messages) {
-    let dayLabel: string | undefined;
     if (withDayHeaders) {
-      let key = dayKey(listDisplayDate(message));
-      if (key && key != lastDay) {
-        dayLabel = getMailDayGroupLabel(listDisplayDate(message));
-        lastDay = key;
+      let displayDate = listDisplayDate(message);
+      let groupKey = getMailListGroupKey(displayDate);
+      if (groupKey && groupKey != lastGroup) {
+        if (groupKey != "today") {
+          let label = getMailDayGroupLabel(displayDate);
+          if (label) {
+            rows.push({
+              kind: "day",
+              id: `day:${groupKey}`,
+              label,
+            });
+          }
+        }
+        lastGroup = groupKey;
       }
     }
     rows.push({
       kind: "message",
       id: `msg:${messageRowID(message)}`,
       message,
-      dayLabel,
     });
   }
   return rows;
@@ -135,6 +134,12 @@ export class MailListRows {
 
 export function mailListRowSelectable(row: MailListRow | null | undefined): boolean {
   return !!row && row.kind == "message";
+}
+
+export function mailListSectionLabels(rows: readonly MailListRow[]): string[] {
+  return rows
+    .filter((row): row is MailListDayRow => row.kind == "day")
+    .map(row => row.label);
 }
 
 export function findMailListRowForMessage(rows: Collection<MailListRow>, message: EMail | null | undefined): MailListMessageRow | null {

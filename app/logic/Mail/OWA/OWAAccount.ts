@@ -2100,8 +2100,11 @@ export class OWAAccount extends ExchangeMailAccount {
                   if (email.setFlags({
                     Categories: itemData.Categories ?? itemData.categories,
                   }, "full")) {
-                    email.saveWritablePropsLocally().catch(this.errorCallback);
-                    email.storage.saveMessageTags(email).catch(this.errorCallback);
+                    if (!email.dbID) {
+                      email.saveMetadataLocally().catch(this.errorCallback);
+                    } else {
+                      email.saveWritablePropsLocally().catch(this.errorCallback);
+                    }
                   }
                   targetFolder.invalidateMetadataBackfill(itemID);
                 }
@@ -2143,8 +2146,11 @@ export class OWAAccount extends ExchangeMailAccount {
                 if (email.setFlags({
                   Categories: itemData.Categories ?? itemData.categories,
                 }, "full")) {
-                  email.saveWritablePropsLocally().catch(this.errorCallback);
-                  email.storage.saveMessageTags(email).catch(this.errorCallback);
+                  if (!email.dbID) {
+                    email.saveMetadataLocally().catch(this.errorCallback);
+                  } else {
+                    email.saveWritablePropsLocally().catch(this.errorCallback);
+                  }
                 }
                 targetFolder.invalidateMetadataBackfill(itemID);
               }

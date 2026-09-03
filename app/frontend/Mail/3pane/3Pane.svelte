@@ -120,11 +120,6 @@
     min-width: 0 !important;
     font-variant-numeric: tabular-nums;
   }
-  @container mail-message-list (max-width: 420px) {
-    .message-list-pane :global(.day-caption) {
-      display: none;
-    }
-  }
   @container mail-message-list (max-width: 560px) {
     .message-list-pane :global(.attachment) {
       visibility: hidden;
