@@ -36,4 +36,6 @@ test("распознаёт горячие клавиши масштаба", () =
 test("добавляет CSS масштаба только при отличии от 100%", () => {
   expect(messageZoomHeadStyle(100)).toBe("");
   expect(messageZoomHeadStyle(120)).toContain("zoom: 1.2");
+  expect(messageZoomHeadStyle(120)).toContain("calc(100% / 1.2)");
+  expect(messageZoomHeadStyle(120)).toContain("overflow-wrap: anywhere");
 });

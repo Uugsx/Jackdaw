@@ -41,11 +41,62 @@ export function messageZoomKeyDirection(event: KeyboardEvent): 1 | -1 | 0 | null
   return event.key == "-" ? -1 : 1;
 }
 
+export function messageZoomFactor(zoom: number): number {
+  return zoom / 100;
+}
+
+/** CSS inside the email iframe: reflow text when using non-layout zoom. */
+export function messageZoomReflowCss(
+  factor: number,
+  mode: "css-zoom" | "text-wrap" = "css-zoom",
+): string {
+  if (factor == 1) {
+    return "";
+  }
+  let wrapRules = `
+body {
+  overflow-x: hidden !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+table {
+  max-width: 100%;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+`;
+  if (mode == "text-wrap") {
+    return wrapRules;
+  }
+  return `
+html {
+  zoom: ${factor};
+}
+body {
+  width: calc(100% / ${factor}) !important;
+  max-width: calc(100% / ${factor}) !important;
+  box-sizing: border-box;
+  overflow-x: hidden !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+table {
+  max-width: 100%;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+`;
+}
+
 export function messageZoomHeadStyle(zoom: number): string {
   if (zoom == kMessageZoomDefault) {
     return "";
   }
-  return `<style>html { zoom: ${zoom / 100}; }</style>`;
+  return `<style id="jackdaw-message-zoom">${messageZoomReflowCss(messageZoomFactor(zoom))}</style>`;
 }
 
 export function isMacPlatform(): boolean {
