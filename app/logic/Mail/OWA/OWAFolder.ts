@@ -41,6 +41,13 @@ const kActionFlagsBackfillLimitShared = 40;
 /** Пауза перед необязательным backfill, чтобы не блокировать FindItem/GetItem. */
 const kActionFlagsBackfillDelayMs = 2_500;
 const kActionFlagsBackfillDelaySharedMs = 4_000;
+/** Повтор backfill, пока у свежих писем нет подтверждённых категорий. */
+const kCategoryBackfillRetryMs = 3_000;
+const kCategoryBackfillRetrySharedMs = 5_000;
+/** Сколько верхних писем проверять при открытии папки из кеша. */
+const kRecentCategoryRefreshCount = 50;
+/** Не считать «без категорий» окончательным для свежих писем (Exchange rules). */
+const kRecentCategoryGraceMs = 15 * 60_000;
 
 export class OWAFolder extends ExchangeFolder {
   declare account: OWAAccount;
@@ -280,6 +287,10 @@ export class OWAFolder extends ExchangeFolder {
       || this.isBehindServer();
     if (!needsFetch) {
       this.completeInitialSync();
+      // Как кнопка «получить почту»: FindItem для свежих строк без категорий.
+      if (this.recentMessagesNeedCategoryRefresh()) {
+        return this.syncRecentArrivals();
+      }
       this.backfillMessageActionFlags();
       return this.messages;
     }
@@ -1031,12 +1042,7 @@ export class OWAFolder extends ExchangeFolder {
     let limit = this.account.isDependentAccount
       ? kActionFlagsBackfillLimitShared
       : kActionFlagsBackfillLimit;
-    let messages = this.messages.contents
-      .filter(message => {
-        let id = message.pID == null ? "" : String(message.pID);
-        return id && !this.actionFlagsCheckedIDs.has(id);
-      })
-      .slice(0, limit);
+    let messages = this.messagesNeedingMetadataBackfill(limit);
     if (!messages.length) {
       return;
     }
@@ -1045,7 +1051,40 @@ export class OWAFolder extends ExchangeFolder {
       await this.refreshMessageActionFlags(messages);
     } finally {
       this.actionFlagsBackfillRunning = false;
+      if (this.messagesNeedingMetadataBackfill(1).length) {
+        this.scheduleActionFlagsBackfill(this.categoryBackfillRetryDelayMs());
+      }
     }
+  }
+
+  protected messagesNeedingMetadataBackfill(limit: number): EMail[] {
+    return this.messages.contents
+      .filter(message => {
+        let id = message.pID == null ? "" : String(message.pID);
+        return id && !this.actionFlagsCheckedIDs.has(id);
+      })
+      .slice(0, limit);
+  }
+
+  protected recentMessagesNeedCategoryRefresh(): boolean {
+    let now = Date.now();
+    return this.messages.contents.slice(0, kRecentCategoryRefreshCount).some(message => {
+      if (message.tags.hasItems) {
+        return false;
+      }
+      let id = message.pID == null ? "" : String(message.pID);
+      if (!id || this.actionFlagsCheckedIDs.has(id)) {
+        return false;
+      }
+      let received = message.received?.getTime() ?? message.sent?.getTime() ?? 0;
+      return now - received <= kRecentCategoryGraceMs;
+    });
+  }
+
+  protected categoryBackfillRetryDelayMs(): number {
+    return this.account.isDependentAccount
+      ? kCategoryBackfillRetrySharedMs
+      : kCategoryBackfillRetryMs;
   }
 
   protected markActionFlagsChecked(id: string | null | undefined): void {
@@ -1061,13 +1100,26 @@ export class OWAFolder extends ExchangeFolder {
   protected markMetadataBackfillComplete(
     id: string | null | undefined,
     item: Record<string, any> | null | undefined,
-    _email: OWAEMail,
+    email: OWAEMail,
   ): void {
     if (!id) {
       return;
     }
-    if (owaCategoriesPresent(item) || owaCategoriesConfirmedAbsent(item)) {
+    if (owaCategoriesPresent(item)) {
       this.markActionFlagsChecked(id);
+      return;
+    }
+    if (owaCategoriesConfirmedAbsent(item)) {
+      // GetItem без Categories = «нет меток». Для свежих писем это часто временно:
+      // правила Exchange проставляют категории через несколько секунд.
+      if (email.tags.hasItems) {
+        this.markActionFlagsChecked(id);
+        return;
+      }
+      let received = email.received?.getTime() ?? email.sent?.getTime() ?? 0;
+      if (Date.now() - received > kRecentCategoryGraceMs) {
+        this.markActionFlagsChecked(id);
+      }
     }
   }
 

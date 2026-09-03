@@ -187,3 +187,95 @@ test("запускает синхронизацию входящих после 
   expect(folder.countTotal).toBe(1);
   expect(folder.countUnread).toBe(1);
 });
+
+test("при открытии из кеша подтягивает категории для свежих писем без меток", async () => {
+  appGlobal.remoteApp = { OWA: {} };
+  let account = new OWAAccount();
+  account.storage = new DummyMailStorage();
+  account.mainAccount = new OWAAccount();
+
+  let findItemCalls = 0;
+  (account as any).callOWA = async (request: any) => {
+    if (request.action == "GetFolder") {
+      return { Folders: [{ TotalCount: 1, UnreadCount: 0 }] };
+    }
+    if (request.action == "FindItem") {
+      findItemCalls++;
+      return {
+        RootFolder: {
+          Items: [{
+            ItemId: { Id: "recent-message" },
+            Categories: { String: ["Переписка (мы в копии)"] },
+          }],
+          IncludesLastItemInRange: true,
+        },
+      };
+    }
+    throw new Error(`Неожиданный запрос OWA: ${request.action}`);
+  };
+
+  let folder = account.newFolder();
+  folder.id = "inbox";
+  folder.name = "Входящие";
+  (folder as any).haveReadFolder = true;
+  folder.countTotal = 1;
+  folder.countUnread = 0;
+
+  let recent = folder.newEMail();
+  recent.itemID = "recent-message";
+  recent.received = new Date();
+  recent.sent = recent.received;
+  folder.messages.add(recent);
+  folder.downloadMessages = async (messages: any) => messages;
+
+  await folder.syncOnFolderOpen();
+
+  expect(findItemCalls).toBeGreaterThan(0);
+  expect(recent.tags.contents.map(tag => tag.name)).toEqual(["Переписка (мы в копии)"]);
+});
+
+test("при открытии из кеша подтягивает категории для свежих писем без меток", async () => {
+  appGlobal.remoteApp = { OWA: {} };
+  let account = new OWAAccount();
+  account.storage = new DummyMailStorage();
+  account.mainAccount = new OWAAccount();
+
+  let findItemCalls = 0;
+  (account as any).callOWA = async (request: any) => {
+    if (request.action == "GetFolder") {
+      return { Folders: [{ TotalCount: 1, UnreadCount: 0 }] };
+    }
+    if (request.action == "FindItem") {
+      findItemCalls++;
+      return {
+        RootFolder: {
+          Items: [{
+            ItemId: { Id: "recent-message" },
+            Categories: { String: ["Переписка (мы в копии)"] },
+          }],
+          IncludesLastItemInRange: true,
+        },
+      };
+    }
+    throw new Error(`Неожиданный запрос OWA: ${request.action}`);
+  };
+
+  let folder = account.newFolder();
+  folder.id = "inbox";
+  folder.name = "Входящие";
+  (folder as any).haveReadFolder = true;
+  folder.countTotal = 1;
+  folder.countUnread = 0;
+
+  let recent = folder.newEMail();
+  recent.itemID = "recent-message";
+  recent.received = new Date();
+  recent.sent = recent.received;
+  folder.messages.add(recent);
+  folder.downloadMessages = async (messages: any) => messages;
+
+  await folder.syncOnFolderOpen();
+
+  expect(findItemCalls).toBeGreaterThan(0);
+  expect(recent.tags.contents.map(tag => tag.name)).toEqual(["Переписка (мы в копии)"]);
+});
