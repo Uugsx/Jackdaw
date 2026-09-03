@@ -206,12 +206,15 @@ export function owaGetNewMsgHeadersRequest(newMessageIDs: string[]): OWARequest 
 }
 
 /**
- * Загружает метаданные ответа/пересылки для сообщений из локального кеша.
- * Некоторые общие папки OWA отклоняют эти дополнительные свойства в FindItem,
- * но принимают их в GetItem, который уже используется для новых писем.
+ * Загружает категории и метаданные ответа/пересылки для сообщений из кеша.
+ * FindItem на общих ящиках часто возвращает пустую оболочку Categories;
+ * GetItem здесь — авторитетный источник, как для новых писем.
  */
 export function owaGetMessageActionFlagsRequest(messageIDs: string[], includeActionTime = true): OWARequest {
   let additionalProperties: object[] = [{
+    __type: "PropertyUri:#Exchange",
+    FieldURI: "item:Categories",
+  }, {
     __type: "ExtendedPropertyUri:#Exchange",
     PropertyTag: IconIndexPidTag,
     PropertyType: "Integer",

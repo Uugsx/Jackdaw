@@ -112,8 +112,9 @@ export class OWAEMail extends ExchangeEMail {
     let tagNames: string[];
     if ("Categories" in json) {
       tagNames = owaCategoryNames(json.Categories);
-      // FindItem sometimes returns an empty Categories shell — do not wipe local tags.
-      if (source == "partial" && !tagNames.length && oldTagNames.length) {
+      // FindItem / SyncFolderItems sometimes return an empty Categories shell.
+      // Treat that as unreliable and keep local tags until GetItem confirms.
+      if (!tagNames.length && oldTagNames.length) {
         tagNames = oldTagNames;
       }
     } else if (source == "full") {
@@ -414,6 +415,16 @@ function propertyValue(value: any): any {
     return value.Value;
   }
   return value;
+}
+
+/** Categories were explicitly returned and parsed to at least one name. */
+export function owaCategoriesPresent(json: Record<string, any> | null | undefined): boolean {
+  return owaCategoryNames(json?.Categories ?? json?.categories).length > 0;
+}
+
+/** GetItem omitted Categories — on a full fetch that means none on the server. */
+export function owaCategoriesConfirmedAbsent(json: Record<string, any> | null | undefined): boolean {
+  return !!json && !("Categories" in json) && !("categories" in json);
 }
 
 function owaCategoryNames(value: any): string[] {

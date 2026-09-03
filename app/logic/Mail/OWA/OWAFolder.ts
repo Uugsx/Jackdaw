@@ -3,7 +3,7 @@ import { MessageFlagsPidTag } from "../EWS/ExchangeEMail";
 import { SpecialFolder } from "../Folder";
 import { computeEMailContact, type EMail } from "../EMail";
 import { getSharedPersons, ExchangePermission } from "../EWS/ExchangePermission";
-import { OWAEMail } from "./OWAEMail";
+import { OWAEMail, owaCategoriesConfirmedAbsent, owaCategoriesPresent } from "./OWAEMail";
 import { OWAAccount, kMaxFetchCount } from "./OWAAccount";
 import { OWAError, isUnsupportedOptionError } from "./OWAError";
 import { OWACreateItemRequest } from "./Request/OWACreateItemRequest";
@@ -600,13 +600,13 @@ export class OWAFolder extends ExchangeFolder {
           if (!id || this.deletions.has(id)) {
             continue;
           }
-          this.markActionFlagsChecked(id);
           let existing = this.getEmailByItemID(id);
           if (existing) {
             if (existing.setFlags(item, "full")) {
               await existing.saveWritablePropsLocally();
               await existing.storage.saveMessageTags(existing);
             }
+            this.markMetadataBackfillComplete(id, item, existing);
             existing.contact = computeEMailContact(existing);
             continue;
           }
@@ -618,6 +618,7 @@ export class OWAFolder extends ExchangeFolder {
           if (raced && raced !== email) {
             continue;
           }
+          this.markMetadataBackfillComplete(id, item, email);
           newMsgs.add(email);
         } catch (ex) {
           this.account.errorCallback(ex);
@@ -644,11 +645,11 @@ export class OWAFolder extends ExchangeFolder {
     let missingMessages: OWAEMail[] = [];
     for (let item of items ?? []) {
       let id = sanitize.nonemptystring(item?.ItemId?.Id, null);
-      this.markActionFlagsChecked(id);
       let email = id ? (this.getEmailByItemID(id) ?? this.account.getEmailByItemID(id)) : undefined;
       if (email) {
         email.fromJSON(item);
         await email.saveMetadataLocally();
+        this.markMetadataBackfillComplete(id, item, email);
       } else if (id) {
         try {
           let newEmail = this.newEMail();
@@ -1053,6 +1054,23 @@ export class OWAFolder extends ExchangeFolder {
     }
   }
 
+  /**
+   * Письма без категорий остаются в очереди backfill: Exchange-правила часто
+   * проставляют категории через несколько секунд после доставки.
+   */
+  protected markMetadataBackfillComplete(
+    id: string | null | undefined,
+    item: Record<string, any> | null | undefined,
+    _email: OWAEMail,
+  ): void {
+    if (!id) {
+      return;
+    }
+    if (owaCategoriesPresent(item) || owaCategoriesConfirmedAbsent(item)) {
+      this.markActionFlagsChecked(id);
+    }
+  }
+
   protected actionFlagItemsFromResponse(result: any): any[] {
     if (result?.ResponseMessages?.Items) {
       return this.account.itemsFromResponses(result.ResponseMessages.Items);
@@ -1083,14 +1101,17 @@ export class OWAFolder extends ExchangeFolder {
         }
       }
       for (let id of batch) {
-        this.markActionFlagsChecked(id);
-      }
-      for (let item of items) {
-        let id = sanitize.nonemptystring(item?.ItemId?.Id ?? item?.ItemId, "");
-        let email = id ? this.getEmailByItemID(id) : undefined;
-        if (email && email.setFlags(item, "partial")) {
+        let item = items.find(entry => sanitize.nonemptystring(entry?.ItemId?.Id ?? entry?.ItemId, "") == id);
+        let email = this.getEmailByItemID(id);
+        if (email && item && email.setFlags(item, "full")) {
           await email.saveWritablePropsLocally();
+          await email.storage.saveMessageTags(email);
           changed = true;
+        }
+        if (item && email) {
+          this.markMetadataBackfillComplete(id, item, email);
+        } else {
+          this.markActionFlagsChecked(id);
         }
       }
     }
