@@ -789,6 +789,8 @@ function getMacAppBundlePath(): string {
   return path.join("/Applications", "Jackdaw.app");
 }
 
+const kUpdateShutdownTimeoutMs = 3_000;
+
 /** Quit first, then a detached shell script mounts the DMG and replaces the .app bundle. */
 async function scheduleMacDmgInstallAndQuit(dmgPath: string): Promise<void> {
   let destApp = getMacAppBundlePath();
@@ -821,12 +823,15 @@ ditto "$SRC" "$DEST"
 open "$DEST"
 `;
   await fsPromises.writeFile(scriptPath, script, { mode: 0o755 });
+  await writePendingUpdateMarker(updateState.version);
+  quittingForUpdate = true;
   let child = spawn("/bin/bash", [scriptPath], { detached: true, stdio: "ignore" });
   child.unref();
 
-  await writePendingUpdateMarker(updateState.version);
-  quittingForUpdate = true;
-  await shutdownBackend();
+  await Promise.race([
+    shutdownBackend(),
+    new Promise<void>(resolve => setTimeout(resolve, kUpdateShutdownTimeoutMs)),
+  ]);
   app.exit(0);
 }
 
@@ -1030,17 +1035,14 @@ export async function prepareUpdaterAuth(): Promise<boolean> {
 
 export async function installUpdate() {
   if (process.platform === "darwin") {
+    if (!macDmgPendingPath && updateState.version) {
+      await downloadMacDmgUpdate(updateState.version);
+    }
     if (macDmgPendingPath) {
       await scheduleMacDmgInstallAndQuit(macDmgPendingPath);
       return;
     }
-    let version = updateState.version;
-    if (version) {
-      updateState.update = null;
-      await downloadMacDmgUpdate(version);
-      return;
-    }
-    throw new Error("No update version to install");
+    throw new Error("No update downloaded");
   }
   if (!updateState.readyToInstall && !await updateState.updateDownloaded()) {
     throw new Error("No update downloaded");

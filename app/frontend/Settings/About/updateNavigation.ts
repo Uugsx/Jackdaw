@@ -2,7 +2,7 @@ import { openSettingsCategoryByID } from "../Window/CategoriesUtils";
 
 let pendingAutoUpdateFlow = false;
 
-/** Open Settings → About and run the update flow (check / download / install). */
+/** Open Settings → About so the user can review and install the update manually. */
 export function openAboutForUpdate(): void {
   pendingAutoUpdateFlow = true;
   openSettingsCategoryByID("about");

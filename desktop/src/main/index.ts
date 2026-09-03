@@ -154,7 +154,7 @@ app.on("before-quit", event => {
 async function handleBeforeQuit() {
   try {
     await releaseOWASessionsOnQuit();
-    if (await updateState.updateDownloaded()) {
+    if (process.platform !== "darwin" && await updateState.updateDownloaded()) {
       await installUpdate();
       return;
     }

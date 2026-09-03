@@ -24,12 +24,8 @@
       <p class="hint">{$t`The update will also install automatically when you quit the app.`}</p>
     {/if}
     <hbox class="actions">
-      {#if !isMac}
-        <Button label={installingUpdate ? $t`Installing update…` : $t`Install update`} onClick={installUpdate}
-          disabled={installingUpdate} />
-      {:else if installingUpdate}
-        <div class="status">{$t`Installing update…`}</div>
-      {/if}
+      <Button label={installingUpdate ? $t`Installing update…` : $t`Install update`} onClick={installUpdate}
+        disabled={installingUpdate} />
       {#if isMac}
         <Button label={$t`Download .dmg`} onClick={openManualDownload} errorCallback={showError} />
       {/if}
@@ -100,16 +96,8 @@
       syncFromBackend(status);
     }
     await refreshStatus();
-    let fromNotification = consumeAboutUpdateFlow();
-    if (fromNotification) {
-      if (phase === "idle" || phase === "uptodate" || phase === "unsupported") {
-        await checkForUpdate(true);
-      } else if (phase === "downloaded" || readyToInstall) {
-        await installUpdate();
-      }
-    } else if (phase === "idle") {
-      checkForUpdate(false);
-    } else if (phase === "checking") {
+    consumeAboutUpdateFlow();
+    if (phase === "checking") {
       startCheckingWatchdog();
     } else if (phase === "available" || phase === "downloading") {
       startDownloadWatchdog();
@@ -198,11 +186,8 @@
   }) {
     if (obj.phase != null) {
       phase = obj.phase;
-      if (phase === "downloading" || phase === "available") {
+      if (phase === "downloading" || phase === "available" || phase === "downloaded") {
         installingUpdate = false;
-      }
-      if (isMac && phase === "downloaded") {
-        installingUpdate = true;
       }
     }
     if (obj.progress != null) {
