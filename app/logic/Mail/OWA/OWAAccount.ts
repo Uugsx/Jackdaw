@@ -6,6 +6,7 @@ import type { EMail } from "../EMail";
 import { SpecialFolder, type Folder, type MailShareCombinedPermissions, type MailShareIndividualPermissions } from "../Folder";
 import { OWAFolder } from "./OWAFolder";
 import type { OWAEMail } from "./OWAEMail";
+import { owaCategoriesPresent } from "./OWAEMail";
 import { OWAError } from "./OWAError";
 import type { OWANotifications } from "./Notification/OWANotifications";
 import { OWAExchangeNotifications } from "./Notification/OWAExchangeNotifications";
@@ -2108,8 +2109,17 @@ export class OWAAccount extends ExchangeMailAccount {
           } else if (itemID) {
             let email = targetFolder.getEmailByItemID(itemID) ?? this.getEmailByItemID(itemID);
             if (email && itemData && typeof itemData === "object") {
-              // Row snippets often omit or stale Categories — apply non-tag flags only;
-              // refreshMessages (GetItem) is authoritative for categories.
+              // Row snippets may carry fresh Categories — apply them immediately.
+              if (owaCategoriesPresent(itemData)) {
+                if (email.setFlags({
+                  Categories: itemData.Categories ?? itemData.categories,
+                }, "full")) {
+                  email.saveWritablePropsLocally().catch(this.errorCallback);
+                  email.storage.saveMessageTags(email).catch(this.errorCallback);
+                }
+                targetFolder.invalidateMetadataBackfill(itemID);
+              }
+              // Other fields may be stale; GetItem refresh below is authoritative.
               let partial = { ...itemData };
               delete partial.Categories;
               delete partial.categories;

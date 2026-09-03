@@ -97,13 +97,14 @@ export class OWAEMail extends ExchangeEMail {
 
   /**
    * @param source
-   *   `full` — the request asked for `item:Categories`, so FindItem, GetItem
-   *     and SyncFolderItems all qualify. An omitted `Categories` then means the
-   *     message has none, which is how a removal in Outlook reaches us.
-   *   `partial` — Row notification snippet, which carries no `Categories` at
-   *     all. Treating that as "none" would wipe the local tags.
+   *   `full` — GetItem / authoritative fetch with `item:Categories`. An omitted
+   *     `Categories` means none; an empty shell means cleared on the server.
+   *   `list` — FindItem / SyncFolderItems. An empty Categories shell is treated
+   *     as unreliable — keep local tags until GetItem confirms.
+   *   `partial` — Row notification snippet without categories, or action-flag
+   *     fields only. Omitted categories must not wipe local tags.
    */
-  setFlags(json: Record<string, any>, source: "full" | "partial" = "partial"): boolean {
+  setFlags(json: Record<string, any>, source: "full" | "list" | "partial" = "partial"): boolean {
     let datesChanged = this.applyHeaderDates(json);
     let oldTagNames = this.tags.contents.map(tag => tag.name);
     let isRead = "IsRead" in json ? sanitize.boolean(propertyValue(json.IsRead), this.isRead) : this.isRead;
@@ -113,8 +114,7 @@ export class OWAEMail extends ExchangeEMail {
     if ("Categories" in json) {
       tagNames = owaCategoryNames(json.Categories);
       // FindItem / SyncFolderItems sometimes return an empty Categories shell.
-      // Treat that as unreliable and keep local tags until GetItem confirms.
-      if (!tagNames.length && oldTagNames.length) {
+      if (source != "full" && !tagNames.length && oldTagNames.length) {
         tagNames = oldTagNames;
       }
     } else if (source == "full") {

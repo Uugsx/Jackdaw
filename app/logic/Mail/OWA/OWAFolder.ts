@@ -216,7 +216,7 @@ export class OWAFolder extends ExchangeFolder {
         }
         let email = this.getEmailByItemID(id);
         if (email) {
-          if (email.setFlags(message, "full")) {
+          if (email.setFlags(message, "list")) {
             await email.saveWritablePropsLocally();
             await email.storage.saveMessageTags(email);
           }
@@ -431,7 +431,7 @@ export class OWAFolder extends ExchangeFolder {
           }
           let email = this.getEmailByItemID(id);
           if (email) {
-            if (email.setFlags(message, "full")) {
+            if (email.setFlags(message, "list")) {
               await email.saveWritablePropsLocally();
               await email.storage.saveMessageTags(email);
             }
@@ -538,7 +538,7 @@ export class OWAFolder extends ExchangeFolder {
           if (!email) {
             continue;
           }
-          if (email.setFlags(message, "full")) {
+          if (email.setFlags(message, "list")) {
             await email.saveWritablePropsLocally();
           }
         }
@@ -651,16 +651,27 @@ export class OWAFolder extends ExchangeFolder {
     if (!ids.length) {
       return;
     }
+    for (let id of ids) {
+      this.invalidateMetadataBackfill(id);
+    }
     let results = await this.account.callOWA(owaGetNewMsgHeadersRequest(ids));
     let items = results.ResponseMessages ? this.account.itemsFromResponses(results.ResponseMessages.Items) : results.Items;
     let missingMessages: OWAEMail[] = [];
+    let changed = false;
     for (let item of items ?? []) {
       let id = sanitize.nonemptystring(item?.ItemId?.Id, null);
       let email = id ? (this.getEmailByItemID(id) ?? this.account.getEmailByItemID(id)) : undefined;
       if (email) {
+        let oldTagNames = email.tags.contents.map(tag => tag.name);
         email.fromJSON(item);
         await email.saveMetadataLocally();
+        await email.storage.saveMessageTags(email);
         this.markMetadataBackfillComplete(id, item, email);
+        let newTagNames = email.tags.contents.map(tag => tag.name);
+        if (oldTagNames.length != newTagNames.length ||
+            oldTagNames.some((name, i) => name != newTagNames[i])) {
+          changed = true;
+        }
       } else if (id) {
         try {
           let newEmail = this.newEMail();
@@ -676,6 +687,10 @@ export class OWAFolder extends ExchangeFolder {
       this.addMessagesIfAbsent(missingMessages);
       this.downloadMessages(new ArrayColl(missingMessages))
         .catch(this.account.errorCallback);
+      changed = true;
+    }
+    if (changed) {
+      this.notifyObservers();
     }
   }
 
@@ -878,7 +893,7 @@ export class OWAFolder extends ExchangeFolder {
   }
 
   protected async processSyncUpdate(email: OWAEMail, update: any) {
-    if (email.setFlags(update, "full")) {
+    if (email.setFlags(update, "list")) {
       await email.saveWritablePropsLocally();
       await email.storage.saveMessageTags(email);
     }
@@ -1090,6 +1105,12 @@ export class OWAFolder extends ExchangeFolder {
   protected markActionFlagsChecked(id: string | null | undefined): void {
     if (id) {
       this.actionFlagsCheckedIDs.add(id);
+    }
+  }
+
+  invalidateMetadataBackfill(id: string | null | undefined): void {
+    if (id) {
+      this.actionFlagsCheckedIDs.delete(id);
     }
   }
 

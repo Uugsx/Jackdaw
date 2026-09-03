@@ -234,48 +234,29 @@ test("при открытии из кеша подтягивает катего�
   expect(recent.tags.contents.map(tag => tag.name)).toEqual(["Переписка (мы в копии)"]);
 });
 
-test("при открытии из кеша подтягивает категории для свежих писем без меток", async () => {
+test("refreshMessages подтягивает изменённые категории с сервера", async () => {
   appGlobal.remoteApp = { OWA: {} };
   let account = new OWAAccount();
   account.storage = new DummyMailStorage();
-  account.mainAccount = new OWAAccount();
-
-  let findItemCalls = 0;
-  (account as any).callOWA = async (request: any) => {
-    if (request.action == "GetFolder") {
-      return { Folders: [{ TotalCount: 1, UnreadCount: 0 }] };
-    }
-    if (request.action == "FindItem") {
-      findItemCalls++;
-      return {
-        RootFolder: {
-          Items: [{
-            ItemId: { Id: "recent-message" },
-            Categories: { String: ["Переписка (мы в копии)"] },
-          }],
-          IncludesLastItemInRange: true,
-        },
-      };
-    }
-    throw new Error(`Неожиданный запрос OWA: ${request.action}`);
-  };
 
   let folder = account.newFolder();
-  folder.id = "inbox";
-  folder.name = "Входящие";
-  (folder as any).haveReadFolder = true;
-  folder.countTotal = 1;
-  folder.countUnread = 0;
+  let message = folder.newEMail();
+  message.itemID = "message-1";
+  message.tags.replaceAll([{ name: "Старая метка", color: "#00aa00" } as any]);
+  folder.messages.add(message);
 
-  let recent = folder.newEMail();
-  recent.itemID = "recent-message";
-  recent.received = new Date();
-  recent.sent = recent.received;
-  folder.messages.add(recent);
-  folder.downloadMessages = async (messages: any) => messages;
+  (account as any).callOWA = async () => ({
+    Items: [{
+      ItemId: { Id: message.itemID },
+      Categories: { String: ["Новая метка"] },
+      Subject: message.subject,
+      DateTimeSent: "2026-09-03T07:00:00Z",
+      DateTimeReceived: "2026-09-03T07:00:00Z",
+      ItemClass: "IPM.Note",
+    }],
+  });
 
-  await folder.syncOnFolderOpen();
+  await folder.refreshMessages([message.itemID!]);
 
-  expect(findItemCalls).toBeGreaterThan(0);
-  expect(recent.tags.contents.map(tag => tag.name)).toEqual(["Переписка (мы в копии)"]);
+  expect(message.tags.contents.map(tag => tag.name)).toEqual(["Новая метка"]);
 });

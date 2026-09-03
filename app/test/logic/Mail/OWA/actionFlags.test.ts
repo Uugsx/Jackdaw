@@ -129,9 +129,18 @@ test("FindItem с пустой оболочкой Categories не затирае
   let { message } = createMessage();
   message.tags.replaceAll([{ name: "Переписка (мы в копии)", color: "#00aa00" } as any]);
 
-  message.setFlags({ Categories: { String: [] } }, "full");
+  message.setFlags({ Categories: { String: [] } }, "list");
 
   expect(message.tags.contents.map(tag => tag.name)).toEqual(["Переписка (мы в копии)"]);
+});
+
+test("GetItem с пустой оболочкой Categories очищает метки", () => {
+  let { message } = createMessage();
+  message.tags.replaceAll([{ name: "Старая метка", color: "#00aa00" } as any]);
+
+  message.setFlags({ Categories: { String: [] } }, "full");
+
+  expect(message.tags.contents).toEqual([]);
 });
 
 test("GetItem без Categories очищает метки при полном ответе", () => {
