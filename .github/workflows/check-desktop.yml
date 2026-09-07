@@ -4,11 +4,11 @@ on:
   workflow_call:
   pull_request:
     paths:
-      - 'app/**'
-      - 'lib/**'
-      - 'desktop/**'
-      - '.github/workflows/check-desktop.yml'
-      - '.github/workflows/publish-desktop-jackdaw.yml'
+      - "app/**"
+      - "lib/**"
+      - "desktop/**"
+      - ".github/workflows/check-desktop.yml"
+      - ".github/workflows/publish-desktop-jackdaw.yml"
 
 permissions:
   contents: read
@@ -24,7 +24,9 @@ jobs:
           node-version: 24.x
           package-manager-cache: false
       # Lock-файлы не коммитятся в этом репозитории, поэтому используем npm install.
-      - run: npm install --legacy-peer-deps
+      # У svelte-navigator устаревший postinstall, который предполагает наличие
+      # не публикуемых вместе с пакетом devDependencies (is-ci и husky).
+      - run: npm install --legacy-peer-deps --ignore-scripts
         working-directory: app
       - run: npm install
         working-directory: lib
