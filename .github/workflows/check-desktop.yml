@@ -22,20 +22,15 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24.x
-          cache: npm
-          cache-dependency-path: |
-            app/package-lock.json
-            lib/package-lock.json
-            desktop/package-lock.json
-            desktop/backend/package-lock.json
-      # Lock-файлы используют совместную установку старых плагинов и текущих Svelte/Vite.
-      - run: npm ci --legacy-peer-deps
+          package-manager-cache: false
+      # Lock-файлы не коммитятся в этом репозитории, поэтому используем npm install.
+      - run: npm install --legacy-peer-deps
         working-directory: app
-      - run: npm ci
+      - run: npm install
         working-directory: lib
-      - run: npm ci --legacy-peer-deps
+      - run: npm install --legacy-peer-deps
         working-directory: desktop
-      - run: npm ci
+      - run: npm install
         working-directory: desktop/backend
       - name: Тестовая конфигурация OAuth
         run: cp OAuth2Secrets.local.example.ts OAuth2Secrets.user.ts
