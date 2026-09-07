@@ -24,6 +24,7 @@ on:
       - 'app/**'
       - 'lib/**'
       - 'desktop/**'
+      - '.github/workflows/check-desktop.yml'
       - '.github/workflows/publish-desktop-jackdaw.yml'
 
 concurrency:
