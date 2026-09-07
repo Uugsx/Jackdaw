@@ -35,12 +35,10 @@
   import { t } from "../../../l10n/l10n";
 
   let themeSetting = getLocalStorage("appearance.theme", "system");
-  let colorsSetting = getLocalStorage("appearance.colors", {});
   $: theme = $themeSetting.value;
 
   function switchTo(newTheme: "system" | "light" | "dark") {
     themeSetting.value = newTheme;
-    colorsSetting.value = {};
   }
 </script>
 

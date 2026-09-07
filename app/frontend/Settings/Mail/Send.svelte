@@ -107,6 +107,21 @@
 
 <HeaderGroupBox>
   <hbox slot="header">
+    {$t`Composition defaults`}
+  </hbox>
+  <hbox class="default-font-setting">
+    <label for="default-font-family">{$t`Default font for new messages and replies`}</label>
+    <select id="default-font-family" bind:value={defaultFontFamilySetting.value}>
+      {#each composeFontFamilies as font}
+        <option value={font.value}>{font.label()}</option>
+      {/each}
+    </select>
+  </hbox>
+  <span class="hint">{$t`Used for the text you write in new messages and replies.`}</span>
+</HeaderGroupBox>
+
+<HeaderGroupBox>
+  <hbox slot="header">
     {$t`Composition`}
   </hbox>
   <vbox class="composition-settings">
@@ -138,12 +153,14 @@
   import { t } from "../../../l10n/l10n";
   import Paper from "../../Shared/Paper.svelte";
   import { webMail } from "../../../logic/build";
+  import { composeDefaultFontFamily, composeFontFamilies } from "../../Shared/Editor/composeEditorExtensions";
 
   let formatSetting = getLocalStorage("mail.send.format", "html");
   let quoteSetting = getLocalStorage("mail.send.quote", "below");
   let quoteAttributionSetting = getLocalStorage("mail.send.quote.attribution", false);
   let spellcheckEnabledSetting = getLocalStorage("mail.send.spellcheck.enabled", false);
   let presentationSetting = getLocalStorage("mail.compose.presentation", "fullscreen");
+  let defaultFontFamilySetting = getLocalStorage("mail.compose.defaultFontFamily", composeDefaultFontFamily);
 </script>
 
 <style>
@@ -168,6 +185,25 @@
   }
   .format img {
     margin: 16px 32px 24px 28px;
+  }
+  .default-font-setting {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-block-start: 4px;
+  }
+  .default-font-setting label {
+    margin-inline-start: 0;
+  }
+  .default-font-setting select {
+    min-width: 12em;
+  }
+  .hint {
+    display: block;
+    margin-block-start: 8px;
+    color: var(--input-placeholder);
+    font-size: 13px;
+    line-height: 1.4;
   }
   label.spellcheck {
     text-decoration: underline;

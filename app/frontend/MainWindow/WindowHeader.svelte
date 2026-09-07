@@ -86,7 +86,7 @@
     min-height: 48px;
     box-sizing: border-box;
     app-region: drag;
-    background: var(--glass-bg);
+    background-color: var(--windowheader-bg);
     backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
     border-block-end: 1px solid var(--glass-border-subtle);

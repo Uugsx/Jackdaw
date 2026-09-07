@@ -33,7 +33,8 @@
           <span class="label">{$t`To`}</span>
         </hbox>
         <hbox flex class="to-row">
-          <MailAutocomplete bind:this={toAutocomplete} addresses={mail.to} placeholder={$t`Add recipient`} tabindex={1} autofocus={mail.to.isEmpty && !floating}>
+          <MailAutocomplete bind:this={toAutocomplete} addresses={mail.to} collapseAfter={3}
+            placeholder={$t`Add recipient`} tabindex={1} autofocus={mail.to.isEmpty && !floating}>
             <svelte:fragment slot="person-popup-buttons" let:person>
               <Button plain label={$t`CC`} onClick={() => onMoveToCC(person)} />
               <Button plain label={$t`BCC`} onClick={() => onMoveToBCC(person)} />
@@ -62,7 +63,8 @@
         </hbox>
         {#if showCC}
           <hbox class="label-cell"><span class="label">{$t`Cc`}</span></hbox>
-          <MailAutocomplete bind:this={ccAutocomplete} addresses={mail.cc} placeholder={$t`Add CC recipient`} tabindex={1}>
+          <MailAutocomplete bind:this={ccAutocomplete} addresses={mail.cc} collapseAfter={3}
+            placeholder={$t`Add CC recipient`} tabindex={1}>
             <svelte:fragment slot="person-popup-buttons" let:person={person}>
               <Button plain label={$t`To`} onClick={() => onMoveToTo(person)} />
               <Button plain label={$t`BCC`} onClick={() => onMoveToBCC(person)} />
@@ -71,7 +73,8 @@
         {/if}
         {#if showBCC}
           <hbox class="label-cell"><span class="label">{$t`Bcc`}</span></hbox>
-          <MailAutocomplete bind:this={bccAutocomplete} addresses={mail.bcc} placeholder={$t`Add BCC recipient`} tabindex={1}>
+          <MailAutocomplete bind:this={bccAutocomplete} addresses={mail.bcc} collapseAfter={3}
+            placeholder={$t`Add BCC recipient`} tabindex={1}>
             <svelte:fragment slot="person-popup-buttons" let:person>
               <Button plain label={$t`To`} onClick={() => onMoveToTo(person)} />
               <Button plain label={$t`CC`} onClick={() => onMoveToCC(person)} />
@@ -247,6 +250,7 @@
   let bccAutocomplete: MailAutocomplete;
   let spellcheckEnabled = getLocalStorage("mail.send.spellcheck.enabled", false);
   let quoteAttributionSetting = getLocalStorage("mail.send.quote.attribution", false);
+  let defaultFontFamilySetting = getLocalStorage("mail.compose.defaultFontFamily", composeDefaultFontFamily);
   $: showQuoteAttribution = $quoteAttributionSetting.value;
   $: isReplyQuote = !!(mail.composeSource && mail.inReplyTo);
   let editorZoom = 100;
@@ -255,6 +259,7 @@
   // HACK to reload the HTMLEditor to force it to load the new text
   // See <https://github.com/ueberdosis/tiptap/issues/4918>
   let lastMail = null;
+  let defaultComposeFormattingApplied = false;
   $: differentMailLoaded(mail);
   function differentMailLoaded(_dummy: any) {
     if (closing) {
@@ -268,6 +273,7 @@
     composeQuoteHtml = "";
     editableHtml = "";
     quoteBodyHtml = "";
+    defaultComposeFormattingApplied = false;
 
     fromIdentity = mail.identity
       ?? mail.folder?.account.identities.first
@@ -411,18 +417,35 @@
   }
 
   function applyDefaultComposeFormatting() {
-    if (!editor || mail.hasHTML || mail.isDraft) {
+    if (!editor || mail.isDraft || defaultComposeFormattingApplied) {
       return;
     }
-    let html = editor.getHTML();
-    if (html.replace(/<[^>]+>/g, "").trim()) {
+    if (editorHasNewComposeText(editor.getHTML(), editableHtml)) {
       return;
     }
-    editor.chain().focus()
-      .selectAll()
-      .setFontFamily(composeDefaultFontFamily)
-      .setFontSize(fontSizeToCSS(composeDefaultFontSize))
-      .run();
+
+    let bodyEnd = 1;
+    let hasEditableBlock = false;
+    editor.state.doc.forEach((node, position) => {
+      if (node.type.name === "footer") {
+        return;
+      }
+      hasEditableBlock = true;
+      bodyEnd = Math.max(bodyEnd, position + node.nodeSize - 1);
+    });
+    if (!hasEditableBlock) {
+      return;
+    }
+
+    let chain = editor.chain().focus().setTextSelection({ from: 1, to: bodyEnd });
+    if (defaultFontFamilySetting.value) {
+      chain.setFontFamily(defaultFontFamilySetting.value);
+    } else {
+      chain.unsetFontFamily();
+    }
+    if (chain.setFontSize(fontSizeToCSS(composeDefaultFontSize)).run()) {
+      defaultComposeFormattingApplied = true;
+    }
   }
 
   async function commitPendingRecipients() {
@@ -830,6 +853,16 @@
     flex: 1 1 auto;
     min-width: 0;
   }
+  .recipients :global(.persons-autocomplete) {
+    font-size: 13px;
+    line-height: 1.2;
+  }
+  .recipients :global(.persons-autocomplete .person) {
+    font-size: 13px;
+  }
+  .recipients :global(.persons-autocomplete input.autocomplete-input) {
+    font-size: 13px;
+  }
   .subject-row {
     display: grid;
     grid-template-columns: 3.25rem 1fr;
@@ -857,6 +890,7 @@
   }
   .editor {
     margin: 12px 0;
+    padding-block: 12px 16px;
     padding-inline: 12px;
     max-width: none;
     width: auto;
@@ -875,6 +909,15 @@
     overflow: visible;
     max-height: none;
     max-width: 100%;
+    line-height: 1;
+  }
+  .editor :global(.tiptap) {
+    /* В самостоятельном редакторе HTMLEditor добавляет отрицательный
+       внешний отступ. В письме положение текста задаёт отступ бумаги. */
+    margin-block: 0;
+  }
+  .editor :global(.ProseMirror p) {
+    margin-block: 0;
   }
   .compose-quote {
     margin: 0 12px 12px;

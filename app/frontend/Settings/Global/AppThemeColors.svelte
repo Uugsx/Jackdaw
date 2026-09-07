@@ -1,27 +1,29 @@
 <vbox class="colors">
   <hbox class="hint font-small">{$t`These colors override the current theme. Clear restores the default.`}</hbox>
-  {#each Object.keys(cssVars) as cssVar}
-    {@const label = cssVars[cssVar]}
-    {@const custom = !!colors[cssVar]}
-    <grid class="color-setting">
-      <hbox class="label">{label}</hbox>
-      <label class="swatch">
-        <input type="color"
-          value={swatchHex(cssVar)}
-          on:input={(event) => onPick(cssVar, event.currentTarget.value)}
+  {#key clearVersion}
+    {#each Object.keys(cssVars) as cssVar}
+      {@const label = cssVars[cssVar]}
+      {@const custom = !!colors[cssVar]}
+      <grid class="color-setting">
+        <hbox class="label">{label}</hbox>
+        <label class="swatch">
+          <input type="color"
+            value={swatchHex(cssVar)}
+            on:input={(event) => onPick(cssVar, event.currentTarget.value)}
+            />
+          <hbox class="swatch-face" style:background={swatchHex(cssVar)} />
+        </label>
+        <Button
+          label={$t`Clear`}
+          icon={XIcon}
+          iconSize="16px"
+          plain
+          onClick={() => onClear(cssVar)}
+          disabled={!custom}
           />
-        <hbox class="swatch-face" style:background={swatchHex(cssVar)} />
-      </label>
-      <Button
-        label={$t`Clear`}
-        icon={XIcon}
-        iconSize="16px"
-        plain
-        onClick={() => onClear(cssVar)}
-        disabled={!custom}
-        />
-    </grid>
-  {/each}
+      </grid>
+    {/each}
+  {/key}
 </vbox>
 
 <script lang="ts">
@@ -30,11 +32,29 @@
   import Button from "../../Shared/Button.svelte";
   import XIcon from "lucide-svelte/icons/x";
   import { t } from "../../../l10n/l10n";
+  import { onDestroy } from "svelte";
 
   let themeSetting = getLocalStorage("appearance.theme", "system");
   let colorsSetting = getLocalStorage("appearance.colors", {});
-  $: colors = ($colorsSetting.value ?? {}) as Record<string, string>;
-  $: theme = $themeSetting.value;
+  let colors = (colorsSetting.value ?? {}) as Record<string, string>;
+  let theme = themeSetting.value;
+  let clearVersion = 0;
+
+  // ObservableLocalStorageSetting не является стандартным Svelte store:
+  // реактивное чтение `$setting.value` может увидеть старое значение до
+  // следующего обновления компонента. Подписка синхронно обновляет и UI,
+  // и CSS-переменные сразу после нажатия на цвет или «Очистить».
+  let unsubscribeColors = colorsSetting.subscribe(setting => {
+    colors = (setting.value ?? {}) as Record<string, string>;
+    applyColors(colors);
+  });
+  let unsubscribeTheme = themeSetting.subscribe(setting => {
+    theme = setting.value;
+  });
+  onDestroy(() => {
+    unsubscribeColors();
+    unsubscribeTheme();
+  });
 
   /**
    * Defines which colors (css vars) the user can modify.
@@ -60,7 +80,11 @@
     if (typeof document == "undefined") {
       return {};
     }
-    let style = getComputedStyle(document.documentElement);
+    // В desktop-теме значения по умолчанию задаются на оболочке окна, а не
+    // только на `:root`; иначе в тёмном режиме свотчи показывают светлые
+    // базовые цвета.
+    let themeRoot = document.querySelector<HTMLElement>(".main-window") ?? document.documentElement;
+    let style = getComputedStyle(themeRoot);
     let result: Record<string, string> = {};
     for (let cssVar of Object.keys(cssVars)) {
       result[cssVar] = cssColorToHex(style.getPropertyValue("--" + cssVar)) || "#000000";
@@ -70,6 +94,12 @@
 
   function swatchHex(cssVar: string): string {
     return colors[cssVar] || computed[cssVar] || "#000000";
+  }
+
+  function saveColors(next: Record<string, string>) {
+    colors = next;
+    colorsSetting.value = next;
+    applyColors(next);
   }
 
   function onPick(cssVar: string, color: string) {
@@ -82,8 +112,7 @@
         themeSetting.value = textColor == "#ffffff" ? "dark" : "light";
       }
     }
-    colorsSetting.value = next;
-    applyColors(next);
+    saveColors(next);
   }
 
   function onClear(cssVar: string) {
@@ -92,8 +121,11 @@
     if (cssVar.endsWith("bg")) {
       delete next[cssVar.substring(0, cssVar.length - 2) + "fg"];
     }
-    colorsSetting.value = next;
-    applyColors(next);
+    saveColors(next);
+    // Нативный color input может удерживать старое значение после очистки.
+    // Пересоздаём только эту небольшую группу контролов, чтобы сразу
+    // обновились свотчи, значения input и состояние кнопок.
+    clearVersion += 1;
   }
 </script>
 

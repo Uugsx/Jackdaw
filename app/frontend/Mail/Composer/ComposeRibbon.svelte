@@ -55,6 +55,14 @@
               on:click={onCopy}>
               <CopyIcon size="18px" />
             </button>
+            <button type="button" class="ribbon-btn" class:on={!!formatPainter}
+              title={formatPainter ? $t`Select text to apply formatting` : $t`Copy formatting`}
+              aria-label={formatPainter ? $t`Select text to apply formatting` : $t`Copy formatting`}
+              aria-pressed={!!formatPainter}
+              on:mousedown|preventDefault={() => void 0}
+              on:click={toggleFormatPainter}>
+              <BrushIcon size="18px" />
+            </button>
           </hbox>
           <span class="group-label">{$t`Clipboard`}</span>
         </vbox>
@@ -64,7 +72,7 @@
         <vbox class="group basic-text-group">
           <hbox class="group-row font-row">
             <select class="ribbon-select font-family" title={$t`Font`}
-              value={selectedFontFamily}
+              value={displayFontFamily}
               on:mousedown={rememberEditorSelection}
               on:change={onFontFamilyChange}>
               {#each composeFontFamilies as font}
@@ -80,6 +88,17 @@
               {/if}
               {#each composeFontSizes as size}
                 <option value={size}>{formatFontSizeLabel(size)}</option>
+              {/each}
+            </select>
+            <select class="ribbon-select line-height" title={$t`Line spacing`}
+              value={displayLineHeight}
+              on:mousedown={rememberEditorSelection}
+              on:change={onLineHeightChange}>
+              {#if selectedLineHeight && !composeLineHeights.some(lh => lh.value === selectedLineHeight)}
+                <option value={selectedLineHeight}>{lineHeightLabel}</option>
+              {/if}
+              {#each composeLineHeights as lineHeight}
+                <option value={lineHeight.value}>{lineHeight.label}</option>
               {/each}
             </select>
           </hbox>
@@ -405,21 +424,32 @@
     composeHighlightColors,
     composeHighlightColorsHighContrast,
     composeTextColors,
+    composeDefaultFontFamily,
     composeDefaultFontSize,
     composeDefaultHighlightColor,
     currentFontFamily,
     currentFontSize,
+    currentLineHeight,
     highlightPreviewColor,
     formatFontSizeLabel,
+    formatLineHeightLabel,
     fontSizeToCSS,
     normalizeFontSizeValue,
+    composeLineHeights,
   } from "../../Shared/Editor/composeEditorExtensions";
+  import {
+    applyFormatPainter,
+    captureFormatPainter,
+    captureFormatPainterFromRange,
+    type FormatPainterSnapshot,
+  } from "../../Shared/Editor/formatPainter";
   import { onDestroy } from "svelte";
   import { t } from "../../../l10n/l10n";
   import SendIcon from "lucide-svelte/icons/send";
   import ClipboardPasteIcon from "lucide-svelte/icons/clipboard-paste";
   import ScissorsIcon from "lucide-svelte/icons/scissors";
   import CopyIcon from "lucide-svelte/icons/copy";
+  import BrushIcon from "lucide-svelte/icons/brush";
   import BoldIcon from "lucide-svelte/icons/bold";
   import ItalicIcon from "lucide-svelte/icons/italic";
   import UnderlineIcon from "lucide-svelte/icons/underline";
@@ -491,6 +521,7 @@
   let activeTab: "message" | "options" = "message";
   const zoomLevels = [90, 100, 125];
   let formatSetting = getLocalStorage("mail.send.format", "html");
+  let defaultFontFamilySetting = getLocalStorage("mail.compose.defaultFontFamily", composeDefaultFontFamily);
   $: sendAsHtml = formatSetting.value === "html";
   function toggleSendFormat() {
     formatSetting.value = sendAsHtml ? "plaintext" : "html";
@@ -516,6 +547,7 @@
 
   $: if (editor && editor !== subscribedEditor) {
     styleListenerCleanup?.();
+    clearFormatPainter();
     subscribedEditor = editor;
     let bump = () => styleTick++;
     editor.on("selectionUpdate", bump);
@@ -532,16 +564,30 @@
 
   onDestroy(() => {
     styleListenerCleanup?.();
+    clearFormatPainter();
     styleListenerCleanup = null;
     subscribedEditor = null;
   });
 
-  $: selectedFontFamily = editor ? (styleTick, currentFontFamily(editor)) : "";
-  $: selectedFontSize = editor ? (styleTick, currentFontSize(editor)) : "";
+  /** Keep the editor style revision reactive without comma-operator diagnostics. */
+  function readEditorStyle<T>(read: () => T, _styleRevision: number): T {
+    return read();
+  }
+
+  $: selectedFontFamily = editor ? readEditorStyle(() => currentFontFamily(editor), styleTick) : "";
+  $: displayFontFamily = selectedFontFamily || $defaultFontFamilySetting.value;
+  $: selectedFontSize = editor ? readEditorStyle(() => currentFontSize(editor), styleTick) : "";
   $: displayFontSize = selectedFontSize || normalizeFontSizeValue(composeDefaultFontSize);
-  $: selectedTextColor = editor ? (styleTick, editor.getAttributes("textStyle").color ?? "") : "";
+  $: selectedLineHeight = editor ? readEditorStyle(() => currentLineHeight(editor), styleTick) : "";
+  $: displayLineHeight = selectedLineHeight;
+  $: lineHeightLabel = formatLineHeightLabel(displayLineHeight);
+  $: selectedTextColor = editor
+    ? readEditorStyle(() => editor.getAttributes("textStyle").color ?? "", styleTick)
+    : "";
   $: textColorBar = selectedTextColor || "var(--headerbar-fg)";
-  $: highlightBarColor = editor ? (styleTick, highlightPreviewColor(editor)) : composeDefaultHighlightColor;
+  $: highlightBarColor = editor
+    ? readEditorStyle(() => highlightPreviewColor(editor), styleTick)
+    : composeDefaultHighlightColor;
   $: visibleHighlightColors = highlightHighContrastOnly
     ? composeHighlightColorsHighContrast
     : composeHighlightColors;
@@ -551,6 +597,88 @@
   }
 
   let savedSelection: { from: number; to: number } | null = null;
+  let formatPainter: FormatPainterSnapshot | null = null;
+  let formatPainterSourceSelection: { from: number; to: number; source: "editor" | "quote" } | null = null;
+  let formatPainterListenersCleanup: (() => void) | null = null;
+
+  function captureCurrentFormatPainter(): { snapshot: FormatPainterSnapshot; source: "editor" | "quote" } | null {
+    let nativeSelection = document.getSelection();
+    if (nativeSelection?.rangeCount && !nativeSelection.isCollapsed) {
+      let range = nativeSelection.getRangeAt(0);
+      let startElement = range.startContainer instanceof Element
+        ? range.startContainer
+        : range.startContainer.parentElement;
+      if (startElement?.closest(".compose-quote-html")) {
+        let snapshot = captureFormatPainterFromRange(editor, range);
+        return snapshot ? { snapshot, source: "quote" } : null;
+      }
+    }
+    return { snapshot: captureFormatPainter(editor), source: "editor" };
+  }
+
+  function toggleFormatPainter() {
+    if (formatPainter) {
+      clearFormatPainter();
+      return;
+    }
+    if (!editor) {
+      return;
+    }
+    let captured = captureCurrentFormatPainter();
+    if (!captured) {
+      return;
+    }
+    formatPainter = captured.snapshot;
+    let { from, to } = editor.state.selection;
+    formatPainterSourceSelection = { from, to, source: captured.source };
+
+    let onMouseUp = (event: MouseEvent) => {
+      if (event.target instanceof Node && editor.view.dom.contains(event.target)) {
+        setTimeout(applyFormatPainterToSelection, 0);
+      }
+    };
+    let onKeyUp = () => {
+      if (editor.view.hasFocus()) {
+        setTimeout(applyFormatPainterToSelection, 0);
+      }
+    };
+    let onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        clearFormatPainter();
+      }
+    };
+    document.addEventListener("mouseup", onMouseUp, true);
+    document.addEventListener("keyup", onKeyUp, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    formatPainterListenersCleanup = () => {
+      document.removeEventListener("mouseup", onMouseUp, true);
+      document.removeEventListener("keyup", onKeyUp, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }
+
+  function applyFormatPainterToSelection() {
+    if (!formatPainter || !editor || !editor.view.hasFocus()) {
+      return;
+    }
+    let selection = editor.state.selection;
+    if (formatPainterSourceSelection?.source === "editor"
+      && formatPainterSourceSelection.from === selection.from
+      && formatPainterSourceSelection.to === selection.to) {
+      return;
+    }
+    let snapshot = formatPainter;
+    clearFormatPainter();
+    applyFormatPainter(editor, snapshot);
+  }
+
+  function clearFormatPainter() {
+    formatPainterListenersCleanup?.();
+    formatPainterListenersCleanup = null;
+    formatPainter = null;
+    formatPainterSourceSelection = null;
+  }
 
   function rememberEditorSelection() {
     if (!editor) {
@@ -588,6 +716,16 @@
       chainWithSavedSelection().setFontSize(value).run();
     } else {
       chainWithSavedSelection().unsetFontSize().run();
+    }
+    clearSavedSelection();
+  }
+
+  function onLineHeightChange(event: Event) {
+    let value = (event.currentTarget as HTMLSelectElement).value;
+    if (value) {
+      chainWithSavedSelection().setLineHeight(value).run();
+    } else {
+      chainWithSavedSelection().unsetLineHeight().run();
     }
     clearSavedSelection();
   }
@@ -815,6 +953,10 @@
     max-width: 9em;
   }
   .ribbon-select.font-size {
+    min-width: 3.5em;
+    max-width: 4em;
+  }
+  .ribbon-select.line-height {
     min-width: 3.5em;
     max-width: 4em;
   }

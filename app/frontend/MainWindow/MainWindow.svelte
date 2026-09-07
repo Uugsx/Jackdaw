@@ -121,7 +121,7 @@ import { updatePaneFocusFromPointer } from "./paneFocus";
   import { getUILocale, t } from "../../l10n/l10n";
   import { rtlLocales } from "../../l10n/list";
   import { appName } from "../../logic/build";
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import debounce from "lodash/debounce";
   import { Router } from "svelte-navigator";
   // #if [MOBILE]
@@ -146,7 +146,12 @@ import { updatePaneFocusFromPointer } from "./paneFocus";
     }
   }
 
-  onMount(() => catchErrors(onLoad));
+  onMount(() => {
+    // На момент создания подписки `.main-window` ещё не существует в DOM.
+    // Повторно применяем сохранённые цвета после монтирования оболочки.
+    applyColors(colorsSetting.value);
+    return catchErrors(onLoad);
+  });
 
   async function onLoad() {
     loadApps();
@@ -193,7 +198,11 @@ import { updatePaneFocusFromPointer } from "./paneFocus";
     appGlobal.remoteApp.setTheme(theme);
   }
   let colorsSetting = getLocalStorage("appearance.colors", {});
-  $: applyColors($colorsSetting.value);
+  // Читаем актуальное значение при каждом уведомлении. Реактивная запись
+  // `$colorsSetting.value` могла повторно применить старый набор цветов после
+  // изменения его в настройках.
+  let unsubscribeColors = colorsSetting.subscribe(setting => applyColors(setting.value));
+  onDestroy(unsubscribeColors);
 
   let windowWidth: number;
   $: windowWidth, setSmall()

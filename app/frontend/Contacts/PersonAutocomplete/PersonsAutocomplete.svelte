@@ -1,17 +1,40 @@
 <hbox flex class="persons-autocomplete">
-  {#each $persons.each as person}
-    <PersonEntry {person}
-      {onRemovePerson}
-      on:focusNext={onFocusNext}
-      {disabled}
-      >
-      <slot name="person-pill-before-avatar" slot="before-avatar" {person} />
-      <slot name="person-pill-after-name" slot="after-name" {person} />
-      <slot name="person-popup-bottom" slot="person-popup-bottom" {person} />
-      <slot name="person-popup-buttons" slot="person-popup-buttons" {person} />
-      <slot name="person-context-menu" slot="context-menu" {person} />
-    </PersonEntry>
+  {#each $persons.each as person, index}
+    {#if !isCollapsed || collapseAfter == null || index < collapseAfter}
+      <PersonEntry {person}
+        {onRemovePerson}
+        on:focusNext={onFocusNext}
+        {disabled}
+        >
+        <slot name="person-pill-before-avatar" slot="before-avatar" {person} />
+        <slot name="person-pill-after-name" slot="after-name" {person} />
+        <slot name="person-popup-bottom" slot="person-popup-bottom" {person} />
+        <slot name="person-popup-buttons" slot="person-popup-buttons" {person} />
+        <slot name="person-context-menu" slot="context-menu" {person} />
+      </PersonEntry>
+    {/if}
   {/each}
+  {#if collapseAfter != null && $persons.length > collapseAfter}
+    <hbox class="recipient-collapse buttons">
+      {#if isCollapsed}
+        <Button
+          iconSize="10px"
+          label="+ {hiddenPersonCount}"
+          tooltip={$t`Show ${hiddenPersonCount} more`}
+          classes="font-small"
+          onClick={() => isCollapsed = false}
+          />
+      {:else}
+        <Button
+          icon={ChevronUpIcon}
+          label={$t`Collapse`}
+          classes="small collapse font-small"
+          iconOnly
+          onClick={() => isCollapsed = true}
+          />
+      {/if}
+    </hbox>
+  {/if}
   {#if !disabled}
     <hbox flex class="input">
       <PersonAutocomplete
@@ -32,6 +55,9 @@
   import type { PersonUID } from "../../../logic/Abstract/PersonUID";
   import PersonAutocomplete from "./PersonAutocomplete.svelte";
   import PersonEntry from "./PersonEntry.svelte";
+  import Button from "../../Shared/Button.svelte";
+  import ChevronUpIcon from "lucide-svelte/icons/chevron-up";
+  import { t } from "../../../l10n/l10n";
 
   /**
    * The persons that the user selected.
@@ -41,8 +67,12 @@
   export let tabindex = null;
   export let autofocus = false;
   export let disabled = false;
+  export let collapseAfter: number | null = null;
   export let onAddPerson: (person: PersonUID) => void | Promise<void> = onAddPersonDefault;
   export let onRemovePerson: (person: PersonUID) => void | Promise<void> = onRemovePersonDefault;
+
+  let isCollapsed = true;
+  $: hiddenPersonCount = collapseAfter == null ? 0 : Math.max($persons.length - collapseAfter, 0);
 
   //$: console.log("persons", persons.contents);
 
@@ -87,5 +117,18 @@
   }
   .persons-autocomplete :global(input.autocomplete-input) {
     border: none;
+  }
+  .recipient-collapse {
+    margin-inline-start: 4px;
+  }
+  .recipient-collapse :global(button) {
+    min-height: 22px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 999px;
+    font-size: 11px;
+  }
+  .recipient-collapse :global(button:not(:hover)) {
+    background-color: color-mix(in srgb, var(--main-fg) 8%, transparent);
   }
 </style>

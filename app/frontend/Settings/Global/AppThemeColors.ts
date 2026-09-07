@@ -23,14 +23,19 @@ const managedColorVars = [
 ];
 
 export function applyColors(colors: Record<string, string> | null | undefined) {
-  let style = document.documentElement.style;
   let next = colors ?? {};
-  for (let cssVar of managedColorVars) {
-    let color = next[cssVar];
-    if (color) {
-      style.setProperty("--" + cssVar, color);
-    } else {
-      style.removeProperty("--" + cssVar);
+  // Десктопная тема задаёт часть переменных непосредственно на
+  // `.main-window`, поэтому одного `:root` недостаточно: его значения не
+  // наследуются сквозь локальные переменные оболочки окна.
+  let targets = [document.documentElement, ...document.querySelectorAll<HTMLElement>(".main-window")];
+  for (let target of targets) {
+    for (let cssVar of managedColorVars) {
+      let color = next[cssVar];
+      if (color) {
+        target.style.setProperty("--" + cssVar, color);
+      } else {
+        target.style.removeProperty("--" + cssVar);
+      }
     }
   }
 }

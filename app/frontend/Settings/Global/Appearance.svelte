@@ -1,6 +1,6 @@
 <vbox class="appearance">
   <HeaderGroupBox>
-    <hbox slot="header">{$t`Dark mode`}</hbox>
+    <hbox slot="header">{$t`Appearance`}</hbox>
     <ThemeSwitcher />
   </HeaderGroupBox>
 

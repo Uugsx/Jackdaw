@@ -1,4 +1,5 @@
-<PersonsAutocomplete persons={addresses} {placeholder} {tabindex} {autofocus} bind:this={personsEl}>
+<PersonsAutocomplete persons={addresses} {placeholder} {tabindex} {autofocus}
+  {collapseAfter} bind:this={personsEl}>
   <slot name="end" slot="end" />
   <hbox class="addressbooks" slot="person-popup-bottom" let:person class:top-border={person?.person?.emailAddresses.length > 1}>
     {#if person?.person}
@@ -20,6 +21,7 @@
   export let placeholder: string;
   export let tabindex = null;
   export let autofocus = false;
+  export let collapseAfter: number | null = null;
 
   let personsEl: PersonsAutocomplete;
 
