@@ -83,7 +83,8 @@
     position: relative;
     z-index: 10;
     align-items: center;
-    min-height: 48px;
+    min-height: 36px;
+    height: 36px;
     box-sizing: border-box;
     app-region: drag;
     background-color: var(--windowheader-bg);
@@ -108,31 +109,43 @@
     app-region: no-drag;
   }
   .app-title {
-    font-size: 18px;
+    font-size: 14px;
+    line-height: 16px;
     align-items: center;
     margin-inline-start: 4px;
   }
+  .window-header :global(.workspace) {
+    font-size: 13px;
+    line-height: 16px;
+    padding-block: 2px;
+    padding-inline: 8px;
+  }
+  .window-header :global(.workspace .dot) {
+    min-width: 8px;
+    min-height: 8px;
+    margin-inline-end: 8px;
+  }
   .right {
-    padding-inline-end: 8px;
+    padding-inline-end: 6px;
   }
   .right :global(button) {
     color: var(--windowheader-fg);
+    padding-inline-start: 6px;
+    padding-inline-end: 6px;
+  }
+  .right :global(.maximize) {
     padding-inline-start: 8px;
     padding-inline-end: 8px;
   }
-  .right :global(.maximize) {
-    padding-inline-start: 10px;
-    padding-inline-end: 10px;
-  }
   .right :global(.minimize svg) {
-    margin-block-start: 8px; /* Find better icon */
+    margin-block-start: 4px; /* Keep the icon visually centered in the compact bar. */
   }
   .free {
     min-width: 0;
   }
 
   .window-header :global(.search) {
-    margin: 6px 12px;
+    margin: 4px 8px;
     outline: 1px solid color-mix(in srgb, var(--windowheader-fg) 10%, transparent);
     border: none;
   }

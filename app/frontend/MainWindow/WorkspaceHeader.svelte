@@ -43,11 +43,12 @@
 
 <style>
   .workspace {
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 500;
+    line-height: 16px;
     letter-spacing: -0.02em;
     align-items: center;
-    padding: 4px 10px;
+    padding: 2px 8px;
     border-radius: var(--border-radius);
   }
   .workspace :global(button) {
@@ -62,9 +63,9 @@
 
   .dot {
     background-color: var(--workspace-color);
-    margin-inline-end: 12px;
-    min-width: 11px;
-    min-height: 11px;
+    margin-inline-end: 8px;
+    min-width: 8px;
+    min-height: 8px;
     border-radius: 11px;
     align-self: center;
   }
