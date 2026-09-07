@@ -44,9 +44,14 @@ export async function buildContextMenu(context: ContextInfo, win: any): Promise<
     menuItems.add(menuItem);
   }
 
-  if (context.misspelledWord && context.isEditable && context.isText) {
+  if (context.misspelledWord && context.isEditable) {
+    let suggestions = [...new Set((context.dictionarySuggestions ?? [])
+      .filter(suggestion => suggestion.trim()))];
+    suggestions.forEach((suggestion, index) => {
+      add(`spellcheckerSuggestion${index}`, suggestion, null,
+        (_context, window) => replaceSpelling(window, suggestion));
+    });
     add("spellcheckerAddToDictionary", gt`Add word to dictionary`, null, learnSpelling);
-    // TODO Spelling suggestions
   }
   if (context.isLink) {
     add("copyLink", gt`Copy link address`, null, copyLink);
@@ -256,6 +261,10 @@ async function copyVideoURL(context: ContextInfo, win: any) {
 
 function learnSpelling(context: ContextInfo, win: any) {
   win.session.addWordToSpellCheckerDictionary(context.misspelledWord);
+}
+
+function replaceSpelling(win: any, suggestion: string) {
+  win.replaceMisspelling(suggestion);
 }
 
 function inspect(context: ContextInfo, win: any) {

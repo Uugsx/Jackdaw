@@ -9,6 +9,8 @@
     "../lib/**/*",
   ],
   "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "composite": true,
     "types": [
       "electron-vite/node"

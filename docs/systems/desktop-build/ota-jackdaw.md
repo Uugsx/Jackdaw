@@ -26,6 +26,10 @@ Push to `main` builds **both** platforms. Manual **workflow_dispatch** can choos
 
 ## CI pipeline (do not break)
 
+Перед `prepare` выполняется `checks` из `check-desktop.yml`: регрессионные тесты
+файлов, OAuth и OWA, а также сборки frontend и desktop. При их ошибке релиз
+и тег не создаются. Этот же workflow запускается для pull request.
+
 ```
 prepare  →  mac  ║  windows  →  carry-forward?  →  finalize
   │            │       │

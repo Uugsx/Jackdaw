@@ -1,6 +1,6 @@
 <!-- TODO Jail content into an iframe -->
 
-<div bind:this={rootEl} class="html-editor" />
+<div bind:this={rootEl} class="html-editor" lang={getUILocale()} />
 
 <script lang="ts">
   import { Editor } from '@tiptap/core';
@@ -17,6 +17,7 @@
   // import { common as lowlightCommon, createLowlight } from 'lowlight'
   import { onMount, onDestroy } from 'svelte';
   import { createEventDispatcher } from 'svelte';
+  import { getUILocale } from '../../../l10n/l10n';
   const dispatchEvent = createEventDispatcher<{ change: string }>();
 
   /** in/out */

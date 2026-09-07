@@ -15,7 +15,7 @@ import * as webdavClient from "webdav";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { afterAll, afterEach, beforeAll, expect, test, vi } from "vitest";
 
 const v2 = (webdavServer as any).v2;
 const USERNAME = "testuser";
@@ -28,6 +28,8 @@ let localFilesDir: string;
 let account: any;            // WebDAVAccount
 let ArrayColl: any;
 let WebDAVDirectoryCls: any;
+
+afterEach(() => vi.restoreAllMocks());
 
 async function startServer(): Promise<void> {
   storageDir = await fs.mkdtemp(path.join(os.tmpdir(), "jackdaw-webdav-test-"));
@@ -219,4 +221,109 @@ test("deleteIt removes file from the server", async () => {
 
   let onServer = await verify.getDirectoryContents("/") as webdavClient.FileStat[];
   expect(onServer.map(s => s.basename)).not.toContain("hello.txt");
+});
+
+async function transferFolders(name: string) {
+  const root = account.rootDirs.first;
+  const source = await root.createSubDirectory(name + "-source");
+  const target = await root.createSubDirectory(name + "-target");
+  await verify.putFileContents(source.path + "first.txt", "first");
+  await verify.putFileContents(source.path + "second.txt", "second");
+  await source.listContents();
+  return { source, target };
+}
+
+test("ошибка сервера не убирает переносимые файлы из исходной папки", async () => {
+  const { source, target } = await transferFolders("failed-move");
+  const files = [...source.files.contents];
+  const failure = new Error("Сеть недоступна");
+  vi.spyOn(account.client, "moveFile").mockRejectedValueOnce(failure);
+  await expect(target.moveFilesHere(source.files)).rejects.toBe(failure);
+  expect(source.files.contents).toEqual(files);
+  expect(target.files.length).toBe(0);
+  expect(await verify.exists(source.path + "first.txt")).toBe(true);
+});
+
+test("частичный перенос сохраняет неперенесённые файлы и обновляет обе папки", async () => {
+  const { source, target } = await transferFolders("partial-move");
+  const originalMove = account.client.moveFile.bind(account.client);
+  const first = source.files.first;
+  const second = source.files.contents[1];
+  vi.spyOn(account.client, "moveFile")
+    .mockImplementationOnce(originalMove)
+    .mockRejectedValueOnce(new Error("Сеть недоступна"));
+  await expect(target.moveFilesHere(source.files)).rejects.toThrow("Сеть недоступна");
+  expect(source.files.contents.map(file => file.name)).toEqual([second.name]);
+  expect(target.files.contents.map(file => file.name)).toEqual([first.name]);
+  expect(await verify.exists(source.path + second.name)).toBe(true);
+  expect(await verify.exists(target.path + first.name)).toBe(true);
+});
+
+test("неудачное удаление сохраняет файл в локальном списке", async () => {
+  const { source } = await transferFolders("failed-delete");
+  const file = source.files.first;
+  vi.spyOn(account.client, "deleteFile").mockRejectedValueOnce(new Error("Удаление запрещено"));
+  await expect(file.deleteIt()).rejects.toThrow("Удаление запрещено");
+  expect(source.files.contains(file)).toBe(true);
+  expect(await verify.exists(file.path)).toBe(true);
+});
+
+test("неудачная загрузка не создаёт файл в целевой папке", async () => {
+  const { source, target } = await transferFolders("failed-upload");
+  const file = source.files.first;
+  await file.download();
+  vi.spyOn(account.client, "putFileContents").mockRejectedValueOnce(new Error("Загрузка запрещена"));
+  await expect(target.addFile(file)).rejects.toThrow("Загрузка запрещена");
+  expect(target.files.length).toBe(0);
+  expect(source.files.contains(file)).toBe(true);
+});
+
+test("пустой перенос и перенос в ту же папку не вызывают серверные операции", async () => {
+  const { source, target } = await transferFolders("noop-move");
+  const move = vi.spyOn(account.client, "moveFile");
+  await target.moveFilesHere(new ArrayColl());
+  await source.moveFilesHere(source.files);
+  expect(move).not.toHaveBeenCalled();
+  expect(source.files.length).toBe(2);
+});
+
+test("перенос всей коллекции не пропускает файлы при изменении исходного списка", async () => {
+  const { source, target } = await transferFolders("all-move");
+  await target.moveFilesHere(source.files);
+  expect(source.files.length).toBe(0);
+  expect(target.files.contents.map(file => file.name).sort()).toEqual(["first.txt", "second.txt"]);
+});
+
+async function useSeparateAccount(target: any) {
+  const other = new account.constructor();
+  other.storage = new account.storage.constructor();
+  other.url = account.url;
+  other.username = USERNAME;
+  other.password = PASSWORD;
+  other.authMethod = account.authMethod;
+  await other.login(false);
+  target.account = other;
+  return other;
+}
+
+test("между аккаунтами сначала загружает файлы, затем удаляет оригиналы", async () => {
+  const { source, target } = await transferFolders("cross-account");
+  await useSeparateAccount(target);
+  await target.moveFilesHere(source.files);
+  expect(source.files.length).toBe(0);
+  expect(target.files.length).toBe(2);
+  expect(await verify.exists(source.path + "first.txt")).toBe(false);
+  expect(await verify.getFileContents(target.path + "first.txt", { format: "text" })).toBe("first");
+  expect(await verify.getFileContents(target.path + "second.txt", { format: "text" })).toBe("second");
+});
+
+test("ошибка загрузки между аккаунтами сохраняет оригиналы", async () => {
+  const { source, target } = await transferFolders("cross-failed");
+  const other = await useSeparateAccount(target);
+  vi.spyOn(other.client, "putFileContents").mockRejectedValueOnce(new Error("Загрузка запрещена"));
+  const deleteSource = vi.spyOn(account.client, "deleteFile");
+  await expect(target.moveFilesHere(source.files)).rejects.toThrow("Загрузка запрещена");
+  expect(source.files.length).toBe(2);
+  expect(target.files.length).toBe(0);
+  expect(deleteSource).not.toHaveBeenCalled();
 });

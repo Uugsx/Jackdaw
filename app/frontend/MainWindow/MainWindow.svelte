@@ -12,6 +12,7 @@
   on:mousedown|capture={(event) => catchErrors(() => onCategoryShortcutMouseDown(event))} />
 
 <vbox flex class="main-window"
+  lang={getUILocale()}
   dir={rtl}
   class:mobile={$appGlobal.isMobile}
   class:desktop={!$appGlobal.isMobile}

@@ -1,10 +1,12 @@
 import { setMainWindow, startupBackend, shutdownBackend, startupArgs, updateState, checkForUpdateAndNotify, installUpdate, createJPCSecret, isQuittingForUpdate, prepareUpdaterAuth } from '../../backend/backend';
-import { app, shell, BrowserWindow, session, Menu, MenuItemConstructorOptions } from 'electron'
+import { app, shell, BrowserWindow, session, Menu, MenuItemConstructorOptions, type ContextMenuParams, type WebContents } from 'electron'
 import { ipcMain } from 'electron/main';
 import { join } from 'path'
 import { electronApp, is } from '@electron-toolkit/utils'
 import icon from '../../build/icon.png?asset'
 import { installSignalServiceCATrust } from './signalServiceCA'
+import { connectOAuth2Window } from './oauth2Window'
+import { getSpellcheckSuggestions } from './spellcheck'
 
 async function createWindow(): Promise<void> {
   try {
@@ -54,7 +56,7 @@ async function createWindow(): Promise<void> {
      * Attention: This does *not* catch normal `<a href="">` links.
      * Thus, sanitizeHTML() adds a `target="_blank"` to such links,
      * which is considered a new web window and forces them to end up here. */
-    mainWindow.webContents.setWindowOpenHandler((details): any => {
+    mainWindow.webContents.setWindowOpenHandler((details) => {
       // Chrome special-cases "about:blank". Make *sure* that we don't get this here.
       if (!details.url?.startsWith("https://")) {
         return { action: 'deny' };
@@ -64,7 +66,10 @@ async function createWindow(): Promise<void> {
       if (details?.features?.includes("oauth2popup")) {
         return {
           action: 'allow',
-          overrideBrowserWindowOptions: "center,noopener,noreferrer,sandbox=true",
+          overrideBrowserWindowOptions: {
+            center: true,
+            webPreferences: { sandbox: true, nodeIntegration: false, contextIsolation: true },
+          },
         };
       }
       // Open the URL in the system web browser
@@ -74,17 +79,10 @@ async function createWindow(): Promise<void> {
       return { action: 'deny' }
     })
 
-    mainWindow.webContents.on('did-create-window', (child, _details) => {
-      child.on('closed', () => {
-        mainWindow.webContents.send('oauth2-close');
-      });
-      child.webContents.on('did-navigate', (_event, url) => {
-        mainWindow.webContents.send('oauth2-navigate', url);
-      });
-      // Workaround for window.close() not closing in some cases
-      ipcMain.on('oauth2-close', () => {
-        child.close();
-      });
+    setupSpellcheckContextMenu(mainWindow);
+
+    mainWindow.webContents.on('did-create-window', (child, details) => {
+      connectOAuth2Window(mainWindow, child, details.frameName, ipcMain);
     });
 
     // HMR for renderer base on electron-vite cli.
@@ -127,6 +125,41 @@ function createMenu() {
     { role: 'windowMenu' },
   ]);
   Menu.setApplicationMenu(menu);
+}
+
+function setupSpellcheckContextMenu(mainWindow: BrowserWindow): void {
+  mainWindow.webContents.on("context-menu", (event, params) => {
+    if (!params.isEditable || !params.misspelledWord) {
+      return;
+    }
+    event.preventDefault();
+
+    void showSpellcheckContextMenu(mainWindow, params);
+  });
+}
+
+async function showSpellcheckContextMenu(
+  mainWindow: BrowserWindow,
+  params: ContextMenuParams,
+): Promise<void> {
+  const suggestions = await getSpellcheckSuggestions(
+    params.misspelledWord,
+    params.dictionarySuggestions,
+  );
+  let menuItems: MenuItemConstructorOptions[] = suggestions.map((suggestion, index) => ({
+    id: `spellcheckerSuggestion${index}`,
+    label: suggestion,
+    click: (): void => mainWindow.webContents.replaceMisspelling(suggestion),
+  }));
+  if (suggestions.length) {
+    menuItems.push({ type: "separator" });
+  }
+  menuItems.push({
+    id: "spellcheckerAddToDictionary",
+    label: "Add word to dictionary",
+    click: (): void => mainWindow.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+  });
+  Menu.buildFromTemplate(menuItems).popup({ window: mainWindow, frame: params.frame });
 }
 
 let owaSessionsReleased = false;
@@ -223,7 +256,7 @@ const kBackgroundUpdateCheckMs = 4 * 60 * 60 * 1000; // every 4 hours
   }
 }
 
-app.on('web-contents-created', (event, webContents) => setWindowOpenHandler(webContents));
+app.on('web-contents-created', (_event, webContents) => setWindowOpenHandler(webContents));
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
@@ -330,7 +363,7 @@ function allowCrossDomainRequestsFromFrontend() {
 }
 
 function setWindowOpenHandler(webContents: WebContents) {
-  webContents.setWindowOpenHandler((details) => {
+  webContents.setWindowOpenHandler(() => {
     return { action: 'deny' };
   });
 }

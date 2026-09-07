@@ -188,15 +188,7 @@ export class OWAEMail extends ExchangeEMail {
   }
 
   async markRead(read = true) {
-    let wasRead = this.isRead;
     await super.markRead(read);
-    if (wasRead != read && this.folder) {
-      if (read) {
-        this.folder.countUnread = Math.max(0, this.folder.countUnread - 1);
-      } else {
-        this.folder.countUnread++;
-      }
-    }
     await this.saveWritablePropsLocally().catch(() => null);
     await this.withItemIdRetry(() => this.updateIsReadOnServer(read));
   }

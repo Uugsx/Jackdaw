@@ -1,6 +1,6 @@
 <!-- Floating compose windows sit above the glass content shell. -->
 <vbox class="compose-floating-layer">
-  {#each $floatingComposes as entry (entry.id)}
+  {#each $floatingComposes.filter(entry => !entry.minimized) as entry (entry.id)}
     <ComposeFloatingShell {entry} />
   {/each}
 </vbox>

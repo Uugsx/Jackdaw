@@ -1,0 +1,51 @@
+name: Проверки desktop
+
+on:
+  workflow_call:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'lib/**'
+      - 'desktop/**'
+      - '.github/workflows/check-desktop.yml'
+      - '.github/workflows/publish-desktop-jackdaw.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            lib/package-lock.json
+            desktop/package-lock.json
+            desktop/backend/package-lock.json
+      # Lock-файлы используют совместную установку старых плагинов и текущих Svelte/Vite.
+      - run: npm ci --legacy-peer-deps
+        working-directory: app
+      - run: npm ci
+        working-directory: lib
+      - run: npm ci --legacy-peer-deps
+        working-directory: desktop
+      - run: npm ci
+        working-directory: desktop/backend
+      - name: Тестовая конфигурация OAuth
+        run: cp OAuth2Secrets.local.example.ts OAuth2Secrets.user.ts
+        working-directory: app/logic/Auth
+      - name: Регрессионные и интеграционные тесты
+        run: npm run test:regression
+        working-directory: app
+      - name: Сборка frontend
+        run: npm run build
+        working-directory: app
+      - name: Сборка desktop
+        run: npm run build
+        working-directory: desktop

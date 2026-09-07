@@ -45,7 +45,6 @@ export class Directory extends FileOrDirectory {
         this.account.errorCallback(ex);
       }
     }
-    this.list
   }
 
   async moveFileHere(file: File) {
@@ -84,13 +83,17 @@ export class Directory extends FileOrDirectory {
    *   Override to true for delegate/dependent accounts that share a server.
    */
   protected async moveOrCopyFilesHere(action: "move" | "copy", files: Collection<File>, sameAccount?: boolean) {
+    if (!files.length) {
+      return;
+    }
+    files = new ArrayColl(files.contents);
     let sourceFolder = files.first.parent;
     assert(sourceFolder, "Need source folder");
     assert(files.contents.every(file => file.parent === sourceFolder), "All files must be from the same folder");
     sameAccount ??= this.account == sourceFolder.account;
 
-    if (action == "move") {
-      sourceFolder.files.removeAll(files);
+    if (sourceFolder === this) {
+      return;
     }
     if (!sameAccount) {
       for (let file of files) {

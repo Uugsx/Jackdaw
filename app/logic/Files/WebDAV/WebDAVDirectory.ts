@@ -104,16 +104,23 @@ export class WebDAVDirectory extends Directory {
 
   protected async moveOrCopyFilesOnServer(action: "move" | "copy", files: Collection<File>) {
     await this.account.login(false);
-    for (let file of files) {
-      let target = this.childPath(file.name);
-      if (action == "move") {
-        await this.account.client.moveFile(file.path, target);
-      } else {
-        await this.account.client.copyFile(file.path, target);
+    let source = files.first.parent;
+    try {
+      for (let file of files) {
+        let target = this.childPath(file.name);
+        if (action == "move") {
+          await this.account.client.moveFile(file.path, target);
+          await file.deleteLocally();
+        } else {
+          await this.account.client.copyFile(file.path, target);
+        }
       }
+    } catch (ex) {
+      // После частичного переноса сверяем обе папки, сохраняя исходную ошибку.
+      await Promise.allSettled([this.listContents(), source.listContents()]);
+      throw ex;
     }
     await this.listContents();
-    let source = files.first.parent;
     if (source && source != this) {
       await source.listContents();
     }
@@ -127,13 +134,13 @@ export class WebDAVDirectory extends Directory {
     newFile.mimetype = file.mimetype;
     newFile.size = file.size;
     newFile.lastMod = file.lastMod ?? new Date();
-    this.files.add(newFile);
 
     let bytes = Buffer.from(await file.contents.arrayBuffer()); // Buffer needed for JPC
     let headers: Record<string, string> = {};
     // Honored by ownCloud, Nextcloud, openCloud, SabreDAV. Plain WebDAV ignores it.
-    headers["X-OC-MTime"] = Math.floor(file.lastMod.getTime() / 1000).toString();
+    headers["X-OC-MTime"] = Math.floor(newFile.lastMod.getTime() / 1000).toString();
     await this.account.client.putFileContents(newFile.path, bytes, { overwrite: false, headers });
+    this.files.add(newFile);
     await newFile.stat();
     await newFile.save();
   }

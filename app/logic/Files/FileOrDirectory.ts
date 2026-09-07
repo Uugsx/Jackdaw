@@ -43,8 +43,8 @@ export class FileOrDirectory extends Observable implements TaggableObject {
 
   canDelete: boolean;
   async deleteIt() {
-    await this.deleteLocally();
     await this.deleteOnServer();
+    await this.deleteLocally();
   }
   async deleteLocally() {
     throw new AbstractFunction();

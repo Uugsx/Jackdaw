@@ -162,6 +162,20 @@ export class EMail extends Message {
     this.folder = folder;
   }
 
+  async markRead(read = true) {
+    let wasRead = this.isRead;
+    await super.markRead(read);
+    if (wasRead == read || !this.folder) {
+      return;
+    }
+    if (read) {
+      this.folder.countUnread = Math.max(0, this.folder.countUnread - 1);
+      this.folder.countNewArrived = Math.max(0, this.folder.countNewArrived - 1);
+    } else {
+      this.folder.countUnread++;
+    }
+  }
+
   /** Inbox: received time (like OWA). Sent/Drafts/Outbox: sent time. */
   listDisplayDate(): Date {
     let special = this.folder?.specialFolder;
