@@ -39,6 +39,9 @@ export class MailAccount extends TCPAccount {
 
   @notifyChangedProperty
   emailAddress: string;
+  /** Add the selected mailbox address to Cc on outgoing messages. */
+  @notifyChangedProperty
+  copyToSelf = false;
   @notifyChangedProperty
   readonly identities = new ArrayColl<MailIdentity>();
   @notifyChangedProperty
@@ -242,6 +245,7 @@ export class MailAccount extends TCPAccount {
   fromConfigJSON(json: any) {
     super.fromConfigJSON(json);
     this.emailAddress = sanitize.emailAddress(json.emailAddress);
+    this.copyToSelf = sanitize.boolean(json.copyToSelf, false);
     this.identities.clear();
     for (let idJSON of sanitize.array(json.identities, [])) {
       try {
@@ -280,6 +284,7 @@ export class MailAccount extends TCPAccount {
     json.filterRuleActions = this.filterRuleActions.contents.map(rule => rule.toJSON());
     json.oAuth2 = this.oAuth2?.toConfigJSON();
     json.emailAddress = this.emailAddress;
+    json.copyToSelf = this.copyToSelf;
     json.calendarID = this.calendarID;
     return json;
   }
@@ -295,6 +300,7 @@ export class MailAccount extends TCPAccount {
     this.username = other.username;
     this.password = other.password;
     this.emailAddress = other.emailAddress;
+    this.copyToSelf = other.copyToSelf;
     this.realname = other.realname;
     this.calendarID = other.calendarID;
 

@@ -8,6 +8,20 @@
       />
   </PageHeader>
 
+  <HeaderGroupBox>
+    <hbox slot="header">{$t`Recipients`}</hbox>
+    <vbox class="recipient-settings">
+      <label class="checkbox-row">
+        <input type="checkbox" bind:checked={account.copyToSelf}
+          on:change={() => catchErrors(onCopyToSelfChange)} name="copy-to-self" />
+        {$t`Add my address to Cc on outgoing messages`}
+      </label>
+      <span class="hint">
+        {$t`The current From address is added only when it is not already a recipient.`}
+      </span>
+    </vbox>
+  </HeaderGroupBox>
+
   {#each $identities.each as identity (identity.id)}
     <IdentityBlock bind:this={identityBlocks[identity.id]} {identity}
       canRemove={$identities.length > 1}
@@ -36,6 +50,7 @@
   import PageHeader from "../../Shared/PageHeader.svelte";
   import RoundButton from "../../../Shared/RoundButton.svelte";
   import Button from "../../../Shared/Button.svelte";
+  import HeaderGroupBox from "../../../Shared/HeaderGroupBox.svelte";
   import AddIcon from "lucide-svelte/icons/plus";
   import SaveIcon from "lucide-svelte/icons/save";
   import { sanitize } from "../../../../../lib/util/sanitizeDatatypes";
@@ -68,6 +83,10 @@
     account.realname = identities.first.realname;
     await account.save();
   }
+
+  async function onCopyToSelfChange() {
+    await account.save();
+  }
 </script>
 
 <style>
@@ -81,5 +100,17 @@
   }
   .buttons :global(button) {
     margin-inline-start: 8px;
+  }
+  .recipient-settings {
+    gap: 8px;
+  }
+  .checkbox-row {
+    align-items: center;
+    gap: 8px;
+  }
+  .hint {
+    color: var(--input-placeholder);
+    font-size: 13px;
+    line-height: 1.4;
   }
 </style>

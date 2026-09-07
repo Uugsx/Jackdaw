@@ -200,6 +200,7 @@
   import ComposeQuoteEditor from "./ComposeQuoteEditor.svelte";
   import { composeEditorExtensions, composeDefaultFontFamily, composeDefaultFontSize, fontSizeToCSS } from "../../Shared/Editor/composeEditorExtensions";
   import { resolveComposeRecipients } from "../../../logic/Mail/composeResolveRecipients";
+  import { addSenderToCC } from "../../../logic/Mail/composeRecipients";
   import { closeFloatingCompose } from "./composeFloating";
   import { focusComposeTypingArea } from "./composeCursor";
   import { editorHasNewComposeText } from "./composeBody";
@@ -274,6 +275,7 @@
     assert(fromIdentity, "Composer: Need identity or account for email");
     showCCForce = mail.cc.hasItems;
     showBCCForce = mail.bcc.hasItems;
+    ensureCopyToSelf();
     // setAuthor() called
 
     if (mail.from?.emailAddress) {
@@ -525,12 +527,21 @@
     if (!fromIdentity.isCatchAll || !mail.from?.emailAddress || mail.from.emailAddress.includes("*")) {
       mail.from = fromIdentity.asPersonUID();
     }
+    ensureCopyToSelf();
     // When user switches identity in composer, refresh signature footer
     if (identityChanged && editor && !loading) {
       syncComposeHtml();
       mail.compose.applySignature();
       void reloadEditorFromMail().then(() => setCursorDefault());
     }
+  }
+
+  function ensureCopyToSelf() {
+    if (!fromIdentity?.account.copyToSelf || !mail?.from?.emailAddress) {
+      return;
+    }
+    addSenderToCC(mail);
+    showCCForce = mail.cc.hasItems;
   }
 
   function checkInvalidRecipients(recipients: PersonUID[]) {

@@ -72,5 +72,7 @@
     box-sizing: border-box;
     overflow-x: hidden;
     overflow-wrap: anywhere;
+    background-color: var(--message-viewer-bg, var(--main-bg));
+    color: var(--message-viewer-fg, var(--main-fg));
   }
 </style>

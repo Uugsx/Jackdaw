@@ -14,6 +14,7 @@ import { UserError, assert, dataURLToBlob, type URLString, ensureArray } from ".
 import { convertTextToHTML } from "../util/convertHTML";
 import { getDateTimeLocale, gt } from "../../l10n/l10n";
 import { ArrayColl, type Collection } from "svelte-collections";
+import { addSenderToCC } from "./composeRecipients";
 
 /** Functions based on the email, which are either
  * not changing the email itself, but are based on the email,
@@ -503,6 +504,10 @@ export class ComposeActions {
       if (!fromIdentity.isEMailAddress(this.email.from.emailAddress)) {
         throw new UserError(gt`From address ${this.email.from.emailAddress} does not match the catch-all identity ${fromIdentity.emailAddress}`);
       }
+    }
+
+    if (fromIdentity.account.copyToSelf) {
+      addSenderToCC(this.email);
     }
 
     let previousDrafts = this.getDrafts();

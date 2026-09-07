@@ -18,5 +18,8 @@
     width: 100%;
     max-width: none;
     padding: 16px;
+    box-sizing: border-box;
+    color: var(--message-viewer-fg, var(--main-fg));
+    background-color: var(--message-viewer-bg, var(--main-bg));
   }
 </style>

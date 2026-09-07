@@ -102,7 +102,7 @@
   });
 
   let blobURL: URLString;
-  $: html, bodyClass, catchErrors(setURL);
+  $: html, bodyClass, headHTML, catchErrors(setURL);
   async function setURL() {
     if (url) {
       return;

@@ -1,6 +1,8 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <vbox flex class="message-display"
+  class:message-background-white={messageBackground == "white"}
+  class:message-background-dark={messageBackground == "dark"}
   on:keydown={event => catchErrors(() => onKeyOnMessage(event, onZoomKey))}
   on:wheel|capture={onZoomWheel}
   tabindex={0}
@@ -30,6 +32,10 @@
   import Paper from "../../Shared/Paper.svelte";
   import { catchErrors } from "../../Util/error";
   import {
+    getMessageViewerBackgroundSetting,
+    normalizeMessageViewerBackground,
+  } from "./messageViewerAppearance";
+  import {
     clampMessageZoom,
     getMessageZoomSetting,
     isMessageZoomWheelEvent,
@@ -39,6 +45,9 @@
   } from "./messageZoom";
 
   export let message: EMail;
+
+  let messageBackgroundSetting = getMessageViewerBackgroundSetting();
+  $: messageBackground = normalizeMessageViewerBackground($messageBackgroundSetting.value);
 
   let zoomSetting = getMessageZoomSetting();
   $: zoom = clampMessageZoom($zoomSetting.value);
@@ -73,11 +82,22 @@
 
 <style>
   .message-display {
-    background-color: transparent;
-    color: var(--main-fg);
+    --message-viewer-bg: var(--main-bg);
+    --message-viewer-fg: var(--main-fg);
+    background-color: var(--message-viewer-bg);
+    color: var(--message-viewer-fg);
+  }
+  .message-display.message-background-white {
+    --message-viewer-bg: #ffffff;
+    --message-viewer-fg: #111827;
+  }
+  .message-display.message-background-dark {
+    --message-viewer-bg: #1a1a1c;
+    --message-viewer-fg: #e5e7eb;
   }
   .message-display :global(.paper) {
-    background-color: transparent;
+    background-color: var(--message-viewer-bg);
+    color: var(--message-viewer-fg);
     box-shadow: none;
     border-radius: 0;
     outline: none;

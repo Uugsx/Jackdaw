@@ -1,4 +1,6 @@
-    <WebView html={displayHtml} {headHTML} {bodyClass} allowServerCalls={allowExternalImages} {allowImageOpen} autoSize={fitContent} title={$t`Text`} enableZoomWheel forwardKeysToMail contentZoom={zoom} on:webview on:zoomwheel />
+<vbox class="html-display" bind:this={displayE}>
+  <WebView html={displayHtml} {headHTML} {bodyClass} allowServerCalls={allowExternalImages} {allowImageOpen} autoSize={fitContent} title={$t`Text`} enableZoomWheel forwardKeysToMail contentZoom={zoom} on:webview on:zoomwheel />
+</vbox>
 
 <script lang="ts">
   import cssContent from "./content.css?inline";
@@ -8,7 +10,13 @@
   import { adaptEmailHtmlForDarkMode } from "./emailDarkMode";
   import WebView from "../../Shared/WebView.svelte";
   import { getLocalStorage } from "../../Util/LocalStorage";
+  import {
+    getMessageViewerBackgroundSetting,
+    normalizeMessageViewerBackground,
+  } from "./messageViewerAppearance";
+  import type { MessageViewerBackground } from "./messageViewerAppearance";
   import { t } from "../../../l10n/l10n";
+  import { onMount } from "svelte";
 
   /** DANGER Attention: You must sanitize the HTML. It comes from untrusted sources.
    * @see also Chat Message.svelte */
@@ -23,6 +31,14 @@
   export let webviewE: HTMLIFrameElement = null;
 
   let themeSetting = getLocalStorage("appearance.theme", "system");
+  let colorsSetting = getLocalStorage("appearance.colors", {});
+  let messageBackgroundSetting = getMessageViewerBackgroundSetting();
+  let displayE: HTMLElement;
+  let displayReady = false;
+
+  onMount(() => {
+    displayReady = true;
+  });
 
   function resolveDarkTheme(theme: string): boolean {
     if (theme == "dark") {
@@ -35,8 +51,71 @@
       window.matchMedia("(prefers-color-scheme: dark)").matches;
   }
 
-  $: darkEmail = resolveDarkTheme($themeSetting.value);
-  $: bodyClass = darkEmail ? "jackdaw-email-dark" : "jackdaw-email-light";
+  $: messageBackground = normalizeMessageViewerBackground($messageBackgroundSetting.value);
+  $: darkEmail = messageBackground == "dark" ||
+    (messageBackground == "theme" && resolveDarkTheme($themeSetting.value));
+  $: bodyClass = `jackdaw-email-${darkEmail ? "dark" : "light"} jackdaw-email-background-${messageBackground}`;
   $: displayHtml = darkEmail ? adaptEmailHtmlForDarkMode(html) : html;
-  $: headHTML = `<style>\n${cssBody}\n${fitContent ? cssBodyEmbed + "\n" : ""}${cssContent}\n${cssBodyDark}\n</style>`;
+  $: displayColors = readDisplayColors(messageBackground, darkEmail, displayReady, $colorsSetting.value);
+  $: headHTML = `<style>\n${cssBody}\n${fitContent ? cssBodyEmbed + "\n" : ""}${cssContent}\n${cssBodyDark}\n${displayColorsCSS(messageBackground, darkEmail, displayColors)}\n</style>`;
+
+  function readDisplayColors(
+    backgroundMode: MessageViewerBackground,
+    isDark: boolean,
+    ready: boolean,
+    _colors: unknown,
+  ): { background: string; foreground: string } {
+    if (backgroundMode == "white") {
+      return { background: "#ffffff", foreground: "#111827" };
+    }
+    if (backgroundMode == "dark") {
+      return { background: "#1a1a1c", foreground: "#e5e7eb" };
+    }
+    if (ready && displayE && typeof getComputedStyle == "function") {
+      let styles = getComputedStyle(displayE);
+      return {
+        background: styles.backgroundColor || "#ffffff",
+        foreground: styles.color || "#111827",
+      };
+    }
+    return isDark
+      ? { background: "#1a1a1c", foreground: "#e5e7eb" }
+      : { background: "#ffffff", foreground: "#111827" };
+  }
+
+  function displayColorsCSS(
+    backgroundMode: MessageViewerBackground,
+    isDark: boolean,
+    colors: { background: string; foreground: string },
+  ): string {
+    let background = backgroundMode == "theme" ? "transparent" : colors.background;
+    return `
+      html, body {
+        background-color: ${background} !important;
+        color: ${colors.foreground};
+      }
+      body.jackdaw-email-background-white {
+        color-scheme: light;
+      }
+      body.jackdaw-email-background-theme {
+        color-scheme: ${isDark ? "dark" : "light"};
+      }
+      body.jackdaw-email-background-dark {
+        color-scheme: dark;
+      }
+    `;
+  }
 </script>
+
+<style>
+  .html-display {
+    flex: 1 1 0;
+    min-width: 0;
+    background-color: var(--message-viewer-bg, var(--main-bg));
+    color: var(--message-viewer-fg, var(--main-fg));
+  }
+  .html-display :global(webview),
+  .html-display :global(iframe) {
+    background-color: var(--message-viewer-bg, var(--main-bg));
+  }
+</style>

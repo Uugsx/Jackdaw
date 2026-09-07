@@ -204,7 +204,7 @@
   }
   .outgoing .from {
     font-weight: normal;
-    color: grey;
+    color: color-mix(in srgb, var(--message-viewer-fg, var(--main-fg)) 68%, transparent);
   }
   .recipients {
     justify-content: end;
@@ -214,10 +214,10 @@
     margin-inline-end: 6px;
   }
   .to {
-    color: grey;
+    color: color-mix(in srgb, var(--message-viewer-fg, var(--main-fg)) 68%, transparent);
   }
   .cc, .bcc {
-    color: grey;
+    color: color-mix(in srgb, var(--message-viewer-fg, var(--main-fg)) 68%, transparent);
   }
   .outgoing .to {
     font-weight: bold;
