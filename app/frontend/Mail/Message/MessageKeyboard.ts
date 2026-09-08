@@ -138,7 +138,7 @@ export async function onKeyOnList(event: KeyboardEvent) {
         await Promise.allSettled(messages.map(msg =>
           msg.markRead(false)));
         return;
-    } else if (event.key == "q") { // Outlook
+    } else if (event.key == "q" && event.ctrlKey && !event.metaKey) { // Outlook; Cmd+Q — системное завершение работы macOS
       consume(event);
       await Promise.allSettled(messages.map(msg =>
         msg.markRead(true)));
