@@ -2,7 +2,7 @@
   on:add-files={(event) => catchErrors(() => onFilesDrop(event))}
   on:inline-files={(event) => catchErrors(() => onFileInlineDrop(event))}
   allowInline={true}>
-  <vbox flex class="mail-composer-window" class:floating on:keydown={onComposerKeydown}>
+  <vbox flex class="mail-composer-window" class:floating on:keydown|capture={onComposerKeydown}>
     <vbox class="compose-header">
       <hbox class="compose-top-row">
         <IdentitySelector bind:selectedIdentity={fromIdentity}
@@ -94,9 +94,10 @@
     <hbox bind:this={smlAddAnchor} class="ribbon-anchor">
       <ComposeRibbon
         {editor}
+        {quoteEditor}
         bind:openLinkDialog
       sendDisabledTooltip={sendDisabledTooltip}
-      {sending}
+      sending={sending || loading || !composeContentReady}
       importanceLevel={mail.appportanceLevel}
       requestReadReceipt={mail.requestReadReceipt}
       requestDeliveryReceipt={mail.requestDeliveryReceipt}
@@ -152,7 +153,7 @@
                 {#if showQuoteAttribution && mail.composeSource && mail.inReplyTo}
                   <p class="quote-header">{mail.composeSource.compose.quotePrefixLine()}</p>
                 {/if}
-                <ComposeQuoteEditor html={quoteBodyHtml} on:change={onQuoteChange} />
+                <ComposeQuoteEditor bind:this={quoteEditor} html={quoteBodyHtml} on:change={onQuoteChange} />
               </vbox>
             {/if}
           </Scroll>
@@ -229,6 +230,7 @@
   import { t, gt } from "../../../l10n/l10n";
   import { tick } from "svelte";
   import type { Editor } from '@tiptap/core';
+  import type { QuoteEditorCommand, QuoteEditorHandle } from "./quoteEditorCommands";
 
   export let mail: EMail;
   export let floating = false;
@@ -237,12 +239,13 @@
 
   let editor: Editor;
   let editableHtml = "";
-  /** Quoted original kept out of TipTap — preserved byte-for-byte for send. */
+  /** Quoted message kept out of TipTap so its original HTML wrapper stays intact. */
   let composeQuoteHtml = "";
   /** Editable body shown in the quote block (may differ from composeQuoteHtml wrapper). */
   let quoteBodyHtml = "";
   let composeContentReady = false;
   let loadingEditorContent = false;
+  let quoteEditor: QuoteEditorHandle | null = null;
   $: to = mail.to;
   let fromIdentity: MailIdentity;
   let toAutocomplete: MailAutocomplete;
@@ -289,11 +292,17 @@
       checkInvalidRecipients(recipients);
     }
 
-    loadText()
-      .catch(backgroundError);
+    let currentLoad = loadText();
+    loadTextPromise = currentLoad;
+    currentLoad.catch(backgroundError).finally(() => {
+      if (loadTextPromise === currentLoad) {
+        loadTextPromise = null;
+      }
+    });
   }
 
   let loading = false;
+  let loadTextPromise: Promise<void> | null = null;
   async function loadText() {
     mail.identity = fromIdentity ?? mail.identity;
     if (!mail.hasHTML) {
@@ -375,8 +384,26 @@
     composeContentReady = true;
   }
 
-  async function ensureEditorContent() {
-    if (loadingEditorContent || composeContentReady) {
+  let ensureEditorContentPromise: Promise<void> | null = null;
+
+  function ensureEditorContent(): Promise<void> {
+    if (composeContentReady) {
+      return Promise.resolve();
+    }
+    if (ensureEditorContentPromise) {
+      return ensureEditorContentPromise;
+    }
+    let currentEnsure = ensureEditorContentInternal();
+    ensureEditorContentPromise = currentEnsure.finally(() => {
+      if (ensureEditorContentPromise === currentEnsure) {
+        ensureEditorContentPromise = null;
+      }
+    });
+    return ensureEditorContentPromise;
+  }
+
+  async function ensureEditorContentInternal() {
+    if (composeContentReady) {
       return;
     }
     if (!await waitForEditor()) {
@@ -410,6 +437,17 @@
     } finally {
       loadingEditorContent = false;
     }
+  }
+
+  async function waitForComposeReady(): Promise<boolean> {
+    if (loadTextPromise) {
+      await loadTextPromise;
+    }
+    if (!composeContentReady) {
+      await ensureEditorContent();
+    }
+    await tick();
+    return !!editor && composeContentReady;
   }
 
   $: if (editor && mail === lastMail && !composeContentReady && !loading && !loadingEditorContent) {
@@ -482,7 +520,11 @@
 
   function isEditorTarget(target: EventTarget | null): boolean {
     return target instanceof Element &&
-      !!target.closest(".html-editor, .ProseMirror, .tiptap");
+      !!target.closest(".html-editor, .ProseMirror, .tiptap, .compose-quote-html");
+  }
+
+  function isQuoteEditorTarget(target: EventTarget | null): boolean {
+    return target instanceof Element && !!target.closest(".compose-quote-html");
   }
 
   function onComposerKeydown(event: KeyboardEvent) {
@@ -504,6 +546,22 @@
       event.preventDefault();
       event.stopPropagation();
       catchErrors(onSaveDraft);
+      return;
+    }
+    if (quoteEditor && isQuoteEditorTarget(event.target) && mod && !event.altKey) {
+      let quoteCommand: QuoteEditorCommand | null =
+        event.key.toLowerCase() === "b" ? "bold" :
+        event.key.toLowerCase() === "i" ? "italic" :
+        event.key.toLowerCase() === "u" ? "underline" :
+        event.key.toLowerCase() === "d" ? "strikeThrough" :
+        null;
+      if (quoteCommand) {
+        event.preventDefault();
+        event.stopPropagation();
+        quoteEditor.applyCommand(quoteCommand);
+        return;
+      }
+      // Do not fall through to TipTap shortcuts while the quote has focus.
       return;
     }
     if (!editor || !isEditorTarget(event.target)) {
@@ -650,6 +708,9 @@
     }
     sending = true;
     try {
+      if (!await waitForComposeReady()) {
+        return;
+      }
       syncComposeHtml();
       await commitPendingRecipients();
       await resolveComposeRecipients(mail);
@@ -661,6 +722,9 @@
   }
 
   async function onSaveDraft() {
+    if (!await waitForComposeReady()) {
+      return;
+    }
     syncComposeHtml();
     await mail.compose.saveAsDraft();
   }

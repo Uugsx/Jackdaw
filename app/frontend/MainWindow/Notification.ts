@@ -1,6 +1,7 @@
 import { Observable, notifyChangedProperty } from "../../logic/util/Observable";
 import { logError } from "../Util/error";
 import { ArrayColl } from "svelte-collections";
+import { playNotificationSound } from "../Shared/NotificationSound";
 
 export class Notification extends Observable {
   /** How urgent the message is for the user to handle */
@@ -53,6 +54,7 @@ export function showNotificationError(ex: Error, notifications: ArrayColl<Notifi
 function showNotification(message: string, severity: NotificationSeverity, closeAfterSec: number, notifications: ArrayColl<Notification>) {
   let msg = new Notification(message, severity);
   notifications.add(msg);
+  void playNotificationSound("other");
   setTimeout(() => {
     notifications.remove(msg);
   }, closeAfterSec * 1000);

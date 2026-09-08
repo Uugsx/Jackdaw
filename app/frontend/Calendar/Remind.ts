@@ -77,7 +77,7 @@ async function showReminder() {
 
   const kinds = new NotificationKinds(getLocalStorage("notifications.calendar", ["popup", "sound"]).value);
   for (let event of dueEvents) {
-    let notification = new SystemNotification(kinds, event.title, event.descriptionText, event.id);
+    let notification = new SystemNotification(kinds, event.title, event.descriptionText, event.id, "calendar");
     notification.icon = CalendarIcon;
     notification.onClick = () => openEventInApp(event);
     await notification.show();

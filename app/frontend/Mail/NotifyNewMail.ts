@@ -58,7 +58,7 @@ export async function showNewMail(messages: EMail[]) {
   let body = singleMsg?.text ??
     messages.map(msg => msg.text?.substring(0, 30)).join(", ").substring(0, 160);
 
-  let notification = new SystemNotification(kinds, title, body, "New Mail");
+  let notification = new SystemNotification(kinds, title, body, "New Mail", "mail-incoming");
   // Which mailbox received this. With several accounts, or a shared mailbox,
   // the subject alone does not say where the mail landed.
   notification.subtitle = [senderLabel(singleMsg), mailboxLabel(firstMsg)]
@@ -80,7 +80,12 @@ function senderLabel(msg: EMail | null): string | null {
   if (!msg) {
     return null;
   }
-  return msg.from?.name || msg.from?.emailAddress || null;
+  let name = msg.from?.name;
+  let address = msg.from?.emailAddress;
+  if (name && address && name != address) {
+    return `${name} <${address}>`;
+  }
+  return address || name || null;
 }
 
 /** The mailbox that received the mail, as the user knows it: the account name

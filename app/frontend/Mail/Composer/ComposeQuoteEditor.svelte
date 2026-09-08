@@ -1,5 +1,6 @@
 <!-- Editable quoted thread — native contenteditable preserves original HTML; not TipTap. -->
 <div
+  bind:this={rootEl}
   class="compose-quote-html"
   contenteditable="true"
   spellcheck={false}
@@ -16,14 +17,35 @@
   import { createEventDispatcher } from "svelte";
   import { openMailImageFromElement } from "../Message/openMailImage";
   import { catchErrors, showUserError } from "../../Util/error";
+  import {
+    applyQuoteCommand,
+    captureQuoteSelection,
+    type QuoteEditorCommand,
+  } from "./quoteEditorCommands";
 
   /** Sanitized HTML (original message body or forward quote). */
   export let html: string;
+
+  let rootEl: HTMLDivElement;
 
   const dispatch = createEventDispatcher<{ change: string }>();
 
   function onChange(bodyHtml: string) {
     dispatch("change", bodyHtml);
+  }
+
+  /** Return the native selection when it belongs to the quoted message. */
+  export function captureSelection(): Range | null {
+    return rootEl ? captureQuoteSelection(rootEl) : null;
+  }
+
+  /** Apply formatting in the quote without moving the caret to the reply area. */
+  export function applyCommand(
+    command: QuoteEditorCommand,
+    value?: string | null,
+    range?: Range | null,
+  ): boolean {
+    return rootEl ? applyQuoteCommand(rootEl, command, value, range) : false;
   }
 
   function openImage(img: HTMLImageElement) {

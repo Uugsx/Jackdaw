@@ -3,15 +3,24 @@
     bind:this={anchor}
     class:is-contact={recipient.findPerson()}
     >
-    <div class="name" title={recipient.name + "\n" + recipient.emailAddress}>
-      {displayName}{#if hasSeparateDisplayName && showDomainSuffix} {/if}
-    </div>
-    {#if showDomainSuffix}
-      <div class="domain" title={recipient.emailAddress}>
-        @{domainSuffix}
+    {#if showFullEmail && recipient.emailAddress}
+      <div class="name" title={recipient.name + "\n" + recipient.emailAddress}>
+        {fullDisplayName}
+        {#if hasVisibleName}
+          <span class="full-email">&lt;{recipient.emailAddress}&gt;</span>
+        {/if}
       </div>
-    {:else if !recipient.emailAddress}
-      <hbox class="invalid">{$t`Invalid address`}</hbox>
+    {:else}
+      <div class="name" title={recipient.name + "\n" + recipient.emailAddress}>
+        {displayName}{#if hasSeparateDisplayName && showDomainSuffix}&nbsp;{/if}
+      </div>
+      {#if showDomainSuffix}
+        <div class="domain" title={recipient.emailAddress}>
+          @{domainSuffix}
+        </div>
+      {:else if !recipient.emailAddress}
+        <hbox class="invalid">{$t`Invalid address`}</hbox>
+      {/if}
     {/if}
   </hbox>
 </Clickable>
@@ -54,8 +63,13 @@
   import { t } from "../../../l10n/l10n";
 
   export let recipient: PersonUID;
+  /** Use the Outlook-style `Name <email>` form instead of the compact domain suffix. */
+  export let showFullEmail = false;
 
   $: displayName = personDisplayName(recipient);
+  $: contactName = recipient.findPerson()?.name;
+  $: fullDisplayName = contactName || recipient.name || recipient.emailAddress;
+  $: hasVisibleName = !!fullDisplayName && fullDisplayName !== recipient.emailAddress;
   $: localPart = recipient.emailAddress?.split("@")[0] ?? "";
   $: showDomainSuffix = !recipient.findPerson() && !!recipient.emailAddress;
   $: hasSeparateDisplayName = !!displayName && displayName !== localPart;
@@ -116,6 +130,10 @@
   }
   .name {
     display: inline;
+  }
+  .full-email {
+    font-weight: normal;
+    margin-inline-start: 4px;
   }
   .domain,
   .invalid {

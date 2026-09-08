@@ -15,6 +15,7 @@ import { convertTextToHTML } from "../util/convertHTML";
 import { getDateTimeLocale, gt } from "../../l10n/l10n";
 import { ArrayColl, type Collection } from "svelte-collections";
 import { addSenderToCC } from "./composeRecipients";
+import { playNotificationSound } from "../../frontend/Shared/NotificationSound";
 
 /** Functions based on the email, which are either
  * not changing the email itself, but are based on the email,
@@ -435,6 +436,11 @@ export class ComposeActions {
     return !text;
   }
 
+  protected hasSignatureFooter(html: string | null | undefined): boolean {
+    let { reply } = this.splitReplyAndQuote(html ?? "");
+    return /<footer\b[^>]*>/i.test(reply);
+  }
+
   /** Apply current identity signature onto the raw HTML body. */
   applySignature() {
     let identity = this.email.identity;
@@ -490,8 +496,11 @@ export class ComposeActions {
     }
     let account = fromIdentity.account;
 
-    // Signature first so data: images in it become CID attachments
-    this.applySignature();
+    // Add the signature when it is missing, but keep user edits made inside
+    // the existing signature footer.
+    if (!this.hasSignatureFooter(this.email.rawHTMLDangerous)) {
+      this.applySignature();
+    }
     await this.convertInlineAttachmentsURLs();
     this.applyComposeSendOptions();
     this.email.regenerateTextFromHTML();
@@ -519,6 +528,7 @@ export class ComposeActions {
 
     let mail = await SendEncrypted.encryptAsNeeded(this.email);
     await account.send(mail);
+    void playNotificationSound("mail-outgoing");
 
     await this.markComposeSourceFlags();
 

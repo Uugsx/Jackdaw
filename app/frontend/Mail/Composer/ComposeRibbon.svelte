@@ -39,6 +39,7 @@
         <vbox class="group">
           <hbox class="group-row">
             <button type="button" class="ribbon-btn" title={$t`Paste`}
+              on:mousedown={rememberEditorSelection}
               on:click={() => pasteContent("default")}>
               <ClipboardPasteIcon size="18px" />
             </button>
@@ -48,10 +49,12 @@
               <ChevronDownIcon size="14px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Cut`}
+              on:mousedown={rememberEditorSelection}
               on:click={onCut}>
               <ScissorsIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Copy`}
+              on:mousedown={rememberEditorSelection}
               on:click={onCopy}>
               <CopyIcon size="18px" />
             </button>
@@ -105,22 +108,26 @@
           <hbox class="group-row">
             <button type="button" class="ribbon-btn" title={$t`Bold`}
               class:on={editor.isActive("bold")}
-              on:click={() => editor.chain().focus().toggleBold().run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("bold", () => editor.chain().focus().toggleBold().run())}>
               <BoldIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Italic`}
               class:on={editor.isActive("italic")}
-              on:click={() => editor.chain().focus().toggleItalic().run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("italic", () => editor.chain().focus().toggleItalic().run())}>
               <ItalicIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Underline`}
               class:on={editor.isActive("underline")}
-              on:click={() => editor.chain().focus().toggleUnderline().run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("underline", () => editor.chain().focus().toggleUnderline().run())}>
               <UnderlineIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Strike-through`}
               class:on={editor.isActive("strike")}
-              on:click={() => editor.chain().focus().toggleStrike().run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("strikeThrough", () => editor.chain().focus().toggleStrike().run())}>
               <StrikethroughIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn color-tool"
@@ -151,49 +158,59 @@
           <hbox class="group-row">
             <button type="button" class="ribbon-btn" title={$t`Bulleted list`}
               class:on={editor.isActive("bulletList")}
-              on:click={() => editor.chain().focus().toggleBulletList().run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("insertUnorderedList", () => editor.chain().focus().toggleBulletList().run())}>
               <ListIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Ordered list`}
               class:on={editor.isActive("orderedList")}
-              on:click={() => editor.chain().focus().toggleOrderedList().run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("insertOrderedList", () => editor.chain().focus().toggleOrderedList().run())}>
               <ListOrderedIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Quote of the original email`}
               class:on={editor.isActive("blockquote")}
-              on:click={() => editor.chain().focus().toggleBlockquote().run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("formatBlock", () => editor.chain().focus().toggleBlockquote().run(), "blockquote")}>
               <QuoteIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Align left`}
               class:on={editor.isActive({ textAlign: "left" })}
-              on:click={() => editor.chain().focus().setTextAlign("left").run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("justifyLeft", () => editor.chain().focus().setTextAlign("left").run())}>
               <AlignLeftIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Align center`}
               class:on={editor.isActive({ textAlign: "center" })}
-              on:click={() => editor.chain().focus().setTextAlign("center").run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("justifyCenter", () => editor.chain().focus().setTextAlign("center").run())}>
               <AlignCenterIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Align right`}
               class:on={editor.isActive({ textAlign: "right" })}
-              on:click={() => editor.chain().focus().setTextAlign("right").run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("justifyRight", () => editor.chain().focus().setTextAlign("right").run())}>
               <AlignRightIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Justify`}
               class:on={editor.isActive({ textAlign: "justify" })}
-              on:click={() => editor.chain().focus().setTextAlign("justify").run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("justifyFull", () => editor.chain().focus().setTextAlign("justify").run())}>
               <AlignJustifyIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Increase indent`}
-              on:click={() => editor.chain().focus().indent().run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("indent", () => editor.chain().focus().indent().run())}>
               <IndentIncreaseIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Decrease indent`}
-              on:click={() => editor.chain().focus().unindent().run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("outdent", () => editor.chain().focus().unindent().run())}>
               <IndentDecreaseIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Clear formatting`}
-              on:click={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}>
+              on:mousedown={rememberEditorSelection}
+              on:click={() => runFormattingCommand("removeFormat", () => editor.chain().focus().clearNodes().unsetAllMarks().run())}>
               <RemoveFormattingIcon size="18px" />
             </button>
           </hbox>
@@ -206,6 +223,7 @@
           <hbox class="group-row">
             <button type="button" class="ribbon-btn" title={$t`Link to webpage`}
               class:on={editor.isActive("link")}
+              on:mousedown={rememberEditorSelection}
               on:click={onLinkOpen}>
               <LinkIcon size="18px" />
             </button>
@@ -259,13 +277,15 @@
               <SmileIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Undo the last change`}
+              on:mousedown={rememberEditorSelection}
               disabled={!editor.can().chain().focus().undo().run()}
-              on:click={() => editor.chain().focus().undo().run()}>
+              on:click={() => runFormattingCommand("undo", () => editor.chain().focus().undo().run())}>
               <UndoIcon size="18px" />
             </button>
             <button type="button" class="ribbon-btn" title={$t`Redo the change that was undone before`}
+              on:mousedown={rememberEditorSelection}
               disabled={!editor.can().chain().focus().redo().run()}
-              on:click={() => editor.chain().focus().redo().run()}>
+              on:click={() => runFormattingCommand("redo", () => editor.chain().focus().redo().run())}>
               <RedoIcon size="18px" />
             </button>
           </hbox>
@@ -488,6 +508,7 @@
   import HorizontalScroll from "../../Shared/HorizontalScroll.svelte";
   import { getLocalStorage } from "../../Util/LocalStorage";
   import type { MailImportanceLevel } from "../../../logic/Mail/EMail";
+  import type { QuoteEditorCommand, QuoteEditorHandle } from "./quoteEditorCommands";
 
   export let editor: Editor;
   export let sendDisabledTooltip: string | null = null;
@@ -501,6 +522,7 @@
   export let editorZoom = 100;
   export let hasSML = false;
   export let openLinkDialog = false;
+  export let quoteEditor: QuoteEditorHandle | null = null;
 
   const dispatch = createEventDispatcher<{
     send: void;
@@ -596,7 +618,11 @@
     onLinkOpen();
   }
 
-  let savedSelection: { from: number; to: number } | null = null;
+  type SavedSelection =
+    | { source: "editor"; from: number; to: number }
+    | { source: "quote"; range: Range };
+
+  let savedSelection: SavedSelection | null = null;
   let formatPainter: FormatPainterSnapshot | null = null;
   let formatPainterSourceSelection: { from: number; to: number; source: "editor" | "quote" } | null = null;
   let formatPainterListenersCleanup: (() => void) | null = null;
@@ -681,19 +707,37 @@
   }
 
   function rememberEditorSelection() {
+    let quoteRange = quoteEditor?.captureSelection();
+    if (quoteRange) {
+      savedSelection = { source: "quote", range: quoteRange };
+      return;
+    }
     if (!editor) {
       return;
     }
     let { from, to } = editor.state.selection;
-    savedSelection = { from, to };
+    savedSelection = { source: "editor", from, to };
   }
 
   function chainWithSavedSelection() {
     let chain = editor.chain().focus();
-    if (savedSelection) {
-      chain = chain.setTextSelection(savedSelection);
+    if (savedSelection?.source === "editor") {
+      chain = chain.setTextSelection({ from: savedSelection.from, to: savedSelection.to });
     }
     return chain;
+  }
+
+  function runFormattingCommand(
+    quoteCommand: QuoteEditorCommand,
+    editorCommand: () => boolean,
+    value?: string | null,
+  ): boolean {
+    if (savedSelection?.source === "quote") {
+      quoteEditor?.applyCommand(quoteCommand, value, savedSelection.range);
+      clearSavedSelection();
+      return true;
+    }
+    return editorCommand();
   }
 
   function clearSavedSelection() {
@@ -703,9 +747,9 @@
   function onFontFamilyChange(event: Event) {
     let value = (event.currentTarget as HTMLSelectElement).value;
     if (value) {
-      chainWithSavedSelection().setFontFamily(value).run();
+      runFormattingCommand("fontName", () => chainWithSavedSelection().setFontFamily(value).run(), value);
     } else {
-      chainWithSavedSelection().unsetFontFamily().run();
+      runFormattingCommand("fontName", () => chainWithSavedSelection().unsetFontFamily().run(), "inherit");
     }
     clearSavedSelection();
   }
@@ -713,9 +757,9 @@
   function onFontSizeChange(event: Event) {
     let value = (event.currentTarget as HTMLSelectElement).value;
     if (value) {
-      chainWithSavedSelection().setFontSize(value).run();
+      runFormattingCommand("fontSize", () => chainWithSavedSelection().setFontSize(value).run(), quoteFontSizeValue(value));
     } else {
-      chainWithSavedSelection().unsetFontSize().run();
+      runFormattingCommand("removeFormat", () => chainWithSavedSelection().unsetFontSize().run());
     }
     clearSavedSelection();
   }
@@ -723,18 +767,33 @@
   function onLineHeightChange(event: Event) {
     let value = (event.currentTarget as HTMLSelectElement).value;
     if (value) {
-      chainWithSavedSelection().setLineHeight(value).run();
+      runFormattingCommand("lineHeight", () => chainWithSavedSelection().setLineHeight(value).run(), value);
     } else {
-      chainWithSavedSelection().unsetLineHeight().run();
+      runFormattingCommand("lineHeight", () => chainWithSavedSelection().unsetLineHeight().run());
     }
     clearSavedSelection();
   }
 
+  /** Native contenteditable fontSize accepts only the legacy 1–7 scale. */
+  function quoteFontSizeValue(value: string): string {
+    let size = parseFloat(value);
+    if (!Number.isFinite(size)) {
+      return "3";
+    }
+    if (size <= 8) return "1";
+    if (size <= 10) return "2";
+    if (size <= 12) return "3";
+    if (size <= 14) return "4";
+    if (size <= 18) return "5";
+    if (size <= 24) return "6";
+    return "7";
+  }
+
   function applyTextColor(color: string | null) {
     if (color) {
-      chainWithSavedSelection().setColor(color).run();
+      runFormattingCommand("foreColor", () => chainWithSavedSelection().setColor(color).run(), color);
     } else {
-      chainWithSavedSelection().unsetColor().run();
+      runFormattingCommand("foreColor", () => chainWithSavedSelection().unsetColor().run(), "inherit");
     }
     clearSavedSelection();
     textColorMenuOpen = false;
@@ -752,9 +811,9 @@
 
   function applyHighlight(color: string | null) {
     if (color) {
-      chainWithSavedSelection().setHighlight({ color }).run();
+      runFormattingCommand("hiliteColor", () => chainWithSavedSelection().setHighlight({ color }).run(), color);
     } else {
-      chainWithSavedSelection().unsetHighlight().run();
+      runFormattingCommand("hiliteColor", () => chainWithSavedSelection().unsetHighlight().run(), "transparent");
     }
     clearSavedSelection();
     highlightMenuOpen = false;
@@ -765,17 +824,32 @@
   }
 
   function onCut() {
+    if (savedSelection?.source === "quote" && quoteEditor) {
+      quoteEditor.applyCommand("cut", undefined, savedSelection.range);
+      clearSavedSelection();
+      return;
+    }
     editor?.chain().focus().run();
     document.execCommand("cut");
   }
 
   function onCopy() {
+    if (savedSelection?.source === "quote" && quoteEditor) {
+      quoteEditor.applyCommand("copy", undefined, savedSelection.range);
+      clearSavedSelection();
+      return;
+    }
     editor?.chain().focus().run();
     document.execCommand("copy");
   }
 
   async function pasteContent(mode: PasteMode) {
-    editor?.chain().focus().run();
+    let quoteSelection = savedSelection?.source === "quote" && quoteEditor
+      ? savedSelection.range
+      : null;
+    if (!quoteSelection) {
+      editor?.chain().focus().run();
+    }
     pasteMenuOpen = false;
     try {
       let items = await navigator.clipboard.read();
@@ -791,7 +865,12 @@
       }
       if (mode === "text") {
         if (text) {
-          editor?.chain().focus().insertContent(text).run();
+          if (quoteSelection && quoteEditor) {
+            quoteEditor.applyCommand("insertText", text, quoteSelection);
+            clearSavedSelection();
+          } else {
+            editor?.chain().focus().insertContent(text).run();
+          }
         }
         return;
       }
@@ -799,17 +878,32 @@
         html = mergePasteFormatting(html);
       }
       if ((mode === "default" || mode === "source" || mode === "merge") && html) {
-        editor?.chain().focus().insertContent(html).run();
+        if (quoteSelection && quoteEditor) {
+          quoteEditor.applyCommand("insertHTML", html, quoteSelection);
+          clearSavedSelection();
+        } else {
+          editor?.chain().focus().insertContent(html).run();
+        }
         return;
       }
       if (text) {
-        editor?.chain().focus().insertContent(text).run();
+        if (quoteSelection && quoteEditor) {
+          quoteEditor.applyCommand("insertText", text, quoteSelection);
+          clearSavedSelection();
+        } else {
+          editor?.chain().focus().insertContent(text).run();
+        }
         return;
       }
     } catch {
       // Fall back to native paste when clipboard API is blocked.
     }
-    document.execCommand("paste");
+    if (quoteSelection && quoteEditor) {
+      quoteEditor.applyCommand("paste", undefined, quoteSelection);
+      clearSavedSelection();
+    } else {
+      document.execCommand("paste");
+    }
   }
 
   function mergePasteFormatting(html: string): string {
@@ -836,18 +930,38 @@
 
   function onLinkOpen() {
     isEditingLink = true;
+    if (savedSelection?.source === "quote") {
+      linkTargetURL = "";
+      return;
+    }
     linkTargetURL = editor.getAttributes("link").href ?? "";
   }
 
   function onLinkOK() {
     if (linkTargetURL) {
-      editor.chain().focus().setLink({ href: linkTargetURL }).run();
+      if (savedSelection?.source === "quote" && !isSafeQuoteLink(linkTargetURL)) {
+        clearSavedSelection();
+        isEditingLink = false;
+        return;
+      }
+      runFormattingCommand("createLink", () => editor.chain().focus().setLink({ href: linkTargetURL }).run(), linkTargetURL);
     }
+    clearSavedSelection();
     isEditingLink = false;
   }
 
+  function isSafeQuoteLink(value: string): boolean {
+    try {
+      let protocol = new URL(value, window.location.href).protocol;
+      return ["http:", "https:", "mailto:", "tel:"].includes(protocol);
+    } catch {
+      return false;
+    }
+  }
+
   function onLinkRemove() {
-    editor.chain().focus().unsetLink().run();
+    runFormattingCommand("unlink", () => editor.chain().focus().unsetLink().run());
+    clearSavedSelection();
     isEditingLink = false;
   }
 

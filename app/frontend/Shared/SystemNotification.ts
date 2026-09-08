@@ -3,6 +3,10 @@ import { appGlobal } from "../../logic/app";
 import logo from '../asset/icon/general/logo.svg?raw';
 import { getOSName } from "../Util/util";
 import { backgroundError } from "../Util/error";
+import {
+  playNotificationSound as playSelectedNotificationSound,
+  type NotificationSoundEvent,
+} from "./NotificationSound";
 
 /** Tells the user about a new mail, a meeting reminder etc.
  * outside of our app window: a popup in the screen corner and in the
@@ -37,12 +41,20 @@ export class SystemNotification {
   /** The user typed an answer right into the popup. macOS only. */
   onReply: (text: string) => void;
   replyPlaceholder: string;
+  readonly soundEvent: NotificationSoundEvent;
 
-  constructor(kinds: NotificationKinds, title: string, body: string, id: string) {
+  constructor(
+    kinds: NotificationKinds,
+    title: string,
+    body: string,
+    id: string,
+    soundEvent: NotificationSoundEvent = "other",
+  ) {
     this.kinds = kinds;
     this.title = title;
     this.body = body;
     this.id = id;
+    this.soundEvent = soundEvent;
   }
 
   /** For the popups that have no separate subtitle line. */
@@ -166,19 +178,8 @@ export class SystemNotification {
     popup.show();
   }
 
-  static lastSound = new Date();
-
   async playNotificationSound() {
-    // Don't annoy user with successive "bing, bing, bing"
-    // Don't bing at startup, implemented by default value of `lastSound`.
-    const kMinTimeBetweenSounds = 2; // in seconds
-    if (Date.now() - SystemNotification.lastSound.getTime() < kMinTimeBetweenSounds * 1000) {
-      return;
-    }
-    SystemNotification.lastSound = new Date();
-
-    let audioEl = new Audio("sound/new-message.mp3");
-    await audioEl.play();
+    await playSelectedNotificationSound(this.soundEvent);
   }
 }
 

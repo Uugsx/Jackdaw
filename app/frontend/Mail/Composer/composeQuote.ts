@@ -1,4 +1,4 @@
-/** Split compose HTML into the editable reply and a read-only quoted original. */
+/** Split compose HTML into the TipTap reply and the separately editable quote. */
 export function splitComposeQuote(html: string | null | undefined): { editable: string; quote: string } {
   let body = html ?? "";
   let headerMatch = body.match(/<p\b[^>]*\bclass=(["'])quote-header\1[^>]*>[\s\S]*$/i);

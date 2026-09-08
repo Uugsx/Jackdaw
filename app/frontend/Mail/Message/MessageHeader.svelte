@@ -25,9 +25,12 @@
       {#if $message.outgoing && !$message.folder?.account?.isDependentAccount}
         <value class="from" title={$message.from.emailAddress}>
           {$t`me *=> myself as sender of the email`}
+          {#if $message.from.emailAddress}
+            <span class="sender-email">&lt;{$message.from.emailAddress}&gt;</span>
+          {/if}
         </value>
       {:else}
-        <Recipient recipient={$message.from} />
+        <Recipient recipient={$message.from} showFullEmail={true} />
       {/if}
       <EncryptionButtons {message} bind:isExpanded={isEncryptionExpanded} />
     </hbox>
@@ -198,6 +201,10 @@
   }
   .from {
     font-weight: bold;
+  }
+  .sender-email {
+    font-weight: normal;
+    margin-inline-start: 4px;
   }
   .from :global(.domain) {
     font-weight: normal;

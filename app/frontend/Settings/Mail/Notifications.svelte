@@ -17,11 +17,20 @@
       {$t`From people in my address book`}
     </label>
   </HeaderGroupBox>
+
+  <HeaderGroupBox>
+    <hbox slot="header">
+      {$t`Notification sounds`}
+    </hbox>
+    <hbox class="subtitle">{$t`Choose a sound for each type of event.`}</hbox>
+    <NotificationSounds events={["mail-incoming", "mail-outgoing", "other"]} />
+  </HeaderGroupBox>
 </hbox>
 
 <script lang="ts">
   import { getLocalStorage } from "../../Util/LocalStorage";
   import NotificationKinds from "./NotificationKinds.svelte";
+  import NotificationSounds from "./NotificationSounds.svelte";
   import HeaderGroupBox from "../../Shared/HeaderGroupBox.svelte";
   import { t } from "../../../l10n/l10n";
 
