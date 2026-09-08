@@ -119,6 +119,11 @@
       on:setZoom={event => editorZoom = event.detail}
       on:openActions={() => showSMLAdd = true} />
     </hbox>
+    {#if showAttachments}
+      <hbox class="attachments-row" aria-label={$t`Attachments`}>
+        <AttachmentsPane message={mail} on:remove={onAttachmentRemove} />
+      </hbox>
+    {/if}
     {#if loading}
       <Spinner size="64px" />
     {/if}
@@ -153,11 +158,6 @@
           </Scroll>
         </Paper>
       </vbox>
-      {#if showAttachments}
-        <vbox class="attachments">
-          <AttachmentsPane message={mail} on:remove={onAttachmentRemove} />
-        </vbox>
-      {/if}
     </hbox>
   </vbox>
 </FileDropTarget>
@@ -953,9 +953,38 @@
     border-radius: 12px;
     box-shadow: none;
   }
-  .attachments {
-    width: 300px;
-    margin-inline-end: -12px;
+  .attachments-row {
+    flex: 0 0 auto;
+    min-width: 0;
+    min-height: 0;
+    padding-block: 4px 8px;
+    border-block-end: 1px solid var(--border);
+  }
+  .attachments-row :global(.attachments-pane) {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+  }
+  .attachments-row :global(.attachments-pane .scroll) {
+    flex: 0 0 auto;
+    max-height: 96px;
+    overflow-y: auto;
+  }
+  .attachments-row :global(.attachments-pane .inside) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    min-height: 0;
+  }
+  .attachments-row :global(.attachments-pane .attachment) {
+    flex: 0 1 280px;
+    min-width: 200px;
+    max-width: 360px;
+  }
+  .attachments-row :global(.attachments-pane .inside > .buttons) {
+    margin-inline-start: 8px;
+    margin-block-start: 0;
+    align-self: center;
   }
   .subject {
     margin-inline: 2px 24px;

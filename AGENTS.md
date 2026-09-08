@@ -19,6 +19,14 @@ Do **not** revert to parallel publish without the `prepare` release shell (cause
 - [docs/systems/desktop-build/electron-builder.md](docs/systems/desktop-build/electron-builder.md)
 - [docs/INSTALL.md](docs/INSTALL.md)
 
+## Local desktop app verification
+
+After frontend or desktop changes, rebuild the local macOS ARM64 application for manual verification. The expected artifact is:
+
+`/Users/ng/Documents/antigravity/Jackdaw/desktop/dist/mac-arm64/Jackdaw.app/`
+
+Use the local directory build; do not report only `app/dist` as the application build. From `desktop/`, run `rtk npm run build`, then package the ARM64 app with `rtk npx electron-builder --mac --arm64 --dir --config`.
+
 ## Repo layout (desktop)
 
 - `app/` — Svelte UI + shared logic (including Settings → About updater UI)

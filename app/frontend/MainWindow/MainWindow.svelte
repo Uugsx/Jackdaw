@@ -4,11 +4,12 @@
 <svelte:window
   bind:outerWidth={windowWidth}
   on:resize={saveWindowSettingsDebounced}
-  on:blur={() => catchErrors(saveWindowSettings)}
-  on:visibilitychange={() => catchErrors(saveWindowSettings)}
+  on:blur={onMainWindowBlur}
+  on:visibilitychange={onMainWindowVisibilityChange}
   on:beforeunload={() => catchErrors(saveWindowSettings)}
   on:click|capture={(event) => catchErrors(() => onClickTopLevel(event))}
   on:keydown|capture={(event) => catchErrors(() => onCategoryShortcutKeydown(event))}
+  on:keyup|capture={onCategoryShortcutKeyup}
   on:mousedown|capture={(event) => catchErrors(() => onCategoryShortcutMouseDown(event))} />
 
 <vbox flex class="main-window"
@@ -83,6 +84,7 @@
     applyCategoryShortcut,
     findCategoryShortcut,
     keyboardCategoryShortcutFromEvent,
+    KeyboardCategoryShortcutPressGuard,
     mouseCategoryShortcutFromEvent,
   } from "../Mail/CategoryShortcuts";
   import { getLocalStorage } from "../Util/LocalStorage";
@@ -221,6 +223,21 @@ import { updatePaneFocusFromPointer } from "./paneFocus";
     windowPositionSetting.value = [ window.screenX, window.screenY ];
   }
   const saveWindowSettingsDebounced = debounce(() => catchErrors(saveWindowSettings), 1000);
+  const pressedCategoryShortcutCodes = new KeyboardCategoryShortcutPressGuard();
+
+  function clearPressedCategoryShortcutCodes(): void {
+    pressedCategoryShortcutCodes.clear();
+  }
+
+  function onMainWindowBlur(): void {
+    clearPressedCategoryShortcutCodes();
+    catchErrors(saveWindowSettings);
+  }
+
+  function onMainWindowVisibilityChange(): void {
+    clearPressedCategoryShortcutCodes();
+    catchErrors(saveWindowSettings);
+  }
 
   function onMainWindowPointerDown() {
     if (appGlobal.isMobile) {
@@ -246,9 +263,19 @@ import { updatePaneFocusFromPointer } from "./paneFocus";
     if (!target) {
       return;
     }
+    if (!pressedCategoryShortcutCodes.claim(shortcut.code)) {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     await applyCategoryShortcut(target);
+  }
+
+  function onCategoryShortcutKeyup(event: KeyboardEvent): void {
+    let code = event.code || event.key;
+    if (code) {
+      pressedCategoryShortcutCodes.release(code);
+    }
   }
 
   async function onCategoryShortcutMouseDown(event: MouseEvent): Promise<void> {

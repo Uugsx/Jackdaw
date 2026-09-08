@@ -30,6 +30,27 @@ export type MouseCategoryShortcut = {
 
 export type CategoryShortcut = KeyboardCategoryShortcut | MouseCategoryShortcut;
 
+/** Не даёт одному физическому нажатию применить категорию несколько раз. */
+export class KeyboardCategoryShortcutPressGuard {
+  private readonly pressedCodes = new Set<string>();
+
+  claim(code: string): boolean {
+    if (!code || this.pressedCodes.has(code)) {
+      return false;
+    }
+    this.pressedCodes.add(code);
+    return true;
+  }
+
+  release(code: string): void {
+    this.pressedCodes.delete(code);
+  }
+
+  clear(): void {
+    this.pressedCodes.clear();
+  }
+}
+
 type StoredCategoryShortcut = {
   target: CategoryShortcutTarget;
   shortcut: CategoryShortcut;

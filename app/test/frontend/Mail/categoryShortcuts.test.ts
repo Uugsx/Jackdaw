@@ -12,6 +12,7 @@ import {
   formatCategoryShortcut,
   getCategoryShortcut,
   keyboardCategoryShortcutFromEvent,
+  KeyboardCategoryShortcutPressGuard,
   mouseCategoryShortcutFromEvent,
 } from "../../../frontend/Mail/CategoryShortcuts";
 import { Tag, availableTags } from "../../../logic/Abstract/Tag";
@@ -60,6 +61,19 @@ describe("category shortcuts", () => {
     expect(shortcut?.shift).toBe(true);
     expect(shortcut?.ctrl).toBe(false);
     expect(formatCategoryShortcut(shortcut!)).toBe("Shift");
+  });
+
+  test("does not claim the same physical key until it is released", () => {
+    let guard = new KeyboardCategoryShortcutPressGuard();
+
+    expect(guard.claim("KeyK")).toBe(true);
+    expect(guard.claim("KeyK")).toBe(false);
+
+    guard.release("KeyK");
+    expect(guard.claim("KeyK")).toBe(true);
+
+    guard.clear();
+    expect(guard.claim("KeyK")).toBe(true);
   });
 
   test("moves a shortcut when another target claims it", () => {
