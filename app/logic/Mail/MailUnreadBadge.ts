@@ -39,7 +39,7 @@ export function totalUnreadFromAccounts(accounts: Iterable<MailAccount>): number
     if (!inbox) {
       continue;
     }
-    total += inbox.countUnread || inbox.countNewArrived;
+    total += inbox.countUnread;
   }
   return total;
 }

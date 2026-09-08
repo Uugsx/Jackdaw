@@ -11,6 +11,7 @@ import MailIcon from '../asset/icon/appBar/mail.svg?raw';
 import { logError, showError } from "../Util/error";
 import { CollectionObserver, type ArrayColl } from "svelte-collections";
 import type { Account } from "../../logic/Abstract/Account";
+import { syncMailTaskbarBadge } from "./mailUnreadCounts";
 
 export async function newMailListener() {
   appGlobal.emailAccounts.registerObserver(accountsObserver);
@@ -65,10 +66,13 @@ export async function showNewMail(messages: EMail[]) {
     .join(" · ") || null;
   notification.count = count;
   notification.icon = MailIcon;
+  // Dock-бейдж должен следовать фактическому числу непрочитанных писем.
+  notification.updatesTaskbarBadge = false;
   notification.onClick = () => openMessage(firstMsg);
   notification.onReply = replyText => reply(firstMsg, replyText);
   notification.replyPlaceholder = "Reply…";
   await notification.show();
+  syncMailTaskbarBadge();
 }
 
 /** Who sent it. Only for a single message - for a batch it would be a list. */

@@ -4,6 +4,8 @@ import { SpecialFolder, type Folder } from "../../logic/Mail/Folder";
 import type { MailAccount } from "../../logic/Mail/MailAccount";
 import { accountInboxBadgeCount, findInboxFolder, totalUnreadFromAccounts } from "../../logic/Mail/MailUnreadBadge";
 import { CollectionObserver, type ArrayColl } from "svelte-collections";
+import { getLocalStorage } from "../Util/LocalStorage";
+import { backgroundError } from "../Util/error";
 
 export { accountInboxBadgeCount, findInboxFolder } from "../../logic/Mail/MailUnreadBadge";
 
@@ -13,10 +15,48 @@ export const mailUnreadEpoch = writable(0);
 let trackingStarted = false;
 const inboxUnsubs = new Map<Folder, () => void>();
 const watchedSubFolders = new WeakSet<Folder>();
+const mailNotificationsSetting = getLocalStorage<string[]>("notifications.mail", ["popup", "sound"]);
+let nativeMailBadgeCount: number | undefined;
+let nativeBadgeRemoteApp: any;
+let nativeBadgeUpdate = Promise.resolve();
 
 function bumpMailUnreadEpoch(): void {
   mailUnreadEpoch.update(n => n + 1);
+  syncMailTaskbarBadge();
 }
+
+/** Keep the native Dock/taskbar badge aligned with the Mail unread count. */
+export function syncMailTaskbarBadge(): void {
+  let remoteApp = appGlobal.remoteApp;
+  if (typeof remoteApp?.setBadgeCount != "function") {
+    return;
+  }
+
+  let taskbarEnabled = (mailNotificationsSetting.value ?? []).includes("taskbar");
+  if (!taskbarEnabled && nativeMailBadgeCount === undefined) {
+    return;
+  }
+  let nextCount = taskbarEnabled ? totalMailUnreadCount() : 0;
+  if (nextCount === nativeMailBadgeCount && remoteApp === nativeBadgeRemoteApp) {
+    return;
+  }
+  nativeMailBadgeCount = nextCount;
+  nativeBadgeRemoteApp = remoteApp;
+  let targetRemoteApp = remoteApp;
+
+  nativeBadgeUpdate = nativeBadgeUpdate
+    .catch(() => {})
+    .then(() => targetRemoteApp.setBadgeCount(nextCount))
+    .catch(ex => {
+      if (nativeMailBadgeCount === nextCount && nativeBadgeRemoteApp === targetRemoteApp) {
+        nativeMailBadgeCount = undefined;
+        nativeBadgeRemoteApp = undefined;
+      }
+      backgroundError(ex);
+    });
+}
+
+mailNotificationsSetting.subscribe(() => syncMailTaskbarBadge());
 
 function trackInbox(folder: Folder | null | undefined): void {
   if (!folder || inboxUnsubs.has(folder)) {
@@ -118,6 +158,7 @@ export function startMailUnreadTracking(): void {
     account.subscribe(() => bumpMailUnreadEpoch());
     watchAccountFolders(account);
   }
+  syncMailTaskbarBadge();
 }
 
 /** Total unread across real mail accounts (not the virtual "All accounts"). */

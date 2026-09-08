@@ -24,6 +24,9 @@ export class SystemNotification {
   /** How many mails etc. you want to notify about, at once with this notification.
    * TODO implement */
   count = 1;
+  /** Whether this notification is responsible for the native app badge.
+   * Domain notifications with a persistent unread counter manage it separately. */
+  updatesTaskbarBadge = true;
   /** Raw SVG of the icon below the bubble
    * TODO implement?
    * TODO makes sense? */
@@ -54,9 +57,9 @@ export class SystemNotification {
   async show() {
     await this.showPopups();
 
-    if (this.kinds.taskbar) {
+    if (this.kinds.taskbar && this.updatesTaskbarBadge) {
       try {
-        // TODO
+        await appGlobal.remoteApp.setBadgeCount(this.count);
       } catch (ex) {
         backgroundError(ex);
       }
@@ -186,13 +189,12 @@ export class NotificationKinds {
   readonly popup: boolean;
   /** Bing! */
   readonly sound: boolean;
-  /** In the OS app starter at bottom of the screen, show a bubble on top of the app icon */
+  /** Show a count badge on the native application icon when supported by the OS. */
   readonly taskbar: boolean;
   /** Show an icon in the OS notifications area, e.g. top right on mac and bottom right on Windows.
    * Not yet implemented correctly. */
   readonly tray: boolean;
-  /** In our app bar, in our window, show a bubble on top of the app icon
-   * Not yet implemented. */
+  /** In our app bar, in our window, show a bubble on top of the Mail app icon. */
   readonly appbar: boolean;
 
   constructor(kinds: string[]) {

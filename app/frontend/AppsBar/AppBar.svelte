@@ -4,7 +4,7 @@
       {#each $showApps.each as app (app.id)}
         {#if app.id !== "settings"}
           <AppButton selected={selectedApp == app} classes={app.id}
-            badgeCount={app.id === "mail" ? mailUnreadTotal : 0}
+            badgeCount={app.id === "mail" && appbarBadgeEnabled ? mailUnreadTotal : 0}
             on:click={() => catchErrors(() => onSelectApp(app))} >
             <AppIcon slot="icon" icon={app.icon} size="22px" strokeWidth={1.75} />
             <hbox slot="label" class="label">
@@ -73,7 +73,9 @@
 
   const mac = !webMail && getOSName() == "macintosh";
   const collapsedSetting = getLocalStorage("appbar.collapsed", false);
+  let mailNotificationsSetting = getLocalStorage<string[]>("notifications.mail", ["popup", "sound"]);
   $: collapsed = $collapsedSetting.value;
+  $: appbarBadgeEnabled = ($mailNotificationsSetting.value ?? []).includes("appbar");
 
   function toggleCollapsed() {
     collapsedSetting.value = !collapsedSetting.value;

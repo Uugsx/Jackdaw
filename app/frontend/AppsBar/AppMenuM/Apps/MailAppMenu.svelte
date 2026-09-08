@@ -12,7 +12,7 @@
   onClick={() => goTo("/mail", {})} />
 <AppButton
   app={mailApp}
-  badgeCount={mailUnreadTotal}
+  badgeCount={appbarBadgeEnabled ? mailUnreadTotal : 0}
   page={URLPart`/mail/folder/${allAccountsAccount.id}/${allAccountsAccount.inbox?.id ?? "noid"}/message-list`}
   params={{
     messages: allAccountsAccount.inbox.messages,
@@ -43,10 +43,13 @@
   import { URLPart } from "../../../Util/util";
   import { ArrayColl, mergeColl } from "svelte-collections";
   import { mailUnreadEpoch, totalMailUnreadCount } from "../../../Mail/mailUnreadCounts";
+  import { getLocalStorage } from "../../../Util/LocalStorage";
   import { t } from "../../../../l10n/l10n";
 
   $: _mailUnreadEpoch = $mailUnreadEpoch;
   $: mailUnreadTotal = totalMailUnreadCount();
+  let mailNotificationsSetting = getLocalStorage<string[]>("notifications.mail", ["popup", "sound"]);
+  $: appbarBadgeEnabled = ($mailNotificationsSetting.value ?? []).includes("appbar");
 
   function goToAccount(account: MailAccount) {
     $selectedAccount = account;
