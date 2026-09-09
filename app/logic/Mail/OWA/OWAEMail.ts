@@ -364,6 +364,9 @@ export class OWAEMail extends ExchangeEMail {
         [SpecialFolder.Trash, SpecialFolder.Spam].includes(this.folder.specialFolder);
       let request = new OWADeleteItemRequest(this.itemID, {
         DeleteType: hardDelete ? "HardDelete" : "MoveToDeletedItems",
+        // Exchange требует этот параметр для элементов календаря. Очистка
+        // почты не должна отправлять участникам встречи отмену.
+        SendMeetingCancellations: "SendToNone",
         SuppressReadReceipts: true,
       });
       await this.folder.account.callOWA(request);
