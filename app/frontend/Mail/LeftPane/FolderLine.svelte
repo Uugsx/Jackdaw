@@ -53,8 +53,17 @@
   <FolderMenu
     {folder}
     on:requestCreateFolder={openCreateFolderDialog}
-    on:requestRenameFolder={openRenameFolderDialog} />
+    on:requestRenameFolder={openRenameFolderDialog}
+    on:requestClearFolder={openClearFolderConfirmation}
+    on:requestDeleteFolder={openDeleteFolderConfirmation} />
 </ContextMenu>
+<ConfirmDialog
+  bind:open={folderConfirmationOpen}
+  title={folderConfirmationTitle}
+  message={folderConfirmationMessage}
+  confirmLabel={folderConfirmationConfirmLabel}
+  on:confirm={confirmFolderAction}
+  on:cancel={cancelFolderAction} />
 <Popup
   bind:popupOpen={folderDialogOpen}
   popupAnchor={folderElement}
@@ -81,9 +90,10 @@
   import { onDropMail, onDragOverMail } from '../Message/drag';
   import FolderIcon from './FolderIcon.svelte';
   import RefreshCwIcon from 'lucide-svelte/icons/refresh-cw';
-  import { folderFetchBusy } from '../Selected';
+  import { folderFetchBusy, selectedFolder } from '../Selected';
   import FolderMenu from './FolderMenu.svelte';
   import FolderNameDialog from './FolderNameDialog.svelte';
+  import ConfirmDialog from '../../Shared/ConfirmDialog.svelte';
   import ContextMenu from '../../Shared/Menu/ContextMenu.svelte';
   import Popup from '../../Shared/Popup.svelte';
   import { catchErrors } from '../../Util/error';
@@ -110,7 +120,25 @@
   let dropMode: "before" | "after" | "inside" | null = null;
   let folderDialogOpen = false;
   let folderDialogMode: "create" | "rename" | null = null;
+  let folderConfirmationOpen = false;
+  let folderConfirmationAction: "clear" | "delete" | null = null;
   let treeRefresh = getContext("treeRefresh") as (() => void) | undefined;
+
+  $: permanentlyClearsFolder =
+    folder.specialFolder == SpecialFolder.Trash || folder.specialFolder == SpecialFolder.Spam;
+  $: folderConfirmationTitle = folderConfirmationAction == "delete"
+    ? $t`Delete folder`
+    : permanentlyClearsFolder
+      ? $t`Delete all messages`
+      : $t`Clear folder`;
+  $: folderConfirmationMessage = folderConfirmationAction == "delete"
+    ? $t`Delete folder “${folder.name}” and all messages in it? This cannot be undone.`
+    : permanentlyClearsFolder
+      ? $t`Permanently delete all messages in “${folder.name}”? This cannot be undone.`
+      : $t`Move all messages in “${folder.name}” to Trash?`;
+  $: folderConfirmationConfirmLabel = folderConfirmationAction == "delete" || permanentlyClearsFolder
+    ? $t`Delete`
+    : $t`Move`;
 
   function openCreateFolderDialog() {
     folderDialogMode = "create";
@@ -120,6 +148,37 @@
   function openRenameFolderDialog() {
     folderDialogMode = "rename";
     folderDialogOpen = true;
+  }
+
+  function openClearFolderConfirmation() {
+    folderConfirmationAction = "clear";
+    folderConfirmationOpen = true;
+  }
+
+  function openDeleteFolderConfirmation() {
+    folderConfirmationAction = "delete";
+    folderConfirmationOpen = true;
+  }
+
+  function cancelFolderAction() {
+    folderConfirmationOpen = false;
+    folderConfirmationAction = null;
+  }
+
+  async function confirmFolderAction() {
+    let action = folderConfirmationAction;
+    cancelFolderAction();
+    if (action == "clear") {
+      await catchErrors(() => folder.clearFolder());
+    } else if (action == "delete") {
+      let next = folder.parent ?? folder.account.inbox;
+      await catchErrors(async () => {
+        await folder.deleteIt();
+        if ($selectedFolder == folder) {
+          $selectedFolder = next;
+        }
+      });
+    }
   }
 
   function closeFolderNameDialog() {

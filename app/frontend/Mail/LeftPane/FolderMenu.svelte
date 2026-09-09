@@ -22,13 +22,13 @@
 </hbox>
 {#if folder.specialFolder == SpecialFolder.Trash || folder.specialFolder == SpecialFolder.Spam}
   <MenuItem
-    onClick={clearFolder}
+    onClick={requestClearFolder}
     label={$t`Delete all messages`}
     classes="danger"
     icon={DeleteIcon} />
 {:else if folder.specialFolder != SpecialFolder.Drafts && folder.specialFolder != SpecialFolder.Outbox}
   <MenuItem
-    onClick={clearFolder}
+    onClick={requestClearFolder}
     label={$t`Clear folder`}
     classes="danger"
     icon={TrashIcon} />
@@ -48,7 +48,7 @@
 {/if}
 {#if !folder.disableDelete()}
   <MenuItem
-    onClick={deleteFolder}
+    onClick={requestDeleteFolder}
     label={$t`Delete folder`}
     classes="danger"
     icon={DeleteIcon} />
@@ -109,7 +109,7 @@
   import MoveDownIcon from "lucide-svelte/icons/arrow-down";
   import StarIcon from "lucide-svelte/icons/star";
   import { createEventDispatcher, getContext } from "svelte";
-  import { t, gt } from "../../../l10n/l10n";
+  import { t } from "../../../l10n/l10n";
   import {
     favoriteFoldersSetting,
     isFavoriteFolderRef,
@@ -120,6 +120,8 @@
   const dispatch = createEventDispatcher<{
     requestCreateFolder: void;
     requestRenameFolder: void;
+    requestClearFolder: void;
+    requestDeleteFolder: void;
   }>();
   let treeRefresh = getContext("treeRefresh") as (() => void) | undefined;
 
@@ -147,18 +149,8 @@
     await folder.markAllUnread();
   }
 
-  async function clearFolder() {
-    if (!confirm(clearFolderConfirmText(folder))) {
-      return;
-    }
-    await folder.clearFolder();
-  }
-
-  function clearFolderConfirmText(folder: Folder): string {
-    if (folder.specialFolder == SpecialFolder.Trash || folder.specialFolder == SpecialFolder.Spam) {
-      return gt`Permanently delete all messages in “${folder.name}”? This cannot be undone.`;
-    }
-    return gt`Move all messages in “${folder.name}” to Trash?`;
+  function requestClearFolder() {
+    dispatch("requestClearFolder");
   }
 
   function requestCreateFolder() {
@@ -174,15 +166,8 @@
     treeRefresh?.();
   }
 
-  async function deleteFolder() {
-    if (!confirm(gt`Delete folder “${folder.name}” and all messages in it? This cannot be undone.`)) {
-      return;
-    }
-    let next = folder.parent ?? folder.account.inbox;
-    await folder.deleteIt();
-    if ($selectedFolder == folder) {
-      $selectedFolder = next;
-    }
+  function requestDeleteFolder() {
+    dispatch("requestDeleteFolder");
   }
 
   function openFolderSettings() {
