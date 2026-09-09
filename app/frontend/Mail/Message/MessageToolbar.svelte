@@ -7,7 +7,7 @@
         iconOnly={$appGlobal.isSmall}
         label={$t`Edit draft`}
         onClick={editDraft}
-        classes="primary"
+        classes="primary draft-action"
         />
     </hbox>
   {/if}
@@ -168,11 +168,15 @@
 
   let replyAllRev = 0;
   let replyAllUnsub: (() => void) | null = null;
+  let canReplyAll = false;
   $: {
     replyAllUnsub?.();
     replyAllUnsub = subscribeCanReplyAll(message, () => replyAllRev++);
   }
-  $: canReplyAll = (replyAllRev, computeCanReplyAll(message));
+  $: {
+    replyAllRev;
+    canReplyAll = computeCanReplyAll(message);
+  }
 
   function reply() {
     catchErrors(async () => {
@@ -264,7 +268,7 @@
   // Folder Popup
   let popupAnchorE: HTMLElement;
   let popupOpen = false;
-  function onPopupToggle(event) {
+  function onPopupToggle() {
     popupOpen = !popupOpen;
   }
   function onPopupClose() {
@@ -283,11 +287,23 @@
     margin-inline-start: 0;
     border-radius: 8px;
   }
+  .draft {
+    flex-shrink: 0;
+  }
   .buttons :global(button) {
     width: 30px;
     height: 30px;
     padding: 6px;
     color: var(--main-fg);
+  }
+  .buttons :global(button.draft-action) {
+    width: auto;
+    height: auto;
+    min-width: 0;
+    padding: 6px 8px;
+    border-radius: 8px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .buttons :global(button:hover:not(.disabled)) {
     background-color: var(--hover-bg);
