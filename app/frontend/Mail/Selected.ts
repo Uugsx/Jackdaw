@@ -33,7 +33,8 @@ export const selectedSearchTab = writable<SearchView>(SearchView.Folder);
 /** Messages currently shown in the list (after filters). Used for Ctrl/Cmd+A outside FastList. */
 export const listVisibleMessages = writable<Collection<EMail> | null>(null);
 
-/** True while the open folder is fetching new messages from the server. */
+/** True while the open folder is fetching new messages from the server.
+ * Existing rows stay interactive during this background refresh. */
 export const folderSyncing = writable(false);
 
 /** Folder IDs with an active mail fetch shown in the folder list. */

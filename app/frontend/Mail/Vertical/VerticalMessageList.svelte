@@ -37,11 +37,6 @@
     </svelte:fragment>
   </FastList>
   {/if}
-  {#if $folderSyncing && !$listRows.isEmpty}
-    <vbox class="sync-overlay">
-      <Spinner size="28px" />
-    </vbox>
-  {/if}
 </vbox>
 
 <script lang="ts">
@@ -172,15 +167,6 @@
 <style>
   .message-list {
     position: relative;
-  }
-  .sync-overlay {
-    position: absolute;
-    inset: 0;
-    align-items: center;
-    justify-content: center;
-    background-color: color-mix(in srgb, var(--main-bg) 70%, transparent);
-    pointer-events: none;
-    z-index: 1;
   }
   .message-list :global(.fast-list) {
     padding-inline-start: 0;
