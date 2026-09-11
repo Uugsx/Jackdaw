@@ -142,10 +142,26 @@ export function mailListSectionLabels(rows: readonly MailListRow[]): string[] {
     .map(row => row.label);
 }
 
+function messagesRepresentSameMail(a: EMail, b: EMail): boolean {
+  if (a == b) {
+    return true;
+  }
+  if (a.dbID != null && b.dbID != null) {
+    return a.dbID == b.dbID;
+  }
+  if (a.pID != null && b.pID != null) {
+    return a.pID == b.pID;
+  }
+  if (a.id != null && b.id != null) {
+    return a.id == b.id;
+  }
+  return false;
+}
+
 export function findMailListRowForMessage(rows: Collection<MailListRow>, message: EMail | null | undefined): MailListMessageRow | null {
   if (!message) {
     return null;
   }
   return rows.contents.find((row): row is MailListMessageRow =>
-    row.kind == "message" && row.message == message) ?? null;
+    row.kind == "message" && messagesRepresentSameMail(row.message, message)) ?? null;
 }

@@ -1,0 +1,299 @@
+import { expect, test } from "vitest";
+import {
+  createReportHTML,
+  downloadTextFile,
+} from "../../../frontend/Reports/ReportsExport";
+import type { ReportData } from "../../../logic/Reports/ReportsData";
+import { DEFAULT_WORKING_HOURS_SCHEDULE } from "../../../logic/Reports/WorkingHours";
+import { appGlobal } from "../../../logic/app";
+
+function fixture(): ReportData {
+  const date = new Date("2026-09-09T12:00:00Z");
+  return {
+    range: { from: "2026-09-01", to: "2026-09-09" },
+    generatedAt: date,
+    granularity: "day",
+    workingHours: DEFAULT_WORKING_HOURS_SCHEDULE,
+    summary: {
+      mailMessages: 4,
+      mailIncoming: 2,
+      mailOutgoing: 2,
+      mailAnswered: 1,
+      responseTargetMinutes: 30,
+      responseTime: {
+        answered: 1,
+        averageSeconds: 3_600,
+        minimumSeconds: 3_600,
+        maximumSeconds: 3_600,
+        withinTarget: 0,
+        overTarget: 1,
+      },
+      chatMessages: 1,
+      chatIncoming: 1,
+      chatOutgoing: 0,
+      calendarEvents: 1,
+      calendarHours: 1.5,
+      filesChanged: 2,
+      fileBytes: 2048,
+      activityCount: 4,
+      responseRate: 0.5,
+      peakWeekday: 2,
+      peakHour: 14,
+    },
+    timeline: [
+      {
+        key: "2026-09-09",
+        start: "2026-09-09",
+        mailIncoming: 2,
+        mailOutgoing: 2,
+        chatIncoming: 1,
+        chatOutgoing: 0,
+        calendarEvents: 1,
+        filesChanged: 2,
+        total: 8,
+      },
+    ],
+    activity: [{ weekday: 2, hour: 14, count: 4 }],
+    mail: {
+      summary: {
+        total: 4,
+        incoming: 2,
+        outgoing: 2,
+        answered: 1,
+        withAttachments: 0,
+        totalBytes: 2048,
+        responseTime: {
+          answered: 1,
+          averageSeconds: 3_600,
+          minimumSeconds: 3_600,
+          maximumSeconds: 3_600,
+          withinTarget: 0,
+          overTarget: 1,
+        },
+      },
+      accounts: [
+        {
+          accountId: 1,
+          accountName: "Main profile",
+          total: 4,
+          incoming: 2,
+          outgoing: 2,
+          answered: 1,
+          totalBytes: 2048,
+          lastActivity: date,
+        },
+      ],
+      responders: [
+        {
+          accountId: 1,
+          accountName: "Main profile",
+          email: "me@example.com",
+          requests: 2,
+          answered: 1,
+          sent: 2,
+          lastActivity: date,
+          peakWeekday: 2,
+          peakHour: 14,
+          responseTime: {
+            answered: 1,
+            averageSeconds: 3_600,
+            minimumSeconds: 3_600,
+            maximumSeconds: 3_600,
+            withinTarget: 0,
+            overTarget: 1,
+          },
+        },
+      ],
+      responseTargetMinutes: 30,
+      responseTimes: [
+        {
+          emailId: 11,
+          folderId: 201,
+          accountId: 1,
+          accountName: "Main profile",
+          subject: "Access request",
+          contactName: "Requester",
+          contactEmail: "requester@example.com",
+          requestAt: new Date("2026-09-09T09:00:00Z"),
+          responseAt: new Date("2026-09-09T10:00:00Z"),
+          durationSeconds: 3_600,
+          withinTarget: false,
+          responseTimeStatus: "measured",
+          categoryNames: ["Никита Левченко"],
+        },
+        {
+          emailId: 12,
+          folderId: 201,
+          accountId: 1,
+          accountName: "Main profile",
+          subject: "Письмо вне графика",
+          contactName: "Requester",
+          contactEmail: "requester@example.com",
+          requestAt: new Date("2026-09-12T12:00:00Z"),
+          responseAt: new Date("2026-09-12T12:05:00Z"),
+          durationSeconds: null,
+          withinTarget: null,
+          responseTimeStatus: "outside-working-hours",
+          categoryNames: [],
+        },
+      ],
+      responseTimeDays: [
+        {
+          day: "2026-09-09",
+          answered: 1,
+          averageSeconds: 3_600,
+          minimumSeconds: 3_600,
+          maximumSeconds: 3_600,
+          withinTarget: 0,
+          overTarget: 1,
+        },
+      ],
+      folders: [],
+      correspondents: [],
+      topics: [
+        {
+          topic: "<script>alert(1)</script>",
+          requests: 2,
+          answered: 1,
+          lastActivity: date,
+        },
+      ],
+      categories: [],
+      daily: [],
+      activity: [],
+    },
+    calendar: {
+      summary: { events: 1, hours: 1.5, onlineMeetings: 1, participants: 0 },
+      calendars: [],
+      participants: [],
+      daily: [],
+      activity: [],
+    },
+    chat: {
+      summary: { total: 1, incoming: 1, outgoing: 0 },
+      rooms: [],
+      daily: [],
+      activity: [],
+    },
+    files: {
+      summary: { changed: 2, bytes: 2048, directories: 1 },
+      directories: [],
+      daily: [],
+      activity: [],
+    },
+  };
+}
+
+test("escapes report values in standalone HTML", () => {
+  const html = createReportHTML(fixture());
+
+  expect(html).toContain('<div class="chart">');
+  expect(html).toContain('<html lang="ru">');
+  expect(html).toContain("Отчёт об активности Jackdaw");
+  expect(html).toContain("Письма с меткой");
+  expect(html).toContain("Скорость первого ответа");
+  expect(html).toContain("Рабочий календарь:");
+  expect(html).toContain("Пн 09:00–18:00");
+  expect(html).toContain("Среднее время ответа");
+  expect(html).toContain("Запросы по сотрудникам");
+  expect(html).toContain("Запросы по категориям");
+  expect(html).toContain("Ответы по дням и SLA");
+  expect(html).toContain("Ответы вне рабочего времени");
+  expect(html).toContain("Не оценивается");
+  expect(html).toContain("Вне рабочего времени");
+  expect(html).not.toContain("CSV");
+  expect(html).toContain(
+    "Ответ считается подтверждённым, если почтовый сервер пометил письмо как отвеченное",
+  );
+  expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+  expect(html).not.toContain("<script>alert(1)</script>");
+  expect(html).not.toContain("Activity over time");
+});
+
+test("includes selected mailbox scope in exports", () => {
+  const report = fixture();
+  report.mailAccountFilter = {
+    accountId: 2,
+    accountName: "integrators",
+    email: "integrators@example.com",
+  };
+  report.mailFolderFilter = {
+    accountId: 2,
+    folderId: 201,
+    name: "Входящие",
+    path: "INBOX",
+    specialUse: "inbox",
+  };
+
+  const html = createReportHTML(report);
+
+  expect(html).toContain("integrators — integrators@example.com");
+  expect(html).toContain("папка: Входящие");
+});
+
+test("includes the complete response detail list in the HTML report", () => {
+  const report = fixture();
+  const response = report.mail.responseTimes[0];
+  report.mail.responseTimes = Array.from({ length: 201 }, (_, index) => ({
+    ...response,
+    emailId: index + 1,
+    subject: `Письмо ${index + 1}`,
+  }));
+
+  const html = createReportHTML(report);
+
+  expect(html).toContain("Письмо 201");
+  expect(html).not.toContain("CSV");
+});
+
+test("saves desktop HTML exports in Downloads without overwriting an existing file", async () => {
+  const files = new Map<string, string>();
+  const previousRemoteApp = appGlobal.remoteApp;
+  appGlobal.remoteApp = {
+    directory: async () => "/Users/test/Downloads",
+    path: {
+      join: (directory: string, filename: string) => `${directory}/${filename}`,
+    },
+    fs: {
+      writeFile: async (
+        filepath: string,
+        content: string,
+        options: { flag?: string },
+      ) => {
+        if (options.flag == "wx" && files.has(filepath)) {
+          const error = new Error("File exists") as Error & { code: string };
+          error.code = "EEXIST";
+          throw error;
+        }
+        files.set(filepath, content);
+      },
+    },
+  };
+
+  let firstFilename: string;
+  let secondFilename: string;
+
+  try {
+    firstFilename = await downloadTextFile(
+      "первый",
+      "jackdaw-report-2026-09-09.html",
+      "text/html;charset=utf-8",
+    );
+    secondFilename = await downloadTextFile(
+      "второй",
+      "jackdaw-report-2026-09-09.html",
+      "text/html;charset=utf-8",
+    );
+  } finally {
+    appGlobal.remoteApp = previousRemoteApp;
+  }
+
+  expect(
+    files.get("/Users/test/Downloads/jackdaw-report-2026-09-09.html"),
+  ).toBe("первый");
+  expect(
+    files.get("/Users/test/Downloads/jackdaw-report-2026-09-09 (2).html"),
+  ).toBe("второй");
+  expect(firstFilename).toBe("jackdaw-report-2026-09-09.html");
+  expect(secondFilename).toBe("jackdaw-report-2026-09-09 (2).html");
+});

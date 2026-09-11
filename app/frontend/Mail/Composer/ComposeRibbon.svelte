@@ -45,6 +45,7 @@
             </button>
             <button type="button" class="ribbon-btn paste-menu-btn" title={$t`Paste special`}
               bind:this={pasteMenuAnchor}
+              on:mousedown={rememberEditorSelection}
               on:click={() => pasteMenuOpen = true}>
               <ChevronDownIcon size="14px" />
             </button>
@@ -130,24 +131,48 @@
               on:click={() => runFormattingCommand("strikeThrough", () => editor.chain().focus().toggleStrike().run())}>
               <StrikethroughIcon size="18px" />
             </button>
-            <button type="button" class="ribbon-btn color-tool"
-              class:on={!!selectedTextColor}
-              bind:this={textColorMenuAnchor}
-              title={$t`Font color`}
-              on:mousedown={rememberEditorSelection}
-              on:click|stopPropagation={toggleTextColorMenu}>
-              <span class="font-color-glyph">A</span>
-              <span class="color-tool-bar" style:background={textColorBar} />
-            </button>
-            <button type="button" class="ribbon-btn color-tool"
-              class:on={editor.isActive("highlight")}
-              bind:this={highlightMenuAnchor}
-              title={$t`Text highlight color`}
-              on:mousedown={rememberEditorSelection}
-              on:click|stopPropagation={toggleHighlightMenu}>
-              <HighlighterIcon size="18px" />
-              <span class="color-tool-bar" style:background={highlightBarColor} />
-            </button>
+            <hbox class="split-color-tool">
+              <button type="button" class="ribbon-btn color-tool color-tool-main"
+                class:on={!!selectedTextColor}
+                title={$t`Font color`}
+                aria-label={$t`Font color`}
+                on:mousedown={rememberEditorSelection}
+                on:click|stopPropagation={() => applyTextColor(lastTextColor)}>
+                <span class="font-color-glyph">A</span>
+                <span class="color-tool-bar" style:background={textColorBar} />
+              </button>
+              <button type="button" class="ribbon-btn color-tool-dropdown"
+                bind:this={textColorMenuAnchor}
+                title={$t`Font color`}
+                aria-label={$t`Font color`}
+                aria-haspopup="menu"
+                aria-expanded={textColorMenuOpen}
+                on:mousedown={rememberEditorSelection}
+                on:click|stopPropagation={toggleTextColorMenu}>
+                <ChevronDownIcon size="11px" />
+              </button>
+            </hbox>
+            <hbox class="split-color-tool">
+              <button type="button" class="ribbon-btn color-tool color-tool-main"
+                class:on={editor.isActive("highlight")}
+                title={$t`Text highlight color`}
+                aria-label={$t`Text highlight color`}
+                on:mousedown={rememberEditorSelection}
+                on:click|stopPropagation={() => applyHighlight(lastHighlightColor)}>
+                <HighlighterIcon size="18px" />
+                <span class="color-tool-bar" style:background={highlightBarColor} />
+              </button>
+              <button type="button" class="ribbon-btn color-tool-dropdown"
+                bind:this={highlightMenuAnchor}
+                title={$t`Text highlight color`}
+                aria-label={$t`Text highlight color`}
+                aria-haspopup="menu"
+                aria-expanded={highlightMenuOpen}
+                on:mousedown={rememberEditorSelection}
+                on:click|stopPropagation={toggleHighlightMenu}>
+                <ChevronDownIcon size="11px" />
+              </button>
+            </hbox>
           </hbox>
           <span class="group-label">{$t`Basic Text`}</span>
         </vbox>
@@ -450,7 +475,6 @@
     currentFontFamily,
     currentFontSize,
     currentLineHeight,
-    highlightPreviewColor,
     formatFontSizeLabel,
     formatLineHeightLabel,
     fontSizeToCSS,
@@ -557,6 +581,10 @@
   let highlightMenuOpen = false;
   let highlightMenuAnchor: HTMLButtonElement;
   let highlightHighContrastOnly = false;
+  let lastTextColorSetting = getLocalStorage("mail.compose.lastTextColor", composeTextColors[0]);
+  let lastHighlightColorSetting = getLocalStorage("mail.compose.lastHighlightColor", composeDefaultHighlightColor);
+  let lastTextColor = readRememberedColor(lastTextColorSetting.value, composeTextColors, composeTextColors[0]);
+  let lastHighlightColor = readRememberedColor(lastHighlightColorSetting.value, composeHighlightColors, composeDefaultHighlightColor);
 
   type PasteMode = "default" | "source" | "merge" | "text";
 
@@ -606,10 +634,8 @@
   $: selectedTextColor = editor
     ? readEditorStyle(() => editor.getAttributes("textStyle").color ?? "", styleTick)
     : "";
-  $: textColorBar = selectedTextColor || "var(--headerbar-fg)";
-  $: highlightBarColor = editor
-    ? readEditorStyle(() => highlightPreviewColor(editor), styleTick)
-    : composeDefaultHighlightColor;
+  $: textColorBar = lastTextColor;
+  $: highlightBarColor = lastHighlightColor;
   $: visibleHighlightColors = highlightHighContrastOnly
     ? composeHighlightColorsHighContrast
     : composeHighlightColors;
@@ -733,9 +759,9 @@
     value?: string | null,
   ): boolean {
     if (savedSelection?.source === "quote") {
-      quoteEditor?.applyCommand(quoteCommand, value, savedSelection.range);
+      let changed = quoteEditor?.applyCommand(quoteCommand, value, savedSelection.range) ?? false;
       clearSavedSelection();
-      return true;
+      return changed;
     }
     return editorCommand();
   }
@@ -790,6 +816,10 @@
   }
 
   function applyTextColor(color: string | null) {
+    if (color && composeTextColors.includes(color)) {
+      lastTextColor = color;
+      lastTextColorSetting.value = color;
+    }
     if (color) {
       runFormattingCommand("foreColor", () => chainWithSavedSelection().setColor(color).run(), color);
     } else {
@@ -810,6 +840,10 @@
   }
 
   function applyHighlight(color: string | null) {
+    if (color && composeHighlightColors.includes(color)) {
+      lastHighlightColor = color;
+      lastHighlightColorSetting.value = color;
+    }
     if (color) {
       runFormattingCommand("hiliteColor", () => chainWithSavedSelection().setHighlight({ color }).run(), color);
     } else {
@@ -817,6 +851,10 @@
     }
     clearSavedSelection();
     highlightMenuOpen = false;
+  }
+
+  function readRememberedColor(value: unknown, palette: string[], fallback: string): string {
+    return typeof value === "string" && palette.includes(value) ? value : fallback;
   }
 
   function insertTable() {
@@ -1078,6 +1116,22 @@
     position: relative;
     gap: 0;
     padding-block: 2px 1px;
+  }
+  .split-color-tool {
+    align-items: stretch;
+    gap: 0;
+    flex-shrink: 0;
+  }
+  .split-color-tool .color-tool-main {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+  .split-color-tool .color-tool-dropdown {
+    min-width: 16px;
+    padding-inline: 2px;
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+    margin-inline-start: -1px;
   }
   .font-color-glyph {
     font-size: 15px;

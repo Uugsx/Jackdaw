@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ArrayColl } from "svelte-collections";
 import type { EMail } from "../../../logic/Mail/EMail";
-import { MailListRows, mailListSectionLabels, type MailListMessageRow } from "../../../frontend/Mail/mailListRows";
+import { findMailListRowForMessage, MailListRows, mailListSectionLabels, type MailListMessageRow } from "../../../frontend/Mail/mailListRows";
 
 // The day-header labels go through the l10n date formatter, which reads the
 // user's locale from localStorage.
@@ -146,6 +146,21 @@ describe("MailListRows", () => {
     // silently detach the list from its data.
     expect(model.rows).toBe(rows);
     model.dispose();
+  });
+
+  test("finds a row when the same message was rehydrated as another object", () => {
+    let loaded = fakeMail("loaded", jan2);
+    let row = {
+      kind: "message",
+      id: "msg:loaded",
+      message: loaded,
+    } as MailListMessageRow;
+    let rows = new ArrayColl([row]);
+
+    let rehydrated = fakeMail("loaded", jan2);
+    rehydrated.dbID = loaded.dbID;
+
+    expect(findMailListRowForMessage(rows, rehydrated)).toBe(row);
   });
 
   test("stops updating after dispose", () => {

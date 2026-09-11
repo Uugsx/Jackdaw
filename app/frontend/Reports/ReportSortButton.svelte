@@ -1,0 +1,80 @@
+<script lang="ts">
+  import { createEventDispatcher } from "svelte";
+  import ArrowDownIcon from "lucide-svelte/icons/arrow-down";
+  import ArrowUpDownIcon from "lucide-svelte/icons/arrow-up-down";
+  import ArrowUpIcon from "lucide-svelte/icons/arrow-up";
+
+  export let label: string;
+  export let direction: "asc" | "desc" | null = null;
+  export let align: "left" | "right" = "left";
+
+  const dispatch = createEventDispatcher<{ sort: void }>();
+</script>
+
+<button
+  type="button"
+  class="table-sort-button"
+  class:is-active={direction != null}
+  class:align-right={align == "right"}
+  aria-label={label}
+  on:click={() => dispatch("sort")}
+>
+  <span>{label}</span>
+  <span class="sort-indicator" aria-hidden="true">
+    {#if direction == "asc"}
+      <ArrowUpIcon size="12px" strokeWidth={2.4} />
+    {:else if direction == "desc"}
+      <ArrowDownIcon size="12px" strokeWidth={2.4} />
+    {:else}
+      <ArrowUpDownIcon size="12px" strokeWidth={2.1} />
+    {/if}
+  </span>
+</button>
+
+<style>
+  .table-sort-button {
+    display: inline-flex;
+    width: 100%;
+    box-sizing: border-box;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    margin: -4px 0;
+    padding: 4px 6px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: inherit;
+    text-transform: inherit;
+  }
+
+  .table-sort-button.align-right {
+    justify-content: flex-end;
+  }
+
+  .table-sort-button:hover,
+  .table-sort-button:focus-visible {
+    border-color: color-mix(in srgb, var(--reports-accent) 42%, var(--border));
+    background: color-mix(in srgb, var(--reports-accent) 9%, transparent);
+    color: var(--main-fg);
+  }
+
+  .table-sort-button:focus-visible {
+    outline: 2px solid var(--reports-accent);
+    outline-offset: 1px;
+  }
+
+  .sort-indicator {
+    display: inline-flex;
+    flex: 0 0 auto;
+    color: color-mix(in srgb, currentColor 70%, transparent);
+  }
+
+  .table-sort-button.is-active .sort-indicator {
+    color: var(--reports-accent);
+  }
+</style>

@@ -3,7 +3,7 @@ import { gt } from "../../l10n/l10n";
 import { closeWidgetPopout } from "../../logic/util/widgetBrowser";
 import { writable } from "svelte/store";
 
-export type WidgetKind = "web" | "calendar";
+export type WidgetKind = "web" | "calendar" | "live-sla";
 
 export type WidgetRefreshMinutes = 0 | 1 | 2 | 5 | 10 | 30 | 60 | 90;
 
@@ -30,6 +30,7 @@ export const WIDGET_PANEL_WIDTHS: Array<number | null> = [null, 280, 320, 360, 4
 
 export const WIDGET_RAIL_WIDTH_PX = 44;
 export const WIDGET_DEFAULT_PANEL_WIDTH_PX = 320;
+export const LIVE_SLA_WIDGET_ID = "live-sla";
 
 /** Bump to remount the widgets splitter after a preset width is applied. */
 export const widgetSplitterResetKey = writable(0);
@@ -59,8 +60,15 @@ const calendarWidget: WidgetEntry = {
   kind: "calendar",
 };
 
+const liveSlaWidget: WidgetEntry = {
+  id: LIVE_SLA_WIDGET_ID,
+  name: gt`Live response control`,
+  kind: "live-sla",
+};
+
 export const defaultWidgets: WidgetEntry[] = [
   calendarWidget,
+  liveSlaWidget,
   {
     id: "chatgpt",
     name: "ChatGPT",
@@ -132,8 +140,15 @@ export function normalizeWidgetList(list: WidgetEntry[] | null | undefined): Wid
     ...entry,
     kind: entry.kind ?? (entry.url ? "web" as const : "calendar" as const),
   }));
+  if (!items.length) {
+    return defaultWidgets;
+  }
   if (!items.some(w => w.kind === "calendar")) {
     items = [calendarWidget, ...items];
+  }
+  if (!items.some(w => w.kind === "live-sla")) {
+    let calendarIndex = items.findIndex(w => w.kind === "calendar");
+    items.splice(calendarIndex + 1, 0, liveSlaWidget);
   }
   return items.length ? items : defaultWidgets;
 }
@@ -141,6 +156,12 @@ export function normalizeWidgetList(list: WidgetEntry[] | null | undefined): Wid
 export function selectWidget(id: string) {
   activeWidgetIdSetting.value = id;
   widgetsExpanded.value = true;
+}
+
+/** Открывает живой SLA-контроль в правой панели, даже если панель была скрыта. */
+export function openLiveSlaWidget(): void {
+  widgetsEnabled.value = true;
+  selectWidget(LIVE_SLA_WIDGET_ID);
 }
 
 export function toggleWidgetPanel() {
@@ -173,11 +194,11 @@ export function removeWidget(id: string) {
 }
 
 export function isBuiltInWidget(entry: WidgetEntry): boolean {
-  return entry.kind === "calendar";
+  return entry.kind === "calendar" || entry.kind === "live-sla";
 }
 
 export function migrateWidgetListIfNeeded(): void {
-  let current = widgetsListSetting.value;
+  let current = widgetsListSetting.value ?? [];
   let normalized = normalizeWidgetList(current);
   if (
     current.length !== normalized.length

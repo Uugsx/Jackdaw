@@ -59,7 +59,7 @@
   import Spinner from "../../Shared/Spinner.svelte";
   import { catchErrors } from "../../Util/error";
   import { ArrayColl, type Collection } from "svelte-collections";
-  import { onDestroy } from "svelte";
+  import { onDestroy, tick } from "svelte";
   import { t } from "../../../l10n/l10n";
 
   export let messages: Collection<EMail>;
@@ -71,6 +71,9 @@
 
   let selectedRow: MailListRow | null = null;
   let selectedRows = new ArrayColl<MailListRow>();
+  let scrollToMailListItem: ((item: MailListRow) => void) | null = null;
+  let scrollRequestVersion = 0;
+  let lastScrolledMessage: EMail | null = null;
 
   const rowsModel = new MailListRows();
   const listRows = rowsModel.rows;
@@ -81,6 +84,7 @@
   $: syncSelectedRow(selectedMessage, $listRows);
   $: syncSelectedMessages($selectedRows);
   $: syncRowsFromMessages(selectedMessages, $listRows);
+  $: scrollSelectedMessageIntoView($listRows, selectedMessage);
 
   function selectedMessageRows(rows: ArrayColl<MailListRow>): EMail[] {
     return rows.contents
@@ -119,6 +123,35 @@
     }
   }
 
+  /**
+   * FastList scrolls to the selected row during its initialisation only.
+   * A message opened from another panel changes `selectedMessage` after the
+   * list is already mounted, so explicitly reveal that row as well.
+   */
+  function scrollSelectedMessageIntoView(
+    rows: Collection<MailListRow>,
+    message: EMail | null,
+  ): void {
+    if (!message) {
+      lastScrolledMessage = null;
+      return;
+    }
+    if (!scrollToMailListItem || message == lastScrolledMessage) {
+      return;
+    }
+    let row = findMailListRowForMessage(rows, message);
+    if (!row) {
+      return;
+    }
+    lastScrolledMessage = message;
+    let requestVersion = ++scrollRequestVersion;
+    void tick().then(() => {
+      if (requestVersion == scrollRequestVersion) {
+        scrollToMailListItem?.(row);
+      }
+    });
+  }
+
   function arraysEqual<T>(a: T[], b: T[]): boolean {
     return a.length == b.length && a.every((item, i) => item == b[i]);
   }
@@ -131,10 +164,8 @@
   }
 
   function onListInit(ev: CustomEvent<{ scrollToIndex: (index: number) => void, scrollToItem: (item: MailListRow) => void }>) {
-    let row = findMailListRowForMessage(listRows, selectedMessage);
-    if (row) {
-      ev.detail.scrollToItem(row);
-    }
+    scrollToMailListItem = ev.detail.scrollToItem;
+    scrollSelectedMessageIntoView(listRows, selectedMessage);
   }
 </script>
 

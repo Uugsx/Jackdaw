@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { newMailListener } from "./NotifyNewMail";
+  import { startResponseReminderWatcher } from "./ResponseReminderWatcher";
   import { startMailUnreadTracking } from "./mailUnreadCounts";
   import { startFavoriteFolderTracking } from "./LeftPane/favoriteFolders";
   import { mailApp } from "./MailJackdawApp";
@@ -18,6 +19,7 @@
 
   onMount(() => {
     catchErrors(newMailListener);
+    catchErrors(startResponseReminderWatcher);
     startMailUnreadTracking();
   });
 

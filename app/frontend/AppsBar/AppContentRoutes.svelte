@@ -11,6 +11,12 @@
   <Route path="calendar/*">
     <CalendarRoutes />
   </Route>
+  <Route path="reports/*">
+    <ReportsRoutes />
+  </Route>
+  <Route path="live-sla/*">
+    <LiveSlaRoutes />
+  </Route>
   <Route path="files/*">
     <FilesAppRoutes />
   </Route>
@@ -50,6 +56,8 @@
   import ContactsAppRoutes from "../Contacts/ContactsRoutes.svelte";
   import FilesAppRoutes from "../Files/FilesRoutes.svelte";
   import CalendarRoutes from "../Calendar/CalendarRoutes.svelte";
+  import ReportsRoutes from "../Reports/ReportsRoutes.svelte";
+  import LiveSlaRoutes from "../Reports/LiveSlaRoutes.svelte";
   import MeetAppRoutes from "../Meet/MeetRoutes.svelte";
   import TopicRoutes from "../Topic/TopicRoutes.svelte";
   import WebAppsRoutes from "../WebApps/WebAppsRoutes.svelte";

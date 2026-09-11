@@ -1,6 +1,12 @@
 import { appGlobal } from "../../app";
 import { mailDatabaseSchema } from "./createDatabase";
-import { createFolderIDDateSentIndex, addEMailStatusColumns } from "./SQLEMailMigrate";
+import {
+  createFolderIDDateSentIndex,
+  createReportReplyIndexes,
+  createResponseReminderIndexes,
+  addEMailStatusColumns,
+  repairReportReplyIndexes,
+} from "./SQLEMailMigrate";
 import sql, { type Database } from "../../../../lib/rs-sqlite/index";
 import { getSQLiteDatabase } from "../../util/backend-wrapper";
 
@@ -13,9 +19,16 @@ export async function getDatabase(): Promise<Database> {
     return mailDatabase;
   }
   mailDatabase = await getSQLiteDatabase("mail.db");
-  await mailDatabase.migrate(mailDatabaseSchema, createFolderIDDateSentIndex, addEMailStatusColumns);
-  await mailDatabase.pragma('foreign_keys = true');
-  await mailDatabase.pragma('journal_mode = WAL');
+  await mailDatabase.migrate(
+    mailDatabaseSchema,
+    createFolderIDDateSentIndex,
+    createReportReplyIndexes,
+    createResponseReminderIndexes,
+    addEMailStatusColumns,
+    repairReportReplyIndexes,
+  );
+  await mailDatabase.pragma("foreign_keys = true");
+  await mailDatabase.pragma("journal_mode = WAL");
   return mailDatabase;
 }
 
@@ -27,14 +40,20 @@ export async function getDatabase(): Promise<Database> {
 export async function makeTestDatabase(): Promise<Database> {
   mailDatabase = await getSQLiteDatabase("test-mail.db");
   await deleteDatabase();
-  await mailDatabase.migrate(mailDatabaseSchema);
-  await mailDatabase.pragma('foreign_keys = true');
-  await mailDatabase.pragma('journal_mode = WAL');
+  await mailDatabase.migrate(
+    mailDatabaseSchema,
+    createReportReplyIndexes,
+    createResponseReminderIndexes,
+  );
+  await mailDatabase.pragma("foreign_keys = true");
+  await mailDatabase.pragma("journal_mode = WAL");
   return mailDatabase;
 }
 
 export async function deleteDatabase(): Promise<void> {
-  let tables = await mailDatabase.all(sql`SELECT name FROM sqlite_schema WHERE type='table'`) as any[];
+  let tables = (await mailDatabase.all(
+    sql`SELECT name FROM sqlite_schema WHERE type='table'`,
+  )) as any[];
   for (let row of tables) {
     let table = row.name;
     if (table?.startsWith("sqlite_")) {
@@ -42,7 +61,7 @@ export async function deleteDatabase(): Promise<void> {
     }
     await mailDatabase.execute(sql`DROP TABLE IF EXISTS ${table};`);
   }
-  await mailDatabase.pragma('user_version = 0');
+  await mailDatabase.pragma("user_version = 0");
   (mailDatabase as any).close();
   mailDatabase = null;
 }

@@ -23,6 +23,11 @@
             on:click={openCalendarApp}>
             <CalendarIcon size="14px" />
           </button>
+        {:else if activeWidget.kind === "live-sla"}
+          <button type="button" class="header-btn" title={$t`Open reports`}
+            on:click={openReportsApp}>
+            <ChartIcon size="14px" />
+          </button>
         {/if}
         {#if !isBuiltInWidget(activeWidget)}
           <button type="button" class="header-btn danger" title={$t`Remove widget`}
@@ -52,6 +57,8 @@
       {/each}
       {#if activeWidget?.kind === "calendar" && $widgetsExpanded.value}
         <CalendarWidgetPanel />
+      {:else if activeWidget?.kind === "live-sla" && $widgetsExpanded.value}
+        <LiveSlaApp embedded={true} />
       {/if}
     </vbox>
   </vbox>
@@ -61,11 +68,45 @@
       <button type="button"
         class="rail-btn"
         class:active={activeWidget?.id === widget.id && $widgetsExpanded.value}
-        title={widget.name}
+        title={widget.kind === "live-sla"
+          ? liveSlaRailTitle(widget.name, liveSlaSnapshot.pendingCount)
+          : widget.name}
+        aria-label={widget.kind === "live-sla"
+          ? liveSlaRailTitle(widget.name, liveSlaSnapshot.pendingCount)
+          : widget.name}
         on:click={() => onWidgetClick(widget.id)}
         on:contextmenu={(event) => onWidgetContextMenu(event, widget)}>
         {#if widget.kind === "calendar"}
           <CalendarIcon size="16px" />
+        {:else if widget.kind === "live-sla"}
+          <span
+            class="live-sla-rail-indicator"
+            class:tracking={liveSlaHasPending}
+            class:overdue={liveSlaHasOverdue}
+            class:waiting={liveSlaIsWaiting}
+            aria-hidden="true">
+            <svg class="live-sla-ring" viewBox="0 0 32 32">
+              <circle class="live-sla-ring-track" cx="16" cy="16" r={LIVE_SLA_RING_RADIUS} />
+              {#if liveSlaHasPending && liveSlaProgress}
+                <circle
+                  class="live-sla-ring-value"
+                  class:overdue={liveSlaHasOverdue}
+                  cx="16"
+                  cy="16"
+                  r={LIVE_SLA_RING_RADIUS}
+                  stroke-dasharray={LIVE_SLA_RING_CIRCUMFERENCE}
+                  stroke-dashoffset={liveSlaRingOffset} />
+              {/if}
+            </svg>
+            <ClockIcon size="14px" />
+            {#if liveSlaHasPending}
+              <span class="live-sla-badge">
+                {liveSlaSnapshot.pendingCount > 99
+                  ? "99+"
+                  : liveSlaSnapshot.pendingCount}
+              </span>
+            {/if}
+          </span>
         {:else}
           <span class="rail-letter" aria-hidden="true">{widgetInitial(widget.name)}</span>
         {/if}
@@ -124,6 +165,7 @@
   import Popup from "../Shared/Popup.svelte";
   import AddWidgetDialog from "./AddWidgetDialog.svelte";
   import CalendarWidgetPanel from "./CalendarWidgetPanel.svelte";
+  import LiveSlaApp from "../Reports/LiveSlaApp.svelte";
   import ButtonMenu from "../Shared/Menu/ButtonMenu.svelte";
   import ContextMenu from "../Shared/Menu/ContextMenu.svelte";
   import { onMount } from "svelte";
@@ -150,17 +192,65 @@
   import LogInIcon from "lucide-svelte/icons/log-in";
   import Trash2Icon from "lucide-svelte/icons/trash-2";
   import CalendarIcon from "lucide-svelte/icons/calendar";
+  import ChartIcon from "lucide-svelte/icons/chart-column";
+  import ClockIcon from "lucide-svelte/icons/clock-3";
   import { openExternalURL } from "../../logic/util/os-integration";
   import { openWidgetSignIn } from "../../logic/util/widgetBrowser";
   import { openApp } from "../AppsBar/selectedApp";
   import { calendarApp } from "../Calendar/CalendarJackdawApp";
+  import { reportsApp } from "../Reports/ReportsJackdawApp";
   import { catchErrors } from "../Util/error";
   import { t } from "../../l10n/l10n";
+  import { getResponseSlaProgress } from "../../logic/Reports/ResponseReminder";
+  import {
+    responseReminderLiveState,
+    startResponseReminderWatcher,
+  } from "../Mail/ResponseReminderWatcher";
 
-  onMount(() => migrateWidgetListIfNeeded());
+  const LIVE_SLA_RING_RADIUS = 12;
+  const LIVE_SLA_RING_CIRCUMFERENCE = 2 * Math.PI * LIVE_SLA_RING_RADIUS;
+  let liveIndicatorNow = new Date();
+
+  onMount(() => {
+    migrateWidgetListIfNeeded();
+    // Правая панель владеет индикатором живого SLA. Запускаем watcher и здесь,
+    // чтобы индикатор не зависел от порядка монтирования фоновых mail-компонентов.
+    startResponseReminderWatcher();
+    const timer = setInterval(() => {
+      liveIndicatorNow = new Date();
+    }, 1_000);
+    return () => clearInterval(timer);
+  });
 
   $: widgets = normalizeWidgetList($widgetsListSetting.value);
   $: activeWidget = widgets.find(w => w.id === $activeWidgetIdSetting.value) ?? widgets[0] ?? null;
+  $: liveSlaSnapshot = $responseReminderLiveState;
+  $: liveSlaProgress = liveSlaSnapshot.nextTimer
+    ? getResponseSlaProgress(
+        liveSlaSnapshot.nextTimer.request,
+        liveSlaSnapshot.nextTimer.targetMinutes,
+        liveIndicatorNow,
+        liveSlaSnapshot.nextTimer.workingHours,
+        liveSlaSnapshot.nextTimer.slaStartedAt,
+      )
+    : null;
+  $: liveSlaHasPending = liveSlaSnapshot.pendingCount > 0;
+  $: liveSlaHasOverdue = liveSlaSnapshot.overdueCount > 0;
+  $: liveSlaIsWaiting =
+    liveSlaHasPending &&
+    !liveSlaHasOverdue &&
+    liveSlaSnapshot.waitingForWorkingHoursCount > 0;
+  $: liveSlaRingProgress = liveSlaProgress
+    ? liveSlaProgress.status === "within-target"
+      ? liveSlaProgress.remainingSeconds /
+        Math.max(liveSlaProgress.targetSeconds, 1)
+      : liveSlaProgress.status === "waiting-for-working-hours"
+        ? 1
+        : 0
+    : 0;
+  $: liveSlaRingOffset =
+    LIVE_SLA_RING_CIRCUMFERENCE *
+    (1 - Math.max(0, Math.min(1, liveSlaRingProgress)));
   let addOpen = false;
   let addAnchor: HTMLButtonElement;
   let widgetContextMenu: ContextMenu;
@@ -200,8 +290,16 @@
     return trimmed ? trimmed.charAt(0).toUpperCase() : "?";
   }
 
+  function liveSlaRailTitle(name: string, count: number): string {
+    return count > 0 ? `${name} · ${count}` : name;
+  }
+
   function openCalendarApp() {
     openApp(calendarApp, {});
+  }
+
+  function openReportsApp() {
+    openApp(reportsApp, {});
   }
 </script>
 
@@ -209,6 +307,7 @@
   .widget-sidebar {
     width: 100%;
     min-width: 0;
+    min-inline-size: 0;
     min-height: 0;
     height: 100%;
     overflow: hidden;
@@ -217,10 +316,13 @@
     border-inline-start: 1px solid var(--glass-border-subtle);
   }
   .widget-panel {
+    width: 0;
     min-width: 0;
+    min-inline-size: 0;
     min-height: 0;
     flex: 1 1 auto;
     max-width: calc(100% - 44px);
+    max-inline-size: calc(100% - 44px);
   }
   .widget-panel.collapsed {
     flex: 0 0 0;
@@ -277,6 +379,11 @@
   }
   .widget-body {
     position: relative;
+    width: 100%;
+    min-width: 0;
+    min-inline-size: 0;
+    max-width: 100%;
+    max-inline-size: 100%;
     min-height: 0;
     overflow: hidden;
     display: flex;
@@ -372,5 +479,89 @@
     font-weight: 700;
     line-height: 1;
     font-variant-numeric: tabular-nums;
+  }
+  .live-sla-rail-indicator {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+  }
+  .live-sla-ring {
+    position: absolute;
+    inset: 0;
+    width: 26px;
+    height: 26px;
+    overflow: visible;
+    transform: rotate(-90deg);
+  }
+  .live-sla-ring-track,
+  .live-sla-ring-value {
+    fill: none;
+    stroke-width: 2;
+  }
+  .live-sla-ring-track {
+    stroke: color-mix(in srgb, var(--appbar-fg) 24%, transparent);
+  }
+  .live-sla-ring-value {
+    stroke: var(--icon-primary);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear, stroke 0.16s ease;
+  }
+  .live-sla-ring-value.overdue {
+    stroke: var(--danger-fg);
+  }
+  .live-sla-rail-indicator.tracking::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border: 1px solid color-mix(in srgb, var(--icon-primary) 36%, transparent);
+    border-radius: 50%;
+    animation: live-sla-pulse 1.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .live-sla-rail-indicator.overdue::after {
+    border-color: color-mix(in srgb, var(--danger-fg) 48%, transparent);
+  }
+  .live-sla-badge {
+    position: absolute;
+    top: -4px;
+    right: -7px;
+    min-width: 13px;
+    height: 13px;
+    padding: 0 2px;
+    box-sizing: border-box;
+    border-radius: 7px;
+    background: var(--icon-primary);
+    color: var(--appbar-bg);
+    font-size: 8px;
+    font-weight: 800;
+    line-height: 13px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .live-sla-rail-indicator.overdue .live-sla-badge {
+    background: var(--danger-fg);
+  }
+  @keyframes live-sla-pulse {
+    0%,
+    100% {
+      opacity: 0.55;
+      transform: scale(0.94);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .live-sla-ring-value {
+      transition: stroke 0.16s ease;
+    }
+    .live-sla-rail-indicator.tracking::after {
+      animation: none;
+      opacity: 0.8;
+    }
   }
 </style>

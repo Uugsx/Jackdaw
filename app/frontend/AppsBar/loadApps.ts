@@ -5,6 +5,7 @@ import { meetApp } from "../Meet/MeetJackdawApp";
 // #endif
 import { mailApp } from "../Mail/MailJackdawApp";
 import { calendarApp } from "../Calendar/CalendarJackdawApp";
+import { reportsApp } from "../Reports/ReportsJackdawApp";
 // #if [!WEBMAIL]
 import { filesApp } from "../Files/FilesJackdawApp";
 // #endif
@@ -28,6 +29,7 @@ export function loadApps() {
       meetApp,
       // #endif
       calendarApp,
+      reportsApp,
       filesApp,
       settingsApp,
     ]);
@@ -37,6 +39,7 @@ export function loadApps() {
     contactsApp,
     mailApp,
     calendarApp,
+    reportsApp,
     // #if [!WEBMAIL]
     filesApp,
     // #endif
