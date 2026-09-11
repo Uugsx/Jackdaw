@@ -5,15 +5,25 @@ export type NotificationSoundEvent =
   | "mail-outgoing"
   | "calendar"
   | "chat"
+  | "sla-overdue"
+  | "sla-taken-in-work"
   | "other";
 
-export type NotificationSoundId = "none" | "default" | "chime" | "pop" | "bell";
+export type NotificationSoundId =
+  | "none"
+  | "default"
+  | "chime"
+  | "pop"
+  | "bell"
+  | "alarm";
 
 export const notificationSoundEvents: NotificationSoundEvent[] = [
   "mail-incoming",
   "mail-outgoing",
   "calendar",
   "chat",
+  "sla-overdue",
+  "sla-taken-in-work",
   "other",
 ];
 
@@ -23,6 +33,7 @@ export const notificationSoundOptions: NotificationSoundId[] = [
   "chime",
   "pop",
   "bell",
+  "alarm",
 ];
 
 type NotificationSoundSettings = Partial<Record<NotificationSoundEvent, NotificationSoundId>>;
@@ -32,6 +43,8 @@ const defaultNotificationSoundSettings: Record<NotificationSoundEvent, Notificat
   "mail-outgoing": "pop",
   calendar: "bell",
   chat: "chime",
+  "sla-overdue": "alarm",
+  "sla-taken-in-work": "chime",
   other: "none",
 };
 
@@ -91,6 +104,12 @@ const soundTones: Record<Exclude<NotificationSoundId, "none" | "default">, Tone[
   bell: [
     { frequency: 523.25, duration: 0.32 },
     { frequency: 783.99, duration: 0.42, delay: 0.02 },
+  ],
+  alarm: [
+    { frequency: 880, duration: 0.16 },
+    { frequency: 660, duration: 0.16, delay: 0.08 },
+    { frequency: 880, duration: 0.16, delay: 0.08 },
+    { frequency: 660, duration: 0.28, delay: 0.08 },
   ],
 };
 

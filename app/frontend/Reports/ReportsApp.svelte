@@ -100,6 +100,7 @@
   import { openEMailMessage } from "../Mail/open";
   import ReportPanelControls from "./ReportPanelControls.svelte";
   import ReportSortButton from "./ReportSortButton.svelte";
+  import ResponseEventNotificationSettings from "./ResponseEventNotificationSettings.svelte";
   import { openLiveSlaWidget } from "../Widgets/widgetState";
   import { createReportHTML, downloadTextFile } from "./ReportsExport";
 
@@ -210,6 +211,8 @@
   let newResponseReminderMinutes =
     DEFAULT_RESPONSE_REMINDER_NEW_INTERVAL_MINUTES;
   let responseReminderError: "invalid" | "duplicate" | null = null;
+  let notifyWhenOverdue = false;
+  let notifyWhenTakenInWork = false;
   let responseTrackingCategoryNames: string[] = [];
   let excludedResponseCategoryNames: string[] = [];
   let includeUncategorizedResponses = false;
@@ -472,6 +475,8 @@
     responseRemindersEnabled = snapshot.responseRemindersEnabled;
     responseReminderIntervals = [...snapshot.responseReminderIntervals];
     newResponseReminderMinutes = snapshot.newResponseReminderMinutes;
+    notifyWhenOverdue = snapshot.notifyWhenOverdue ?? false;
+    notifyWhenTakenInWork = snapshot.notifyWhenTakenInWork ?? false;
     responseDaySort = restoreSortState(snapshot.responseDaySort);
     responseDetailSort = restoreSortState(snapshot.responseDetailSort);
     responderSort = restoreSortState(snapshot.responderSort);
@@ -514,6 +519,8 @@
       responseRemindersEnabled,
       responseReminderIntervals: [...responseReminderIntervals],
       newResponseReminderMinutes,
+      notifyWhenOverdue,
+      notifyWhenTakenInWork,
       responseDaySort,
       responseDetailSort,
       responderSort,
@@ -1061,6 +1068,8 @@
     responseReminderIntervals = [...config.intervalsMinutes];
     excludedResponseCategoryNames = [...config.excludedCategoryNames];
     includeUncategorizedResponses = config.includeUncategorized;
+    notifyWhenOverdue = config.notifyWhenOverdue;
+    notifyWhenTakenInWork = config.notifyWhenTakenInWork;
     newResponseReminderMinutes = DEFAULT_RESPONSE_REMINDER_NEW_INTERVAL_MINUTES;
     responseReminderError = null;
   }
@@ -1117,11 +1126,15 @@
       intervalsMinutes: responseReminderIntervals,
       excludedCategoryNames: excludedResponseCategoryNames,
       includeUncategorized: includeUncategorizedResponses,
+      notifyWhenOverdue,
+      notifyWhenTakenInWork,
     });
     responseRemindersEnabled = config.enabled;
     responseReminderIntervals = [...config.intervalsMinutes];
     excludedResponseCategoryNames = [...config.excludedCategoryNames];
     includeUncategorizedResponses = config.includeUncategorized;
+    notifyWhenOverdue = config.notifyWhenOverdue;
+    notifyWhenTakenInWork = config.notifyWhenTakenInWork;
     setResponseReminderConfig(selectedMailAccountId, config);
     // Контролёр использует тот же режим определения отвечающего, что и отчёт.
     // Сохраняем его вместе с напоминаниями, в том числе при первой настройке.
@@ -2296,6 +2309,12 @@
               : $t`Enter whole minutes between 1 minute and 7 days.`}
           </p>
         {/if}
+        <ResponseEventNotificationSettings
+          bind:notifyWhenOverdue
+          bind:notifyWhenTakenInWork
+          disabled={loading || mailFoldersLoading}
+          on:change={saveResponseReminderConfig}
+        />
       </fieldset>
     {/if}
 

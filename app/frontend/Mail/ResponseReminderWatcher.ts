@@ -16,11 +16,14 @@ import {
   getDueResponseReminderIntervals,
   getResponseSlaStartAt,
   getResponseSlaProgress,
+  isResponseRequestTakenInWork,
   isResponseReminderRequestAfterActivation,
   normalizeResponseReminderIntervals,
   responseReminderKey,
+  shouldNotifyResponseReminderEvent,
   RESPONSE_REMINDER_MAX_STATE_AGE_MS,
   type PendingResponseRequest,
+  type ResponseReminderEvent,
   type ResponseReminderStateEntry,
 } from "../../logic/Reports/ResponseReminder";
 import {
@@ -57,6 +60,7 @@ const RESPONSE_REMINDER_POLL_MS = 15_000;
 const RESPONSE_REMINDER_EVALUATION_DELAY_MS = 300;
 const RESPONSE_REMINDER_INITIAL_DELAY_MS = 1_000;
 const MAX_RESPONSE_REMINDER_NOTIFICATIONS_PER_CHECK = 20;
+const MAX_RESPONSE_EVENT_NOTIFICATIONS_PER_CHECK = 20;
 
 interface ResponseReminderCandidate extends PendingResponseRequest {
   accountName: string;
@@ -65,6 +69,14 @@ interface ResponseReminderCandidate extends PendingResponseRequest {
 interface ReminderNotificationJob {
   candidate: ResponseReminderCandidate;
   intervalMinutes: number;
+  workingHours: WorkingHoursSchedule;
+  slaStartedAt: Date;
+}
+
+interface ResponseEventNotificationJob {
+  event: ResponseReminderEvent;
+  candidate: ResponseReminderCandidate;
+  targetMinutes: number;
   workingHours: WorkingHoursSchedule;
   slaStartedAt: Date;
 }
@@ -162,6 +174,7 @@ export function getResponseReminderSlaStartAt(
     previous?.startedAt != slaStartedAt.getTime()
   ) {
     state[key] = {
+      ...previous,
       receivedAt,
       firedIntervalsMinutes: previous?.firedIntervalsMinutes ?? [],
       startedAt: slaStartedAt.getTime(),
@@ -233,6 +246,7 @@ async function evaluateResponseReminders(): Promise<void> {
     const trackingArchive = getResponseTrackingArchive();
     let stateChanged = pruneState(state, now);
     const jobs: ReminderNotificationJob[] = [];
+    const eventJobs: ResponseEventNotificationJob[] = [];
 
     for (const account of appGlobal.emailAccounts.contents) {
       if (!(account instanceof MailAccount)) {
@@ -348,8 +362,68 @@ async function evaluateResponseReminders(): Promise<void> {
           ) {
             continue;
           }
-          if (entryWithStart !== entry) {
-            state[key] = entryWithStart;
+
+          const takenInWork = isResponseRequestTakenInWork(candidate);
+          const overdue = progress.status == "over-target";
+          let stateTakenInWork = takenInWork;
+          let stateOverdue = overdue;
+          if (
+            config.notifyWhenTakenInWork &&
+            shouldNotifyResponseReminderEvent(
+              "taken-in-work",
+              previous,
+              receivedAt,
+              takenInWork,
+            )
+          ) {
+            if (eventJobs.length < MAX_RESPONSE_EVENT_NOTIFICATIONS_PER_CHECK) {
+              eventJobs.push({
+                event: "taken-in-work",
+                candidate,
+                targetMinutes,
+                workingHours,
+                slaStartedAt,
+              });
+            } else {
+              // Оставляем переход незафиксированным: следующий цикл
+              // доставит событие, не теряя его при большом количестве писем.
+              stateTakenInWork = false;
+            }
+          }
+          if (
+            config.notifyWhenOverdue &&
+            shouldNotifyResponseReminderEvent(
+              "overdue",
+              previous,
+              receivedAt,
+              overdue,
+            )
+          ) {
+            if (eventJobs.length < MAX_RESPONSE_EVENT_NOTIFICATIONS_PER_CHECK) {
+              eventJobs.push({
+                event: "overdue",
+                candidate,
+                targetMinutes,
+                workingHours,
+                slaStartedAt,
+              });
+            } else {
+              // См. комментарий выше для перехода в работу.
+              stateOverdue = false;
+            }
+          }
+
+          const nextStateEntry: ResponseReminderStateEntry = {
+            ...entryWithStart,
+            takenInWork: stateTakenInWork,
+            overdue: stateOverdue,
+          };
+          if (
+            entryWithStart !== entry ||
+            previous?.takenInWork !== stateTakenInWork ||
+            previous?.overdue !== stateOverdue
+          ) {
+            state[key] = nextStateEntry;
             stateChanged = true;
           }
           const dueIntervals = getDueResponseReminderIntervals(
@@ -369,14 +443,15 @@ async function evaluateResponseReminders(): Promise<void> {
             continue;
           }
           state[key] = {
+            ...nextStateEntry,
             receivedAt,
             firedIntervalsMinutes: normalizeResponseReminderIntervals(
-              [...entryWithStart.firedIntervalsMinutes, ...dueIntervals],
+              [...nextStateEntry.firedIntervalsMinutes, ...dueIntervals],
               [],
             ),
-            ...(entryWithStart.startedAt == null
+            ...(nextStateEntry.startedAt == null
               ? {}
-              : { startedAt: entryWithStart.startedAt }),
+              : { startedAt: nextStateEntry.startedAt }),
           };
           stateChanged = true;
           jobs.push({
@@ -420,6 +495,9 @@ async function evaluateResponseReminders(): Promise<void> {
     liveStatePublished = true;
     for (const job of jobs) {
       await showResponseReminder(job, now);
+    }
+    for (const job of eventJobs) {
+      await showResponseEventNotification(job, now);
     }
   } finally {
     if (!liveStatePublished) {
@@ -504,6 +582,55 @@ async function showResponseReminder(
   await notification.show();
 }
 
+async function showResponseEventNotification(
+  job: ResponseEventNotificationJob,
+  now: Date,
+): Promise<void> {
+  const { event, candidate, targetMinutes, workingHours, slaStartedAt } = job;
+  const subject = candidate.subject.trim() || "(без темы)";
+  const soundEvent =
+    event == "overdue" ? "sla-overdue" : "sla-taken-in-work";
+  const notification = new SystemNotification(
+    // SLA-события управляются своими переключателями и не зависят от
+    // глобального переключателя уведомлений о новой почте.
+    new NotificationKinds(["popup", "sound"]),
+    event == "overdue"
+      ? gt`SLA response overdue`
+      : gt`Request taken into work`,
+    event == "overdue"
+      ? gt`No reply to “${subject}” within ${targetMinutes} working minutes.`
+      : gt`“${subject}” was taken into work. The SLA timer is running.`,
+    `response-sla:${event}:${responseReminderKey(candidate)}`,
+    soundEvent,
+  );
+  const elapsedMinutes = Math.max(
+    0,
+    Math.floor(
+      elapsedResponseMinutes(candidate, now, workingHours, slaStartedAt),
+    ),
+  );
+  const elapsedLabel =
+    event == "overdue"
+      ? gt`${elapsedMinutes} working minutes elapsed`
+      : null;
+  notification.subtitle = [
+    candidate.accountName,
+    ...candidate.categoryNames,
+    ...(elapsedLabel == null ? [] : [elapsedLabel]),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  notification.icon = MailIcon;
+  notification.urgency = event == "overdue" ? "critical" : "normal";
+  notification.updatesTaskbarBadge = false;
+  notification.onClick = () => {
+    void openPendingResponseMessage(candidate).catch((ex) =>
+      backgroundError(toError(ex)),
+    );
+  };
+  await notification.show();
+}
+
 function readResponderAttribution(
   accountId: number,
 ): ResponderAttributionConfig {
@@ -545,12 +672,18 @@ function readState(): Record<string, ResponseReminderStateEntry> {
     const startedAt = finiteTimestamp(
       (raw as Record<string, unknown>).startedAt,
     );
+    const takenInWork = optionalBoolean(
+      (raw as Record<string, unknown>).takenInWork,
+    );
+    const overdue = optionalBoolean((raw as Record<string, unknown>).overdue);
     state[key] = {
       receivedAt,
       firedIntervalsMinutes: normalizeFiredIntervals(
         (raw as Record<string, unknown>).firedIntervalsMinutes,
       ),
       ...(startedAt == null ? {} : { startedAt }),
+      ...(takenInWork == null ? {} : { takenInWork }),
+      ...(overdue == null ? {} : { overdue }),
     };
   }
   return state;
@@ -606,6 +739,10 @@ function numericId(value: number | string | null): number | null {
 function finiteTimestamp(value: unknown): number | undefined {
   const result = Number(value);
   return Number.isFinite(result) && result > 0 ? Math.floor(result) : undefined;
+}
+
+function optionalBoolean(value: unknown): boolean | undefined {
+  return typeof value == "boolean" ? value : undefined;
 }
 
 function toError(value: unknown): Error {

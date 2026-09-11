@@ -33,22 +33,34 @@
   let displayVersion = appVersion;
   let otaCapable = /-dev\.\d{14}$/.test(appVersion);
 
-  onMount(async () => {
-    try {
-      let status = await appGlobal.remoteApp.getUpdateStatus?.();
-      if (status?.appVersion) {
-        displayVersion = status.appVersion;
-        otaCapable = /-dev\.\d{14}$/.test(status.appVersion);
-      } else {
-        let runtimeVersion = await appGlobal.remoteApp.getAppVersion?.();
-        if (runtimeVersion) {
-          displayVersion = runtimeVersion;
-          otaCapable = /-dev\.\d{14}$/.test(runtimeVersion);
-        }
+  onMount(() => {
+    let loadedRemoteApp: any;
+
+    async function loadRuntimeVersion() {
+      let remoteApp = appGlobal.remoteApp;
+      if (!remoteApp || remoteApp === loadedRemoteApp) {
+        return;
       }
-    } catch {
-      // keep compile-time fallback
+      loadedRemoteApp = remoteApp;
+      try {
+        let status = await remoteApp.getUpdateStatus?.();
+        if (status?.appVersion) {
+          displayVersion = status.appVersion;
+          otaCapable = /-dev\.\d{14}$/.test(status.appVersion);
+        } else {
+          let runtimeVersion = await remoteApp.getAppVersion?.();
+          if (runtimeVersion) {
+            displayVersion = runtimeVersion;
+            otaCapable = /-dev\.\d{14}$/.test(runtimeVersion);
+          }
+        }
+      } catch {
+        // keep compile-time fallback
+      }
     }
+
+    let unsubscribe = appGlobal.subscribe(() => void loadRuntimeVersion());
+    return unsubscribe;
   });
 </script>
 

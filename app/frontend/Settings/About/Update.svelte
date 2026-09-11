@@ -83,28 +83,63 @@
   let watchdog: ReturnType<typeof setTimeout> | undefined;
   let pollTimer: ReturnType<typeof setInterval> | undefined;
   let isMac = false;
+  let initializedRemoteApp: any;
+  let initializingRemoteApp = false;
+  let unsubscribeAppGlobal: (() => void) | undefined;
 
-  onMount(async () => {
-    try {
-      isMac = await appGlobal.remoteApp.platform?.() === "darwin";
-    } catch {
-      isMac = false;
-    }
-    let status = appGlobal.remoteApp?.updateStatus;
-    if (status?.subscribe) {
-      unsub = status.subscribe((obj: typeof status) => syncFromBackend(obj));
-      syncFromBackend(status);
-    }
-    await refreshStatus();
-    consumeAboutUpdateFlow();
-    if (phase === "checking") {
-      startCheckingWatchdog();
-    } else if (phase === "available" || phase === "downloading") {
-      startDownloadWatchdog();
-    }
+  onMount(() => {
+    unsubscribeAppGlobal = appGlobal.subscribe(() => {
+      let remoteApp = appGlobal.remoteApp;
+      if (!remoteApp || remoteApp === initializedRemoteApp || initializingRemoteApp) {
+        return;
+      }
+      void initializeRemoteApp(remoteApp).catch(showError);
+    });
+
+    return () => {
+      unsubscribeAppGlobal?.();
+      unsub?.();
+      clearWatchdog();
+    };
   });
-  async function refreshStatus() {
-    let status = await appGlobal.remoteApp.getUpdateStatus?.();
+
+  async function initializeRemoteApp(remoteApp: any) {
+    initializingRemoteApp = true;
+    initializedRemoteApp = remoteApp;
+    try {
+      try {
+        isMac = await remoteApp.platform?.() === "darwin";
+      } catch {
+        isMac = false;
+      }
+      let status = remoteApp.updateStatus;
+      if (status?.subscribe) {
+        unsub?.();
+        unsub = status.subscribe((obj: typeof status) => syncFromBackend(obj));
+        syncFromBackend(status);
+      }
+      await refreshStatus(remoteApp);
+      consumeAboutUpdateFlow();
+      if (phase === "checking") {
+        startCheckingWatchdog();
+      } else if (phase === "available" || phase === "downloading") {
+        startDownloadWatchdog();
+      }
+    } finally {
+      initializingRemoteApp = false;
+    }
+  }
+
+  function getUpdaterRemoteApp(): any | undefined {
+    let remoteApp = appGlobal.remoteApp;
+    return remoteApp && typeof remoteApp.getUpdateStatus === "function" ? remoteApp : undefined;
+  }
+
+  async function refreshStatus(remoteApp = getUpdaterRemoteApp()) {
+    if (!remoteApp) {
+      return;
+    }
+    let status = await remoteApp.getUpdateStatus();
     if (status) {
       syncFromBackend(status);
       if (status.phase === "unsupported") {
@@ -219,9 +254,13 @@
       clearWatchdog();
     }
     errorEx = undefined;
+    let remoteApp = getUpdaterRemoteApp();
+    if (!remoteApp || typeof remoteApp.checkForUpdate !== "function") {
+      return;
+    }
     try {
-      await appGlobal.remoteApp.checkForUpdate(force);
-      await refreshStatus();
+      await remoteApp.checkForUpdate(force);
+      await refreshStatus(remoteApp);
     } catch (ex) {
       errorEx = ex as Error;
       await refreshStatus();
@@ -229,10 +268,14 @@
   }
 
   async function installUpdate() {
+    let remoteApp = getUpdaterRemoteApp();
+    if (!remoteApp || typeof remoteApp.installUpdate !== "function") {
+      return;
+    }
     installingUpdate = true;
     errorEx = undefined;
     try {
-      await appGlobal.remoteApp.installUpdate();
+      await remoteApp.installUpdate();
     } catch (ex) {
       installingUpdate = false;
       errorEx = ex as Error;
@@ -240,9 +283,13 @@
   }
 
   async function openManualDownload() {
+    let remoteApp = getUpdaterRemoteApp();
+    if (!remoteApp || typeof remoteApp.openPendingReleaseDownload !== "function") {
+      return;
+    }
     errorEx = undefined;
     try {
-      await appGlobal.remoteApp.openPendingReleaseDownload?.();
+      await remoteApp.openPendingReleaseDownload();
     } catch (ex) {
       errorEx = ex as Error;
     }

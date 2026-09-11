@@ -18,6 +18,8 @@ const defaultResponseReminderConfig: ResponseReminderConfig = {
   intervalsMinutes: [...DEFAULT_RESPONSE_REMINDER_INTERVALS_MINUTES],
   excludedCategoryNames: [],
   includeUncategorized: false,
+  notifyWhenOverdue: false,
+  notifyWhenTakenInWork: false,
 };
 
 export function getResponseReminderConfig(
@@ -58,6 +60,8 @@ export function setResponseReminderConfig(
       intervalsMinutes: nextConfig.intervalsMinutes,
       excludedCategoryNames: nextConfig.excludedCategoryNames,
       includeUncategorized: nextConfig.includeUncategorized,
+      notifyWhenOverdue: nextConfig.notifyWhenOverdue,
+      notifyWhenTakenInWork: nextConfig.notifyWhenTakenInWork,
       ...(enabledSince == null ? {} : { enabledSince }),
     },
   };
@@ -81,6 +85,8 @@ function cloneConfig(config: ResponseReminderConfig): ResponseReminderConfig {
     intervalsMinutes: [...config.intervalsMinutes],
     excludedCategoryNames: [...config.excludedCategoryNames],
     includeUncategorized: config.includeUncategorized,
+    notifyWhenOverdue: config.notifyWhenOverdue,
+    notifyWhenTakenInWork: config.notifyWhenTakenInWork,
     ...(config.enabledSince == null
       ? {}
       : { enabledSince: config.enabledSince }),

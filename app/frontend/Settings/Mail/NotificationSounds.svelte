@@ -53,6 +53,8 @@
       case "mail-outgoing": return $t`Outgoing mail`;
       case "calendar": return $t`Calendar reminders`;
       case "chat": return $t`Chat messages`;
+      case "sla-overdue": return $t`SLA overdue`;
+      case "sla-taken-in-work": return $t`Request taken into work`;
       case "other": return $t`Other notifications`;
     }
   }
@@ -63,6 +65,8 @@
       case "mail-outgoing": return $t`After a message was sent successfully`;
       case "calendar": return $t`When a calendar reminder is due`;
       case "chat": return $t`For chat events that support notifications`;
+      case "sla-overdue": return $t`When an unanswered request becomes overdue`;
+      case "sla-taken-in-work": return $t`When a message is read or assigned to an employee`;
       case "other": return $t`For other system events`;
     }
   }
@@ -74,6 +78,7 @@
       case "chime": return $t`Chime`;
       case "pop": return $t`Pop`;
       case "bell": return $t`Bell`;
+      case "alarm": return $t`Alarm`;
     }
   }
 

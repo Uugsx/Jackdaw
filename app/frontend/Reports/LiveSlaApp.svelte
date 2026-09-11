@@ -48,6 +48,7 @@
   import { reportsApp } from "./ReportsJackdawApp";
   import { getReportSession } from "./ReportSession";
   import LiveResponseControl from "./LiveResponseControl.svelte";
+  import ResponseEventNotificationSettings from "./ResponseEventNotificationSettings.svelte";
 
   export let embedded = false;
 
@@ -100,6 +101,8 @@
   let newResponseReminderMinutes =
     DEFAULT_RESPONSE_REMINDER_NEW_INTERVAL_MINUTES;
   let responseReminderError: "invalid" | "duplicate" | null = null;
+  let notifyWhenOverdue = false;
+  let notifyWhenTakenInWork = false;
   let mounted = false;
   let scopeRequestId = 0;
   let liveSettingsOpen = false;
@@ -255,6 +258,8 @@
       newResponseReminderMinutes =
         DEFAULT_RESPONSE_REMINDER_NEW_INTERVAL_MINUTES;
       responseReminderError = null;
+      notifyWhenOverdue = false;
+      notifyWhenTakenInWork = false;
       return;
     }
 
@@ -273,6 +278,8 @@
     responseReminderError = null;
     excludedResponseCategoryNames = [...reminderConfig.excludedCategoryNames];
     includeUncategorizedResponses = reminderConfig.includeUncategorized;
+    notifyWhenOverdue = reminderConfig.notifyWhenOverdue;
+    notifyWhenTakenInWork = reminderConfig.notifyWhenTakenInWork;
 
     const [folders, names] = await Promise.all([
       loadFolders(accountId),
@@ -470,11 +477,15 @@
       intervalsMinutes: responseReminderIntervals,
       excludedCategoryNames: excludedResponseCategoryNames,
       includeUncategorized: includeUncategorizedResponses,
+      notifyWhenOverdue,
+      notifyWhenTakenInWork,
     });
     responseRemindersEnabled = config.enabled;
     responseReminderIntervals = [...config.intervalsMinutes];
     excludedResponseCategoryNames = [...config.excludedCategoryNames];
     includeUncategorizedResponses = config.includeUncategorized;
+    notifyWhenOverdue = config.notifyWhenOverdue;
+    notifyWhenTakenInWork = config.notifyWhenTakenInWork;
     setResponseReminderConfig(selectedMailAccountId, config);
     // Watcher уведомлений использует тот же выбор отвечающего, что и очередь.
     saveResponderAttribution();
@@ -1058,6 +1069,12 @@
                     : $t`Enter whole minutes between 1 minute and 7 days.`}
                 </p>
               {/if}
+              <ResponseEventNotificationSettings
+                bind:notifyWhenOverdue
+                bind:notifyWhenTakenInWork
+                disabled={liveSettingsLoading}
+                on:change={saveResponseReminderConfig}
+              />
               {#if responderAttributionMode == "profile"}
                 <p class="live-setting-help">
                   {$t`In profile mode, all incoming messages from this mailbox are monitored.`}

@@ -21,6 +21,8 @@ export interface ReportSessionSnapshot {
   responseRemindersEnabled: boolean;
   responseReminderIntervals: number[];
   newResponseReminderMinutes: number;
+  notifyWhenOverdue: boolean;
+  notifyWhenTakenInWork: boolean;
   responseDaySort: ReportSortState<string> | null;
   responseDetailSort: ReportSortState<string> | null;
   responderSort: ReportSortState<string> | null;

@@ -9,6 +9,8 @@ import {
   normalizeResponseReminderConfig,
   normalizeResponseReminderIntervals,
   responseReminderKey,
+  shouldNotifyResponseReminderEvent,
+  isResponseRequestTakenInWork,
   type PendingResponseRequest,
 } from "../../../logic/Reports/ResponseReminder";
 import type { WorkingHoursSchedule } from "../../../logic/Reports/WorkingHours";
@@ -43,6 +45,8 @@ function reminderConfig(intervalsMinutes: number[]) {
     intervalsMinutes,
     excludedCategoryNames: [],
     includeUncategorized: false,
+    notifyWhenOverdue: false,
+    notifyWhenTakenInWork: false,
   };
 }
 
@@ -64,7 +68,63 @@ describe("ResponseReminder", () => {
       intervalsMinutes: [15],
       excludedCategoryNames: [],
       includeUncategorized: false,
+      notifyWhenOverdue: false,
+      notifyWhenTakenInWork: false,
     });
+  });
+
+  test("определяет принятие в работу по прочтению или категории", () => {
+    expect(isResponseRequestTakenInWork({ ...request, isRead: true })).toBe(
+      true,
+    );
+    expect(
+      isResponseRequestTakenInWork({ ...request, categoryNames: [] }),
+    ).toBe(false);
+    expect(
+      isResponseRequestTakenInWork({ ...request, categoryNames: ["  "] }),
+    ).toBe(false);
+  });
+
+  test("сигналит только при переходе состояния и не повторяет его", () => {
+    const previous = {
+      receivedAt: receivedAt.getTime(),
+      firedIntervalsMinutes: [],
+      takenInWork: false,
+      overdue: false,
+    };
+
+    expect(
+      shouldNotifyResponseReminderEvent(
+        "taken-in-work",
+        previous,
+        receivedAt.getTime(),
+        true,
+      ),
+    ).toBe(true);
+    expect(
+      shouldNotifyResponseReminderEvent(
+        "taken-in-work",
+        { ...previous, takenInWork: true },
+        receivedAt.getTime(),
+        true,
+      ),
+    ).toBe(false);
+    expect(
+      shouldNotifyResponseReminderEvent(
+        "overdue",
+        previous,
+        receivedAt.getTime(),
+        true,
+      ),
+    ).toBe(true);
+    expect(
+      shouldNotifyResponseReminderEvent(
+        "overdue",
+        previous,
+        receivedAt.getTime() + 1,
+        true,
+      ),
+    ).toBe(false);
   });
 
   test("returns only crossed points and keeps a fired point one-shot", () => {

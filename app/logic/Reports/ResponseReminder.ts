@@ -20,6 +20,10 @@ export interface ResponseReminderConfig {
   excludedCategoryNames: string[];
   /** Нужно ли контролировать входящие письма без категории в режиме категорий. */
   includeUncategorized: boolean;
+  /** Показывать отдельное уведомление при переходе запроса в просрочку. */
+  notifyWhenOverdue: boolean;
+  /** Показывать отдельное уведомление, когда запрос взяли в работу. */
+  notifyWhenTakenInWork: boolean;
   /** Момент включения контроля для отсечения старого архива. */
   enabledSince?: number;
 }
@@ -29,7 +33,13 @@ export interface ResponseReminderStateEntry {
   firedIntervalsMinutes: number[];
   /** Момент, когда письмо было принято в работу вне рабочего графика. */
   startedAt?: number;
+  /** Последнее известное состояние: запрос взят в работу или ещё нет. */
+  takenInWork?: boolean;
+  /** Последнее известное состояние: запрос уже просрочен или ещё нет. */
+  overdue?: boolean;
 }
+
+export type ResponseReminderEvent = "overdue" | "taken-in-work";
 
 export interface PendingResponseRequest {
   accountId: number;
@@ -61,6 +71,8 @@ const defaultConfig: ResponseReminderConfig = {
   intervalsMinutes: [...DEFAULT_RESPONSE_REMINDER_INTERVALS_MINUTES],
   excludedCategoryNames: [],
   includeUncategorized: false,
+  notifyWhenOverdue: false,
+  notifyWhenTakenInWork: false,
 };
 
 export function normalizeResponseReminderIntervals(
@@ -100,6 +112,14 @@ export function normalizeResponseReminderConfig(
       typeof source.includeUncategorized == "boolean"
         ? source.includeUncategorized
         : fallback.includeUncategorized,
+    notifyWhenOverdue:
+      typeof source.notifyWhenOverdue == "boolean"
+        ? source.notifyWhenOverdue
+        : fallback.notifyWhenOverdue,
+    notifyWhenTakenInWork:
+      typeof source.notifyWhenTakenInWork == "boolean"
+        ? source.notifyWhenTakenInWork
+        : fallback.notifyWhenTakenInWork,
     ...(enabledSince == null ? {} : { enabledSince }),
   };
 }
@@ -113,6 +133,34 @@ export function isResponseReminderRequestAfterActivation(
 
 export function responseReminderKey(request: PendingResponseRequest): string {
   return `${request.accountId}:${request.folderId}:${request.emailId}`;
+}
+
+/** Считает письмо взятым в работу по тем же правилам, что и SLA-таймер. */
+export function isResponseRequestTakenInWork(
+  request: PendingResponseRequest,
+): boolean {
+  return (
+    request.isRead === true ||
+    request.categoryNames.some((name) => name.trim().length > 0)
+  );
+}
+
+/**
+ * Проверяет именно переход состояния, а не текущее значение.
+ * Это не даёт повторно сигналить на каждом цикле наблюдателя.
+ */
+export function shouldNotifyResponseReminderEvent(
+  event: ResponseReminderEvent,
+  previous: ResponseReminderStateEntry | undefined,
+  receivedAt: number,
+  currentState: boolean,
+): boolean {
+  if (!previous || previous.receivedAt != receivedAt || !currentState) {
+    return false;
+  }
+  return event == "taken-in-work"
+    ? previous.takenInWork === false
+    : previous.overdue === false;
 }
 
 /**
@@ -144,7 +192,7 @@ export function getResponseSlaStartAt(
 
   if (
     !isWithinWorkingHours(request.receivedAt, workingHours) &&
-    (request.isRead === true || request.categoryNames.length > 0)
+    isResponseRequestTakenInWork(request)
   ) {
     return new Date(now.getTime());
   }

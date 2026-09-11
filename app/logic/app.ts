@@ -33,6 +33,7 @@ class AppGlobal extends Observable {
   readonly persons: Collection<Person> = mergeColls(this.addressbooks.map(ab => ab.persons));
   readonly topics: Collection<Topic> = mergeColls(this.topicAccounts.map(acc => acc.topics));
   //readonly allContacts: Collection<Contact> = mergeColls(this.addressbooks.map(ab => ab.contacts));
+  @notifyChangedProperty
   remoteApp: any;
   me = new Person();
 
