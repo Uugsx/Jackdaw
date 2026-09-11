@@ -20,16 +20,23 @@
   import type { Folder } from "../../../logic/Mail/Folder";
   import FolderLine from "./FolderLine.svelte";
   import TreeItemLine from "../../Shared/FastTreeItem.svelte";
-  import type { ArrayColl } from "svelte-collections";
+  import { ArrayColl, type ArrayColl as ArrayCollType } from "svelte-collections";
   import { createEventDispatcher } from "svelte";
+  import { hiddenFoldersEpoch, isHiddenFolder } from "./hiddenFolders";
 
   export let folder: Folder;
   export let selectedFolder: Folder;
-  export let selectedFolders: ArrayColl<Folder>;
+  export let selectedFolders: ArrayCollType<Folder>;
+  let subFoldersSorted = new ArrayColl<Folder>();
 
   const dispatch = createEventDispatcher();
 
-  $: subFoldersSorted = $folder.subFolders.sortBy(f => f.orderPos);
+  $: {
+    $hiddenFoldersEpoch;
+    subFoldersSorted = new ArrayColl(
+      $folder.subFolders.each.filter(child => !isHiddenFolder(child)),
+    ).sortBy(f => f.orderPos);
+  }
   $: isSelected = selectedFolder === folder;
 
   function selectFolder(event: MouseEvent) {

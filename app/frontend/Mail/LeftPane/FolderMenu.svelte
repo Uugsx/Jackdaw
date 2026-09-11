@@ -66,6 +66,12 @@
     icon={MoveDownIcon}
     disabled={!folder.canMoveSibling("down")} />
 {/if}
+{#if folder.id && folder.account.protocol != "all"}
+  <MenuItem
+    onClick={hideCurrentFolder}
+    label={$t`Hide folder`}
+    icon={EyeOffIcon} />
+{/if}
 <MenuDivider />
 <MenuItem
   onClick={() => toggleFavoriteFolder(folder)}
@@ -108,6 +114,7 @@
   import MoveUpIcon from "lucide-svelte/icons/arrow-up";
   import MoveDownIcon from "lucide-svelte/icons/arrow-down";
   import StarIcon from "lucide-svelte/icons/star";
+  import EyeOffIcon from "lucide-svelte/icons/eye-off";
   import { createEventDispatcher, getContext } from "svelte";
   import { t } from "../../../l10n/l10n";
   import {
@@ -115,6 +122,7 @@
     isFavoriteFolderRef,
     toggleFavoriteFolder,
   } from "./favoriteFolders";
+  import { hideFolder } from "./hiddenFolders";
 
   export let folder: Folder;
   const dispatch = createEventDispatcher<{
@@ -164,6 +172,13 @@
   async function moveSibling(direction: "up" | "down") {
     await folder.moveSibling(direction);
     treeRefresh?.();
+  }
+
+  function hideCurrentFolder() {
+    hideFolder(folder);
+    if ($selectedFolder == folder) {
+      $selectedFolder = folder.parent ?? folder.account.rootFolders.find(candidate => candidate != folder) ?? null;
+    }
   }
 
   function requestDeleteFolder() {

@@ -1,6 +1,6 @@
-{#if favoriteEntries.length || quickFolders.length}
+{#if visibleFavoriteEntries.length || quickFolders.length}
   <nav class="quick-access" aria-label={$t`Favorites`}>
-    {#each favoriteEntries as { ref, folder } (ref.accountId + ":" + ref.folderId)}
+    {#each visibleFavoriteEntries as { ref, folder } (ref.accountId + ":" + ref.folderId)}
       {#if folder}
         <QuickAccessFolder
           {folder}
@@ -13,7 +13,7 @@
         <span class="quick-folder pending" title={ref.folderPath}>{favoriteRefLabel(ref, accounts)}</span>
       {/if}
     {/each}
-    {#each defaultQuickFolders as folder (folder.id || folder.specialFolder || folder.fullPath)}
+    {#each visibleQuickFolders as folder (folder.id || folder.specialFolder || folder.fullPath)}
       {#if !isUserFavorite(folder, favoriteRefs)}
         <QuickAccessFolder
           {folder}
@@ -43,6 +43,11 @@
     type FavoriteFolderRef,
   } from "./favoriteFolders";
   import { getDefaultQuickAccessFolders } from "./quickAccessUtils";
+  import {
+    hiddenFoldersEpoch,
+    isHiddenFolder,
+    isHiddenFolderRef,
+  } from "./hiddenFolders";
 
   export let accounts: Collection<MailAccount>;
   export let account: MailAccount;
@@ -50,6 +55,8 @@
 
   const dispatch = createEventDispatcher<{ select: Folder }>();
   let favoriteEntries: Array<{ ref: FavoriteFolderRef; folder: Folder | null }> = [];
+  let visibleFavoriteEntries: Array<{ ref: FavoriteFolderRef; folder: Folder | null }> = [];
+  let visibleQuickFolders: Folder[] = [];
 
   $: favoriteRefs = $favoriteFoldersSetting.value ?? [];
   $: {
@@ -60,9 +67,18 @@
       folder: findFavoriteFolder(accounts, ref),
     }));
   }
-  $: userFavorites = favoriteEntries.map(entry => entry.folder).filter((f): f is Folder => !!f);
+  $: {
+    $hiddenFoldersEpoch;
+    visibleFavoriteEntries = favoriteEntries.filter(({ ref, folder }) =>
+      !isHiddenFolderRef(ref) && (!folder || !isHiddenFolder(folder)));
+  }
+  $: userFavorites = visibleFavoriteEntries.map(entry => entry.folder).filter((f): f is Folder => !!f);
   $: defaultQuickFolders = getDefaultQuickAccessFolders(account);
-  $: quickFolders = [...userFavorites, ...defaultQuickFolders.filter(f => !isUserFavorite(f, favoriteRefs))];
+  $: {
+    $hiddenFoldersEpoch;
+    visibleQuickFolders = defaultQuickFolders.filter(folder => !isHiddenFolder(folder));
+  }
+  $: quickFolders = [...userFavorites, ...visibleQuickFolders.filter(f => !isUserFavorite(f, favoriteRefs))];
 
   function isUserFavorite(folder: Folder, refs: FavoriteFolderRef[]): boolean {
     return isFavoriteFolderRef(folder, refs);

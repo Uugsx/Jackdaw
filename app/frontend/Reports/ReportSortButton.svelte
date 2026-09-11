@@ -36,6 +36,8 @@
     display: inline-flex;
     width: 100%;
     box-sizing: border-box;
+    min-width: 0;
+    min-height: 28px;
     align-items: center;
     justify-content: flex-start;
     gap: 5px;
@@ -48,8 +50,15 @@
     cursor: pointer;
     font: inherit;
     letter-spacing: inherit;
+    line-height: 1.2;
     text-align: inherit;
     text-transform: inherit;
+    white-space: normal;
+  }
+
+  .table-sort-button > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .table-sort-button.align-right {

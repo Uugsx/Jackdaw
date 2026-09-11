@@ -8,15 +8,20 @@
 
 <script lang="ts">
   import type { Folder } from "../../../logic/Mail/Folder";
-  import type { Collection, ArrayColl } from "svelte-collections";
+  import { ArrayColl, type Collection } from "svelte-collections";
   import FolderTreeBranch from "./FolderTreeBranch.svelte";
   import { setContext } from "svelte";
+  import { hiddenFoldersEpoch, isHiddenFolder } from "./hiddenFolders";
 
   export let folders: Collection<Folder>;
   export let selectedFolder: Folder;
   export let selectedFolders: ArrayColl<Folder>;
+  let foldersSorted = new ArrayColl<Folder>();
 
-  $: foldersSorted = $folders.sortBy(f => f.orderPos);
+  $: {
+    $hiddenFoldersEpoch;
+    foldersSorted = new ArrayColl($folders.each.filter(folder => !isHiddenFolder(folder))).sortBy(f => f.orderPos);
+  }
 
   setContext("treeToggleExpand", (item: Folder) => {
     item.expanded = !item.expanded;

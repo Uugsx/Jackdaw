@@ -14,6 +14,10 @@
     <div class="progress" role="progressbar" aria-valuenow={progress} aria-valuemin="0" aria-valuemax="100">
       <div class="progress-fill" style:width="{progress}%"></div>
     </div>
+    <Button
+      label={isMac ? $t`Download .dmg` : $t`Download latest installer`}
+      onClick={openManualDownload}
+      errorCallback={showError} />
   {:else if phase === "downloaded" || readyToInstall}
     <div class="status">{$t`Update ready`}{version ? `: ${version}` : ""}</div>
     {#if isMac}
@@ -26,28 +30,41 @@
     <hbox class="actions">
       <Button label={installingUpdate ? $t`Installing update…` : $t`Install update`} onClick={installUpdate}
         disabled={installingUpdate} />
-      {#if isMac}
-        <Button label={$t`Download .dmg`} onClick={openManualDownload} errorCallback={showError} />
-      {/if}
+      <Button
+        label={isMac ? $t`Download .dmg` : $t`Download latest installer`}
+        onClick={openManualDownload}
+        errorCallback={showError} />
     </hbox>
   {:else if phase === "available"}
     <div class="status">{$t`Update found`}{version ? `: ${version}` : ""}. {$t`Downloading…`}</div>
     <div class="progress" role="progressbar" aria-valuenow={progress} aria-valuemin="0" aria-valuemax="100">
       <div class="progress-fill" class:indeterminate={progress <= 0} style:width="{progress > 0 ? Math.max(progress, 2) : undefined}%"></div>
     </div>
-    {#if isMac}
-      <Button label={$t`Download .dmg manually`} onClick={openManualDownload} errorCallback={showError} />
-    {/if}
+    <hbox class="actions">
+      <Button
+        label={isMac ? $t`Download .dmg manually` : $t`Download latest installer`}
+        onClick={openManualDownload}
+        errorCallback={showError} />
+    </hbox>
   {:else if phase === "unsupported"}
     <div class="status">
       {errorEx?.message ?? updateUnsupportedMessage()}
     </div>
-    <Button label={$t`Check for update`} onClick={() => checkForUpdate(true)} errorCallback={showError} />
+    <hbox class="actions">
+      <Button label={$t`Check for update`} onClick={() => checkForUpdate(true)} errorCallback={showError} />
+      <Button label={isMac ? $t`Download .dmg` : $t`Download latest installer`} onClick={openManualDownload} errorCallback={showError} />
+    </hbox>
   {:else if phase === "uptodate"}
     <div class="status">{$t`This is the latest version`}</div>
-    <Button label={$t`Check for update`} onClick={() => checkForUpdate(true)} errorCallback={showError} />
+    <hbox class="actions">
+      <Button label={$t`Check for update`} onClick={() => checkForUpdate(true)} errorCallback={showError} />
+      <Button label={isMac ? $t`Download .dmg` : $t`Download latest installer`} onClick={openManualDownload} errorCallback={showError} />
+    </hbox>
   {:else}
-    <Button label={$t`Check for update`} onClick={() => checkForUpdate(true)} errorCallback={showError} />
+    <hbox class="actions">
+      <Button label={$t`Check for update`} onClick={() => checkForUpdate(true)} errorCallback={showError} />
+      <Button label={isMac ? $t`Download .dmg` : $t`Download latest installer`} onClick={openManualDownload} errorCallback={showError} />
+    </hbox>
   {/if}
 
   {#if errorEx && phase !== "unsupported"}

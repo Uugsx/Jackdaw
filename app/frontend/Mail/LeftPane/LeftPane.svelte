@@ -42,6 +42,8 @@
       onClick={openFolderCreation} />
   </hbox>
 
+  <HiddenFolders {accounts} />
+
   <Popup bind:popupOpen={folderCreationOpen} popupAnchor={folderCreationAnchor}
     placement="bottom-end" boundaryElSel="body">
     {#if folderCreationParent}
@@ -113,6 +115,7 @@
   import { openSettingsCategoryByID, openSettingsCategoryForAccount } from "../../Settings/Window/CategoriesUtils";
   import WorkspaceHeader from "../../MainWindow/WorkspaceHeader.svelte";
   import { mailApp } from "../MailJackdawApp";
+  import HiddenFolders from "./HiddenFolders.svelte";
 
   export let accounts: Collection<MailAccount>; /** in */
   export let folders: Collection<Folder>; /** in */

@@ -1645,10 +1645,11 @@
   }
 
   function formatPercent(value: number): string {
+    const normalized = Number.isFinite(value) ? Math.max(0, value) : 0;
     return new Intl.NumberFormat(getDateTimeLocale(), {
       style: "percent",
-      maximumFractionDigits: 0,
-    }).format(value || 0);
+      maximumFractionDigits: 2,
+    }).format(normalized);
   }
 
   function responseRate(answered: number, total: number): number {
@@ -2619,8 +2620,11 @@
         </div>
         <strong>{formatPercent(report.summary.responseRate)}</strong>
         <p>
-          {formatNumber(report.summary.mailAnswered)}
-          {$t`incoming requests with a verified sent reply`}
+          <span class="response-count"
+            >{formatNumber(report.summary.mailAnswered)} /
+            {formatNumber(report.summary.mailIncoming)}</span
+          >
+          {$t`incoming requests answered in the selected period`}
         </p>
       </article>
       <article class="summary-card">
@@ -4647,6 +4651,7 @@
     color: var(--main-fg);
     font-variant-numeric: tabular-nums;
     container-type: inline-size;
+    container-name: reports-page;
   }
 
   .reports-page:has(.report-viewer) {
@@ -5767,6 +5772,12 @@
     color: var(--reports-teal);
   }
 
+  .response-card .response-count {
+    color: var(--main-fg);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+  }
+
   .panel {
     max-width: 1440px;
     margin: 0 auto 16px;
@@ -6148,9 +6159,11 @@
   .dashboard-item {
     grid-column: span 6;
     min-width: 0;
+    max-width: 100%;
     box-sizing: border-box;
     min-height: 0;
     container-type: inline-size;
+    container-name: dashboard-item;
   }
 
   .dashboard-item.layout-full {
@@ -6351,7 +6364,9 @@
   }
 
   .table-wrap {
-    overflow-x: auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .response-detail-block .table-wrap {
@@ -6378,16 +6393,20 @@
 
   table {
     width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
     font-size: 12px;
   }
 
   th,
   td {
+    min-width: 0;
     padding: 10px 8px;
     border-bottom: 1px solid var(--border);
     text-align: left;
     vertical-align: middle;
+    overflow-wrap: anywhere;
   }
 
   thead th {
@@ -6396,7 +6415,7 @@
     font-weight: 750;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    white-space: nowrap;
+    white-space: normal;
   }
 
   tbody tr:last-child th,
@@ -6410,7 +6429,7 @@
   }
 
   tbody th {
-    min-width: 130px;
+    min-width: 0;
     color: var(--main-fg);
     font-weight: 650;
   }
@@ -6464,8 +6483,9 @@
   .topic-cell {
     max-width: 300px;
     overflow: hidden;
+    overflow-wrap: anywhere;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
   }
 
   .empty-cell {
@@ -6530,17 +6550,19 @@
 
   }
 
-  @container (max-width: 1180px) {
+  @container reports-page (max-width: 1180px) {
     .dashboard-grid {
       gap: 12px;
     }
+  }
 
+  @container dashboard-item (max-width: 1180px) {
     .response-metrics {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
 
-  @container (max-width: 640px) {
+  @container reports-page (max-width: 640px) {
     .dashboard-grid {
       grid-template-columns: minmax(0, 1fr);
       gap: 12px;
@@ -6549,23 +6571,11 @@
     .dashboard-item {
       grid-column: 1 / -1 !important;
     }
-
-    .response-metrics {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
   }
 
-  @container (max-width: 420px) {
-    .dashboard-grid {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .dashboard-item {
-      grid-column: 1 / -1 !important;
-    }
-
+  @container dashboard-item (max-width: 720px) {
     .response-metrics {
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .dashboard-item:not(.layout-full) .response-detail-block .table-wrap {
@@ -6644,6 +6654,12 @@
       .response-detail-block tbody
       td.empty-cell::before {
       display: none;
+    }
+  }
+
+  @container dashboard-item (max-width: 420px) {
+    .response-metrics {
+      grid-template-columns: 1fr;
     }
   }
 

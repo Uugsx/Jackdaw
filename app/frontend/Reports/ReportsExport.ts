@@ -123,7 +123,7 @@ export function createReportHTML(
     ["Сообщения почты", formatNumber(report.summary.mailMessages)],
     [
       "Запросы с подтверждённым ответом",
-      `${formatNumber(report.summary.mailAnswered)} (${formatPercent(report.summary.responseRate)})`,
+      `${formatNumber(report.summary.mailAnswered)} / ${formatNumber(report.summary.mailIncoming)} (${formatPercent(report.summary.responseRate)})`,
     ],
     [
       "Норматив первого ответа",
@@ -636,10 +636,11 @@ function formatNumber(value: number, maximumFractionDigits = 0): string {
 }
 
 function formatPercent(value: number): string {
+  const normalized = Number.isFinite(value) ? Math.max(0, value) : 0;
   return new Intl.NumberFormat(EXPORT_LOCALE, {
     style: "percent",
-    maximumFractionDigits: 0,
-  }).format(value || 0);
+    maximumFractionDigits: 2,
+  }).format(normalized);
 }
 
 function responseRate(answered: number, total: number): number {

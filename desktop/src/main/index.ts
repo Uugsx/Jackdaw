@@ -243,10 +243,10 @@ const kBackgroundUpdateCheckMs = 4 * 60 * 60 * 1000; // every 4 hours
         if (updateState.haveUpdate) {
           return;
         }
-        if (updateState.phase === "available" || updateState.phase === "downloading" || updateState.phase === "downloaded") {
+        if (updateState.phase === "checking" || updateState.phase === "available" || updateState.phase === "downloading" || updateState.phase === "downloaded") {
           return;
         }
-        await checkForUpdateAndNotify();
+        await checkForUpdateAndNotify(true);
       } catch (ex) {
         console.error(ex);
       }

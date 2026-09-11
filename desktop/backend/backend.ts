@@ -990,12 +990,16 @@ async function checkForUpdate(force = false): Promise<boolean> {
   });
 }
 
-export async function checkForUpdateAndNotify(): Promise<boolean> {
-  if (updateState.readyToInstall || updateState.haveUpdate) {
+export async function checkForUpdateAndNotify(force = false): Promise<boolean> {
+  if (!force && (updateState.readyToInstall || updateState.haveUpdate)) {
     return updateState.haveUpdate || updateState.readyToInstall;
   }
-  if (updateState.phase === "uptodate" || updateState.phase === "unsupported") {
+  if (!force && (updateState.phase === "uptodate" || updateState.phase === "unsupported")) {
     return false;
+  }
+  if (force) {
+    updateState.reset();
+    checkForUpdateRunOnce.running = null;
   }
   return await checkForUpdateRunOnce.runOnce(async () => {
     try {
@@ -1086,9 +1090,7 @@ export async function installUpdate() {
 }
 
 export async function openPendingReleaseDownload() {
-  let version = updateState.version ?? app.getVersion();
-  let tag = version.startsWith("v") ? version : `v${version}`;
-  await shell.openExternal(`https://github.com/Uugsx/jackdaw-mail/releases/tag/${tag}`);
+  await shell.openExternal(`https://github.com/${kGhOwner}/${kGhRepo}/releases`);
 }
 
 function setTheme(theme: "system" | "light" | "dark") {

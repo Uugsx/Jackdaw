@@ -41,6 +41,7 @@
   import TreeItemLine from '../../Shared/FastTreeItem.svelte';
   import { t } from '../../../l10n/l10n';
   import { createEventDispatcher } from 'svelte';
+  import { hiddenFoldersEpoch, isHiddenFolder } from './hiddenFolders';
 
   export let folders: Collection<Folder>;
   export let selectedFolder: Folder; /* in/out */
@@ -50,8 +51,12 @@
 
   const dispatch = createEventDispatcher<{ selectFolder: Folder }>();
   const embeddedSelection = new ArrayColl<Folder>();
+  let foldersSorted = new ArrayColl<Folder>();
 
-  $: foldersSorted = $folders.sortBy(f => f.orderPos);
+  $: {
+    $hiddenFoldersEpoch;
+    foldersSorted = new ArrayColl($folders.each.filter(folder => !isHiddenFolder(folder))).sortBy(f => f.orderPos);
+  }
 
   function onEmbeddedSelect(event: CustomEvent<Folder>) {
     dispatch("selectFolder", event.detail);

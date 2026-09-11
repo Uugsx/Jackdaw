@@ -189,6 +189,7 @@ Or push to `main` touching monitored paths.
 | Mac: app didn’t restart after update | Install ran while app still open | Use `scheduleMacDmgInstallAndQuit` (quit first, then script) |
 | `JPC: Could not connect to ws://localhost:5455` after OTA | UI loaded before backend | `await startupBackend()` before `loadFile`; retry JPC connect |
 | Infinite “Checking…” on About tab | Remount / race on `checkForUpdate(true)` | Poll status; don’t force new check while `checking` |
+| Windows: “Automatic updates are not configured” | Portable/dir build or an installer without `app-update.yml` | Install the latest `setup.exe` from GitHub Releases, or use **Download latest installer** on the About page |
 | `422` / duplicate tag on publish | Tag missing before publish | `prepare` creates tag + release before mac/win |
 
 ---
@@ -205,8 +206,9 @@ Or push to `main` touching monitored paths.
 
 ### User-facing flow
 
-- **Background check:** on app startup, then every **4 hours** (`desktop/src/main/index.ts`)
+- **Background check:** on app startup, then every **4 hours** (`desktop/src/main/index.ts`). The scheduled check retries even after a transient error or an earlier `unsupported`/`uptodate` result.
 - **Banner:** when update is `available` / `downloading` / `downloaded` — opens Settings → About; user clicks **Install update** manually (no auto-install on tab open)
+- **Manual fallback:** Settings → About always offers a link to the latest GitHub Releases page, with the platform-specific installer available there.
 - **Mac:** DMG download may run in background after check; install only after explicit **Install update**
 
 Do not poll every few minutes — wastes GitHub API and user bandwidth. 4 h is a reasonable default for `-dev` prereleases; increase to 12–24 h when releases become less frequent.
