@@ -34,7 +34,7 @@
   import { t } from "../../../l10n/l10n";
 
   let categories = settingsCategories.filterObservable(cat =>
-    cat.id == "global" || cat.id == "mail" || cat.id == "about");
+    cat.id == "global" || cat.id == "mail" || cat.id == "about" || cat.id == "billing");
 
   $: onSearch($globalSearchTerm)
   function onSearch(searchTerm: string) {

@@ -21,9 +21,10 @@
 # Release
 * Polish based on feedback
 * License notification bar
-* Payment: Upgrade
-  * Upgrade page in Settings: Billing
-  * Server
+* Payment: Jackdaw Pro
+  * Upgrade page in Settings: Jackdaw Pro — client foundation done
+  * License server — pending deployment
+  * YooKassa onboarding and production checkout — pending
 * OAuth
   * Google: Renewal TAC - Started, waiting for Google
   * Microsoft: localhost redirect URL - Client ID vs. account unclear

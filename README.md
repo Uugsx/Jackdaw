@@ -80,6 +80,10 @@ Desktop на **Electron**, mobile на **Capacitor**, UI — **Svelte + TypeScri
 
 Настройки живого контроля сохраняются отдельно для выбранного почтового ящика. Очередь обновляется сразу после изменения письма или категории; периодическая проверка служит резервным механизмом.
 
+### Jackdaw Pro
+
+Отчёты и живой контроль SLA подготовлены как Pro-модуль: в него входят рабочий календарь, таймеры, напоминания, правила очереди, архив контроля, подробный просмотр и HTML-экспорт. Для российского запуска выбран внешний checkout ЮKassa; платёжные данные не проходят через Jackdaw, а доступ выдаётся подписанным серверным entitlement. План интеграции и список обязательных шагов находятся в [`docs/PRO-BILLING.md`](docs/PRO-BILLING.md).
+
 ### Платформы
 
 | Платформа | Статус |
@@ -179,6 +183,10 @@ Reports are generated and reviewed inside the app first. HTML is an optional sav
 - **Queue rules:** exclude categories such as “Переписка (мы в копии)”, choose whether uncategorized messages are included, sort the queue, and archive stale requests with restore support.
 
 Live-control settings are persisted per mailbox. The queue refreshes immediately after a message or category change, with a periodic safety check as a fallback.
+
+### Jackdaw Pro
+
+Reports and live SLA control are prepared as a Pro module covering the working calendar, timers, reminders, queue rules, tracking archive, in-app detailed view and HTML export. YooKassa is the selected checkout for a Russian launch; payment details never pass through Jackdaw, and access is issued by a signed server entitlement. See [`docs/PRO-BILLING.md`](docs/PRO-BILLING.md) for the integration plan and launch checklist.
 
 ### Platforms
 

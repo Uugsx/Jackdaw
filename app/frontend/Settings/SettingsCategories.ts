@@ -27,6 +27,7 @@ import AccountXMPPServer from "./Chat/AccountXMPPServer.svelte";
 import ChatNotifications from "./Chat/Notifications.svelte";
 import CalendarNotifications from "./Calendar/Notifications.svelte";
 import About from "./About/About.svelte";
+import Billing from "./Billing/Billing.svelte";
 // #if [MOBILE || !PRODUCTION]
 import Debug from "./About/Debug.svelte";
 // #endif
@@ -166,6 +167,10 @@ settingsCategories.add(filesSettings);
 
 const about = new SettingsCategory("about", gt`About`, About, true);
 settingsCategories.add(about);
+
+const billing = new SettingsCategory("billing", gt`Jackdaw Pro`, Billing, true);
+billing.synonyms.addAll([gt`Pro`, gt`Subscription`, gt`Payment`]);
+settingsCategories.add(billing);
 
 // #if [MOBILE || !PRODUCTION]
 about.subCategories.add(new SettingsCategory("debug", gt`Debug`, Debug));
