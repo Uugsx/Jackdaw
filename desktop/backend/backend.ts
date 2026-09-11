@@ -34,6 +34,39 @@ const { autoUpdater } = electronUpdater;
 const kGhOwner = "Uugsx";
 const kGhRepo = "jackdaw-mail";
 
+/**
+ * Electron derives `userData` from the visible application name by default.
+ * Keep existing Chromium data (localStorage, preferences and cookies) working
+ * after the Jackdaw → Jackdaw Mail rename when the legacy profile exists.
+ * The custom application databases already use this stable directory below;
+ * this check covers the separate Electron profile used by the renderer.
+ */
+const kLegacyUserDataDirName = "Jackdaw";
+const kChromiumUserDataMarkers = [
+  "Local Storage",
+  "Session Storage",
+  "Preferences",
+  "Cookies",
+  "Network",
+  "IndexedDB",
+];
+
+function hasChromiumUserData(dir: string): boolean {
+  return kChromiumUserDataMarkers.some(marker => fs.existsSync(path.join(dir, marker)));
+}
+
+function preserveLegacyUserData(): void {
+  let defaultUserDataDir = app.getPath("userData");
+  let legacyUserDataDir = path.join(app.getPath("appData"), kLegacyUserDataDirName);
+  if (path.resolve(defaultUserDataDir) == path.resolve(legacyUserDataDir) ||
+      !hasChromiumUserData(legacyUserDataDir)) {
+    return;
+  }
+  app.setPath("userData", legacyUserDataDir);
+}
+
+preserveLegacyUserData();
+
 let jpc: JPCWebSocket | null = null;
 let backendStartup: Promise<void> | null = null;
 
