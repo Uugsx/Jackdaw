@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
-  <title id="title">Jackdaw — демонстрационный экран живого SLA-контроля</title>
+  <title id="title">Jackdaw Mail — демонстрационный экран живого SLA-контроля</title>
   <desc id="desc">Почта и правая боковая панель живого контроля с очередью неотвеченных писем и рабочим таймером. Используются синтетические данные.</desc>
   <style>
     text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; fill: #242321; }

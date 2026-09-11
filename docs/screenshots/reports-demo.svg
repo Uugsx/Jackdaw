@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
-  <title id="title">Jackdaw — демонстрационный экран интерактивного отчёта</title>
+  <title id="title">Jackdaw Mail — демонстрационный экран интерактивного отчёта</title>
   <desc id="desc">Демонстрационный дашборд отчётов с графиком активности, тепловой картой и таблицей ответов. Используются синтетические данные.</desc>
   <style>
     text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; fill: #242321; }
@@ -19,7 +19,7 @@
 
   <text x="72" y="70" class="kicker">ОТЧЁТЫ ОБ АКТИВНОСТИ</text>
   <text x="72" y="112" class="title">Подробный отчёт</text>
-  <text x="72" y="139" class="muted" font-size="15">Графики, рабочее время SLA и полный список ответов — прямо внутри Jackdaw.</text>
+  <text x="72" y="139" class="muted" font-size="15">Графики, рабочее время SLA и полный список ответов — прямо внутри Jackdaw Mail.</text>
 
   <rect x="1160" y="63" width="177" height="42" rx="21" fill="#fff" stroke="#c9c1b5" stroke-width="2"/>
   <path d="M1182 78v13m0 0-5-5m5 5 5-5M1175 95h14" fill="none" stroke="#ad6510" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
