@@ -151,6 +151,14 @@ export function reportDashboardWidthColumns(width: ReportDashboardWidth): number
   }
 }
 
+/** Доля ответов сотрудника среди всех подтверждённых ответов выбранного представления. */
+export function responderResponseShare(
+  answered: number,
+  totalAnswered: number,
+): number {
+  return totalAnswered > 0 ? answered / totalAnswered : 0;
+}
+
 export function toggleReportDashboardHeight(tall: boolean): boolean {
   return !tall;
 }

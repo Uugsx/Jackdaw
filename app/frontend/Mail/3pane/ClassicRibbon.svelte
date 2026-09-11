@@ -1,7 +1,10 @@
 <!-- Outlook-style Home ribbon — classic 3-pane layout only -->
-<hbox class="classic-ribbon font-smallest">
+<hbox class="classic-ribbon font-smallest"
+  class:compact={ribbonSize == "compact"}
+  class:normal={ribbonSize == "normal"}
+  class:large={ribbonSize == "large"}>
   {#if showNew}
-    <vbox class="group new-group">
+    <vbox class="group new-group" class:hidden={ribbonHidden.new} style:order={ribbonOrders.new}>
       <button type="button" class="ribbon-btn primary" disabled={!account}
         title={$t`Write new email`}
         on:click={() => catchErrors(newMail)}>
@@ -13,7 +16,7 @@
     <hbox class="divider" aria-hidden="true" />
   {/if}
 
-  <vbox class="group">
+  <vbox class="group separated" class:hidden={ribbonHidden.delete} style:order={ribbonOrders.delete}>
     {#if folder?.specialFolder == SpecialFolder.Trash || folder?.specialFolder == SpecialFolder.Spam}
       <button type="button" class="ribbon-btn primary" disabled={!hasSelection}
         title={$t`Restore`}
@@ -32,7 +35,7 @@
 
   <hbox class="divider" aria-hidden="true" />
 
-  <vbox class="group row">
+  <vbox class="group row separated" class:hidden={ribbonHidden.reply} style:order={ribbonOrders.reply}>
     <button type="button" class="ribbon-btn" disabled={!message}
       title={$t`Reply to author`}
       on:click={() => catchErrors(reply)}>
@@ -55,7 +58,7 @@
 
   <hbox class="divider" aria-hidden="true" />
 
-  <vbox class="group row">
+  <vbox class="group row separated" class:hidden={ribbonHidden.organize} style:order={ribbonOrders.organize}>
     <button type="button" class="ribbon-btn" disabled={!hasSelection}
       bind:this={moveAnchor}
       title={$t`Move`}
@@ -79,7 +82,7 @@
 
   <hbox class="divider" aria-hidden="true" />
 
-  <vbox class="group row">
+  <vbox class="group row separated" class:hidden={ribbonHidden.status} style:order={ribbonOrders.status}>
     <button type="button" class="ribbon-btn" disabled={!hasSelection}
       title={messageRead ? $t`Mark as unread` : $t`Mark as read`}
       on:click={() => catchErrors(toggleRead)}>
@@ -145,7 +148,7 @@
 
   <hbox class="divider" aria-hidden="true" />
 
-  <vbox class="group">
+  <vbox class="group separated" class:hidden={ribbonHidden.more} style:order={ribbonOrders.more}>
       <ButtonMenu label={$t`More`}>
       {#if message}
         <MessageMenu {message} {printE} onMove={toggleMove} />
@@ -156,7 +159,7 @@
         label={$t`Get mail`}
         icon={RefreshIcon}
         disabled={!folder} />
-    </ButtonMenu>
+      </ButtonMenu>
   </vbox>
 
 </hbox>
@@ -217,12 +220,33 @@
   import { selectedMessages as selectedMessagesStore } from "../Selected";
   import { t, gt } from "../../../l10n/l10n";
   import { computeCanReplyAll, subscribeCanReplyAll } from "../canReplyAll";
+  import {
+    ribbonPreferences,
+    type RibbonGroupId,
+  } from "./ribbonPreferences";
 
   export let account: MailAccount;
   export let folder: Folder;
   export let message: EMail;
   export let selectedMessages: ArrayColl<EMail>;
   export let showNew = true;
+
+  $: currentRibbonPreferences = $ribbonPreferences;
+  $: ribbonSize = currentRibbonPreferences.size;
+  $: ribbonOrders = currentRibbonPreferences.order.reduce((orders, group, index) => {
+    if (!currentRibbonPreferences.hidden.includes(group)) {
+      orders[group] = index;
+    }
+    return orders;
+  }, {} as Record<RibbonGroupId, number>);
+  $: ribbonHidden = {
+    new: currentRibbonPreferences.hidden.includes("new"),
+    delete: currentRibbonPreferences.hidden.includes("delete"),
+    reply: currentRibbonPreferences.hidden.includes("reply"),
+    organize: currentRibbonPreferences.hidden.includes("organize"),
+    status: currentRibbonPreferences.hidden.includes("status"),
+    more: currentRibbonPreferences.hidden.includes("more"),
+  };
 
   let printE: Print;
 
@@ -237,7 +261,7 @@
     replyAllUnsub?.();
     replyAllUnsub = subscribeCanReplyAll(message, () => replyAllRev++);
   }
-  $: canReplyAll = (replyAllRev, computeCanReplyAll(message));
+  $: canReplyAll = replyAllRev >= 0 && computeCanReplyAll(message);
   // Bump after mutations so labels refresh without $message store sub (null-safe)
   let flagsEpoch = 0;
   $: messageSpam = flagsEpoch >= 0 && message?.isSpam;
@@ -432,13 +456,15 @@
     flex-direction: row;
     align-items: center;
   }
+  .group.separated {
+    border-inline-start: 1px solid var(--border);
+    padding-inline-start: 3px;
+  }
+  .group.hidden {
+    display: none;
+  }
   .divider {
-    width: 1px;
-    height: 24px;
-    align-self: center;
-    margin-inline: 2px;
-    background-color: var(--border);
-    flex-shrink: 0;
+    display: none;
   }
   .ribbon-btn {
     display: inline-flex;
@@ -512,5 +538,31 @@
   .classic-ribbon :global(.menu-button:hover:not(.disabled)) {
     background-color: var(--hover-bg);
     color: var(--hover-fg);
+  }
+  .classic-ribbon.large .ribbon-btn {
+    width: 66px;
+    min-width: 66px;
+    height: 54px;
+    gap: 4px;
+    padding: 4px 6px;
+    font-size: 10px;
+    line-height: 1.15;
+  }
+  .classic-ribbon.large .ribbon-btn :global(svg) {
+    width: 22px;
+    height: 22px;
+  }
+  .classic-ribbon.large .ribbon-btn span {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .classic-ribbon.compact .ribbon-btn {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
   }
 </style>

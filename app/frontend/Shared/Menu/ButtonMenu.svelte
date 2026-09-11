@@ -13,7 +13,7 @@
       />
   {/if}
 </hbox>
-<Menu bind:isMenuOpen anchor={menuAnchorE} {boundaryElSel} {placement} dismissOnPointerLeave>
+<Menu bind:isMenuOpen anchor={menuAnchorE} {boundaryElSel} {placement} {dismissOnPointerLeave}>
   <slot />
 </Menu>
 
@@ -43,6 +43,7 @@
    * above/below ("top"/"bottom") and left/right ("start"/"end")
    * in */
   export let placement: Placement = "bottom-end";
+  export let dismissOnPointerLeave = true;
 
   let menuAnchorE: HTMLElement;
   function onMenuToggle(event: MouseEvent) {

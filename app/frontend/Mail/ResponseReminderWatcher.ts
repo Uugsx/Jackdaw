@@ -45,7 +45,10 @@ import {
   responseTrackingArchiveSetting,
 } from "../Reports/ResponseTrackingArchiveSettings";
 import { isResponseTrackingArchived } from "../../logic/Reports/ResponseTrackingArchive";
-import type { WorkingHoursSchedule } from "../../logic/Reports/WorkingHours";
+import {
+  isWithinWorkingHours,
+  type WorkingHoursSchedule,
+} from "../../logic/Reports/WorkingHours";
 import { getLocalStorage } from "../Util/LocalStorage";
 import { backgroundError } from "../Util/error";
 import { openPendingResponseMessage } from "./openPendingResponse";
@@ -164,22 +167,40 @@ export function getResponseReminderSlaStartAt(
   const receivedAt = request.receivedAt.getTime();
   const previous =
     state[key]?.receivedAt == receivedAt ? state[key] : undefined;
+  const takenInWork = isResponseRequestTakenInWork(request);
+  const takenInWorkNow =
+    previous?.takenInWork === false &&
+    takenInWork &&
+    !isWithinWorkingHours(request.receivedAt, workingHours)
+      ? now.getTime()
+      : undefined;
   const slaStartedAt = getResponseSlaStartAt(
     request,
     now,
     workingHours,
-    previous?.startedAt,
+    previous?.startedAt ?? takenInWorkNow,
   );
+  const nextStateEntry: ResponseReminderStateEntry = {
+    ...previous,
+    receivedAt,
+    firedIntervalsMinutes: previous?.firedIntervalsMinutes ?? [],
+    takenInWork,
+    ...(slaStartedAt.getTime() == receivedAt
+      ? {}
+      : {
+          startedAt: slaStartedAt.getTime(),
+          startedAtSource:
+            previous?.startedAtSource ??
+            (takenInWorkNow == null ? undefined : "taken-in-work"),
+        }),
+  };
   if (
-    slaStartedAt.getTime() != receivedAt &&
-    previous?.startedAt != slaStartedAt.getTime()
+    previous?.receivedAt != nextStateEntry.receivedAt ||
+    previous?.takenInWork != nextStateEntry.takenInWork ||
+    previous?.startedAt != nextStateEntry.startedAt ||
+    previous?.startedAtSource != nextStateEntry.startedAtSource
   ) {
-    state[key] = {
-      ...previous,
-      receivedAt,
-      firedIntervalsMinutes: previous?.firedIntervalsMinutes ?? [],
-      startedAt: slaStartedAt.getTime(),
-    };
+    state[key] = nextStateEntry;
     responseReminderStateSetting.value = state;
   }
   return slaStartedAt;
@@ -330,16 +351,33 @@ async function evaluateResponseReminders(): Promise<void> {
             previous?.receivedAt == receivedAt
               ? previous
               : { receivedAt, firedIntervalsMinutes: [] };
+          const takenInWork = isResponseRequestTakenInWork(
+            candidate,
+            config.excludedCategoryNames,
+          );
+          const takenInWorkNow =
+            previous?.receivedAt == receivedAt &&
+            previous.takenInWork === false &&
+            takenInWork &&
+            !isWithinWorkingHours(candidate.receivedAt, workingHours)
+              ? now.getTime()
+              : undefined;
           const slaStartedAt = getResponseSlaStartAt(
             candidate,
             now,
             workingHours,
-            entry.startedAt,
+            entry.startedAt ?? takenInWorkNow,
           );
           const entryWithStart =
             slaStartedAt.getTime() == receivedAt
               ? entry
-              : { ...entry, startedAt: slaStartedAt.getTime() };
+              : {
+                  ...entry,
+                  startedAt: slaStartedAt.getTime(),
+                  startedAtSource:
+                    entry.startedAtSource ??
+                    (takenInWorkNow == null ? undefined : "taken-in-work"),
+                };
           const progress = getResponseSlaProgress(
             request,
             targetMinutes,
@@ -372,10 +410,6 @@ async function evaluateResponseReminders(): Promise<void> {
             continue;
           }
 
-          const takenInWork = isResponseRequestTakenInWork(
-            candidate,
-            config.excludedCategoryNames,
-          );
           const overdue = progress.status == "over-target";
           let stateTakenInWork = takenInWork;
           let stateOverdue = overdue;
@@ -705,9 +739,11 @@ function readState(): Record<string, ResponseReminderStateEntry> {
     if (!Number.isFinite(receivedAt) || receivedAt <= 0) {
       continue;
     }
-    const startedAt = finiteTimestamp(
-      (raw as Record<string, unknown>).startedAt,
-    );
+    const rawStartedAtSource = (raw as Record<string, unknown>).startedAtSource;
+    const startedAt =
+      rawStartedAtSource == "taken-in-work"
+        ? finiteTimestamp((raw as Record<string, unknown>).startedAt)
+        : undefined;
     const takenInWork = optionalBoolean(
       (raw as Record<string, unknown>).takenInWork,
     );
@@ -717,7 +753,9 @@ function readState(): Record<string, ResponseReminderStateEntry> {
       firedIntervalsMinutes: normalizeFiredIntervals(
         (raw as Record<string, unknown>).firedIntervalsMinutes,
       ),
-      ...(startedAt == null ? {} : { startedAt }),
+      ...(startedAt == null
+        ? {}
+        : { startedAt, startedAtSource: "taken-in-work" as const }),
       ...(takenInWork == null ? {} : { takenInWork }),
       ...(overdue == null ? {} : { overdue }),
     };

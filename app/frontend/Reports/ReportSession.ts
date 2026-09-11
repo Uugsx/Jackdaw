@@ -18,11 +18,6 @@ export interface ReportSessionSnapshot {
   categoryFilter: string[] | null;
   responderAttributionMode: ResponderAttributionMode;
   selectedResponderCategoryNames: string[];
-  responseRemindersEnabled: boolean;
-  responseReminderIntervals: number[];
-  newResponseReminderMinutes: number;
-  notifyWhenOverdue: boolean;
-  notifyWhenTakenInWork: boolean;
   responseDaySort: ReportSortState<string> | null;
   responseDetailSort: ReportSortState<string> | null;
   responderSort: ReportSortState<string> | null;

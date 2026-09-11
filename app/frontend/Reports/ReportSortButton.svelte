@@ -17,6 +17,7 @@
   class:is-active={direction != null}
   class:align-right={align == "right"}
   aria-label={label}
+  title={label}
   on:click={() => dispatch("sort")}
 >
   <span>{label}</span>
@@ -54,11 +55,18 @@
     text-align: inherit;
     text-transform: inherit;
     white-space: normal;
+    text-wrap: balance;
   }
 
   .table-sort-button > span:first-child {
+    flex: 1 1 auto;
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: normal;
+    word-break: keep-all;
+    hyphens: none;
+    text-wrap: balance;
   }
 
   .table-sort-button.align-right {

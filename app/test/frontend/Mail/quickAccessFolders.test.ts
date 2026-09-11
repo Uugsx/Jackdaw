@@ -7,6 +7,7 @@ let QuickAccessFolders: any;
 let favoriteFoldersEpoch: any;
 let watchMailFolderTrees: any;
 let enumerateMailAccounts: any;
+let moveFavoriteFolder: any;
 let mounted: ReturnType<typeof mount>[] = [];
 let localStorageValues = new Map<string, string>();
 
@@ -27,6 +28,7 @@ beforeAll(async () => {
   favoriteFoldersEpoch = (await import("../../../frontend/Mail/LeftPane/favoriteFolders")).favoriteFoldersEpoch;
   watchMailFolderTrees = (await import("../../../frontend/Mail/LeftPane/favoriteFolders")).watchMailFolderTrees;
   enumerateMailAccounts = (await import("../../../frontend/Mail/LeftPane/favoriteFolders")).enumerateMailAccounts;
+  moveFavoriteFolder = (await import("../../../frontend/Mail/LeftPane/favoriteFolders")).moveFavoriteFolder;
 });
 
 afterEach(() => {
@@ -175,6 +177,33 @@ describe("QuickAccessFolders", () => {
 
     expect(changes).toBeGreaterThan(1);
     stop();
+  });
+
+  test("moves a favorite past hidden entries in the visible order", () => {
+    let account: any = {
+      id: "account-5",
+      protocol: "owa",
+    };
+    let favoriteRefs = [
+      { accountId: account.id, folderId: "folder-a", folderPath: "A" },
+      { accountId: account.id, folderId: "folder-b", folderPath: "B" },
+      { accountId: account.id, folderId: "folder-c", folderPath: "C" },
+    ];
+    localStorageValues.set("mail.folders.favorites", JSON.stringify(favoriteRefs));
+
+    let folder: any = {
+      id: "folder-a",
+      name: "A",
+      fullPath: "A",
+      account,
+    };
+    moveFavoriteFolder(folder, "down", [favoriteRefs[0], favoriteRefs[2]]);
+
+    expect(JSON.parse(localStorageValues.get("mail.folders.favorites")!)).toEqual([
+      favoriteRefs[2],
+      favoriteRefs[1],
+      favoriteRefs[0],
+    ]);
   });
 
   test("notifies when a mail account is added after tracking starts", () => {

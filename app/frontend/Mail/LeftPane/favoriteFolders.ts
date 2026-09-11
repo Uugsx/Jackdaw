@@ -84,6 +84,18 @@ function folderMatchesRef(folder: Folder, ref: FavoriteFolderRef): boolean {
   return false;
 }
 
+function sameFavoriteRef(a: FavoriteFolderRef, b: FavoriteFolderRef): boolean {
+  if (a.accountId != b.accountId) {
+    return false;
+  }
+  if (a.folderId && b.folderId && a.folderId == b.folderId) {
+    return true;
+  }
+  const aPath = normalizeFolderPath(a.folderPath);
+  const bPath = normalizeFolderPath(b.folderPath);
+  return !!aPath && aPath == bPath;
+}
+
 export function isFavoriteFolderRef(folder: Folder, refs: FavoriteFolderRef[]): boolean {
   if (!folder.id || !folder.account?.id) {
     return false;
@@ -119,6 +131,44 @@ export function removeFavoriteFolder(folder: Folder): void {
   }
   favoriteFoldersSetting.value = getFavoriteFolderRefs().filter(ref =>
     !(ref.accountId == folder.account.id && folderMatchesRef(folder, ref)));
+}
+
+/** Move a favorite without changing the folder hierarchy on the server. */
+export function moveFavoriteFolder(
+  folder: Folder,
+  direction: "up" | "down",
+  visibleRefs?: FavoriteFolderRef[],
+): void {
+  if (!folder.account?.id) {
+    return;
+  }
+  const refs = getFavoriteFolderRefs();
+  const currentRef = refs.find(ref =>
+    ref.accountId == folder.account.id && folderMatchesRef(folder, ref));
+  if (!currentRef) {
+    return;
+  }
+  const orderedVisibleRefs = (visibleRefs ?? refs).filter(ref =>
+    refs.some(candidate => sameFavoriteRef(candidate, ref)));
+  const visibleIndex = orderedVisibleRefs.findIndex(ref =>
+    sameFavoriteRef(ref, currentRef));
+  const targetVisibleIndex = visibleIndex + (direction == "up" ? -1 : 1);
+  if (
+    visibleIndex < 0 ||
+    targetVisibleIndex < 0 ||
+    targetVisibleIndex >= orderedVisibleRefs.length
+  ) {
+    return;
+  }
+  const targetRef = orderedVisibleRefs[targetVisibleIndex];
+  const index = refs.findIndex(ref => sameFavoriteRef(ref, currentRef));
+  const targetIndex = refs.findIndex(ref => sameFavoriteRef(ref, targetRef));
+  if (index < 0 || targetIndex < 0 || index == targetIndex) {
+    return;
+  }
+  const next = refs.slice();
+  [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+  favoriteFoldersSetting.value = next;
 }
 
 export function toggleFavoriteFolder(folder: Folder): void {

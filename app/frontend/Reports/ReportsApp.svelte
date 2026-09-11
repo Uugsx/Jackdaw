@@ -59,6 +59,7 @@
     normalizeReportDashboardLayout,
     normalizeResponderAttributionConfig,
     reportDashboardWidthColumns,
+    responderResponseShare as calculateResponderResponseShare,
     type ReportDashboardPanelLayout,
     type ReportDashboardSectionId,
     type ReportDashboardWidth,
@@ -72,22 +73,10 @@
     type ReportSortState,
     type ReportSortValue,
   } from "../../logic/Reports/ReportSorting";
-  import {
-    DEFAULT_RESPONSE_REMINDER_INTERVALS_MINUTES,
-    DEFAULT_RESPONSE_REMINDER_NEW_INTERVAL_MINUTES,
-    MAX_RESPONSE_REMINDER_INTERVAL_MINUTES,
-    MIN_RESPONSE_REMINDER_INTERVAL_MINUTES,
-    normalizeResponseReminderConfig,
-  } from "../../logic/Reports/ResponseReminder";
-  import { loadResponseTrackingCategoryNames } from "../../logic/Reports/ResponseReminderData";
   import { getLocalStorage } from "../Util/LocalStorage";
   import { CollectionObserver } from "svelte-collections";
   import type { MailAccount } from "../../logic/Mail/MailAccount";
   import { openApp } from "../AppsBar/selectedApp";
-  import {
-    getResponseReminderConfig,
-    setResponseReminderConfig,
-  } from "./ResponseReminderSettings";
   import {
     getWorkingHoursSchedule,
     setWorkingHoursSchedule,
@@ -100,7 +89,6 @@
   import { openEMailMessage } from "../Mail/open";
   import ReportPanelControls from "./ReportPanelControls.svelte";
   import ReportSortButton from "./ReportSortButton.svelte";
-  import ResponseEventNotificationSettings from "./ResponseEventNotificationSettings.svelte";
   import { openLiveSlaWidget } from "../Widgets/widgetState";
   import { createReportHTML, downloadTextFile } from "./ReportsExport";
 
@@ -204,21 +192,6 @@
   let selectedResponderCategoryNames: string[] = [];
   let responderAttributionConfigs: Record<string, ResponderAttributionConfig> =
     {};
-  let responseRemindersEnabled = false;
-  let responseReminderIntervals = [
-    ...DEFAULT_RESPONSE_REMINDER_INTERVALS_MINUTES,
-  ];
-  let newResponseReminderMinutes =
-    DEFAULT_RESPONSE_REMINDER_NEW_INTERVAL_MINUTES;
-  let responseReminderError: "invalid" | "duplicate" | null = null;
-  let notifyWhenOverdue = false;
-  let notifyWhenTakenInWork = false;
-  let responseTrackingCategoryNames: string[] = [];
-  let excludedResponseCategoryNames: string[] = [];
-  let includeUncategorizedResponses = false;
-  let responseTrackingCategoriesLoading = false;
-  let responseTrackingCategoriesError: Error | null = null;
-  let responseTrackingCategoriesRequestId = 0;
   let responseDaySort: ReportSortState<ResponseDaySortColumn> | null = null;
   let responseDetailSort: ReportSortState<ResponseDetailSortColumn> | null =
     null;
@@ -315,12 +288,6 @@
     responseDetailSortValue,
   );
   $: reportCategories = report?.mail.categories ?? [];
-  $: availableResponseTrackingCategoryNames = [
-    ...new Set([
-      ...responseTrackingCategoryNames,
-      ...reportCategories.map((category) => category.name.trim()),
-    ]),
-  ].filter(Boolean).sort((a, b) => a.localeCompare(b));
   $: selectedMailAccount =
     mailAccounts.find((account) => account.accountId == selectedMailAccountId) ??
     null;
@@ -353,11 +320,15 @@
           effectiveResponderCategoryNames,
       )
       : (report?.mail.responders ?? []);
+  $: responderAnsweredTotal = visibleResponders.reduce(
+    (total, responder) => total + Math.max(0, responder.answered),
+    0,
+  );
   $: sortedResponders = sortReportRows(
     visibleResponders,
     responderSort,
     responderSortValue,
-  ).slice(0, 20);
+  );
   $: sortedTopics = report
     ? sortReportRows(report.mail.topics, topicSort, topicSortValue).slice(0, 12)
     : [];
@@ -427,17 +398,13 @@
 
     const restoredFolderId = restoredSession.selectedMailFolderId;
     if (selectedMailAccountId != null) {
-      await Promise.all([
-        loadMailFoldersForAccount(selectedMailAccountId),
-        loadResponseTrackingCategories(selectedMailAccountId),
-      ]);
+      await loadMailFoldersForAccount(selectedMailAccountId);
       if (
         restoredFolderId == null ||
         mailFolders.some((folder) => folder.folderId == restoredFolderId)
       ) {
         selectedMailFolderId = restoredFolderId;
       }
-      syncResponseReminderConfig();
     }
 
     if (reportViewerOpen) {
@@ -472,11 +439,6 @@
     selectedResponderCategoryNames = [
       ...snapshot.selectedResponderCategoryNames,
     ];
-    responseRemindersEnabled = snapshot.responseRemindersEnabled;
-    responseReminderIntervals = [...snapshot.responseReminderIntervals];
-    newResponseReminderMinutes = snapshot.newResponseReminderMinutes;
-    notifyWhenOverdue = snapshot.notifyWhenOverdue ?? false;
-    notifyWhenTakenInWork = snapshot.notifyWhenTakenInWork ?? false;
     responseDaySort = restoreSortState(snapshot.responseDaySort);
     responseDetailSort = restoreSortState(snapshot.responseDetailSort);
     responderSort = restoreSortState(snapshot.responderSort);
@@ -516,11 +478,6 @@
       categoryFilter: categoryFilter ? [...categoryFilter] : null,
       responderAttributionMode,
       selectedResponderCategoryNames: [...selectedResponderCategoryNames],
-      responseRemindersEnabled,
-      responseReminderIntervals: [...responseReminderIntervals],
-      newResponseReminderMinutes,
-      notifyWhenOverdue,
-      notifyWhenTakenInWork,
       responseDaySort,
       responseDetailSort,
       responderSort,
@@ -602,35 +559,6 @@
     } finally {
       if (requestId == mailFoldersRequestId) {
         mailFoldersLoading = false;
-      }
-    }
-  }
-
-  async function loadResponseTrackingCategories(
-    accountId: number | null,
-  ): Promise<void> {
-    const requestId = ++responseTrackingCategoriesRequestId;
-    responseTrackingCategoriesLoading = accountId != null;
-    responseTrackingCategoriesError = null;
-    responseTrackingCategoryNames = [];
-    if (accountId == null) {
-      responseTrackingCategoriesLoading = false;
-      return;
-    }
-    try {
-      const names = await loadResponseTrackingCategoryNames(accountId);
-      if (requestId != responseTrackingCategoriesRequestId) {
-        return;
-      }
-      responseTrackingCategoryNames = names;
-    } catch (ex) {
-      if (requestId == responseTrackingCategoriesRequestId) {
-        responseTrackingCategoriesError =
-          ex instanceof Error ? ex : new Error(String(ex));
-      }
-    } finally {
-      if (requestId == responseTrackingCategoriesRequestId) {
-        responseTrackingCategoriesLoading = false;
       }
     }
   }
@@ -792,7 +720,7 @@
       case "answered":
         return row.answered;
       case "rate":
-        return responseRate(row.answered, row.requests);
+        return responderResponseShare(row.answered);
       case "average":
         return row.responseTime.averageSeconds;
       case "minimum":
@@ -981,12 +909,8 @@
     categoryFilter = null;
     closeReportViewer();
     syncResponderAttribution(null);
-    syncResponseReminderConfig();
     workingHours = getWorkingHoursSchedule(selectedMailAccountId);
-    await Promise.all([
-      loadMailFoldersForAccount(selectedMailAccountId),
-      loadResponseTrackingCategories(selectedMailAccountId),
-    ]);
+    await loadMailFoldersForAccount(selectedMailAccountId);
     void runReport();
   }
 
@@ -1062,18 +986,6 @@
     responderAttributionSetting.value = next;
   }
 
-  function syncResponseReminderConfig(): void {
-    const config = getResponseReminderConfig(selectedMailAccountId);
-    responseRemindersEnabled = config.enabled;
-    responseReminderIntervals = [...config.intervalsMinutes];
-    excludedResponseCategoryNames = [...config.excludedCategoryNames];
-    includeUncategorizedResponses = config.includeUncategorized;
-    notifyWhenOverdue = config.notifyWhenOverdue;
-    notifyWhenTakenInWork = config.notifyWhenTakenInWork;
-    newResponseReminderMinutes = DEFAULT_RESPONSE_REMINDER_NEW_INTERVAL_MINUTES;
-    responseReminderError = null;
-  }
-
   function persistWorkingHoursSchedule(): void {
     const validation = validateWorkingHoursSchedule(workingHours);
     workingHoursError = validation;
@@ -1115,121 +1027,6 @@
   function resetWorkingHoursSchedule(): void {
     workingHours = cloneWorkingHoursSchedule(DEFAULT_WORKING_HOURS_SCHEDULE);
     persistWorkingHoursSchedule();
-  }
-
-  function saveResponseReminderConfig(): void {
-    if (selectedMailAccountId == null) {
-      return;
-    }
-    const config = normalizeResponseReminderConfig({
-      enabled: responseRemindersEnabled,
-      intervalsMinutes: responseReminderIntervals,
-      excludedCategoryNames: excludedResponseCategoryNames,
-      includeUncategorized: includeUncategorizedResponses,
-      notifyWhenOverdue,
-      notifyWhenTakenInWork,
-    });
-    responseRemindersEnabled = config.enabled;
-    responseReminderIntervals = [...config.intervalsMinutes];
-    excludedResponseCategoryNames = [...config.excludedCategoryNames];
-    includeUncategorizedResponses = config.includeUncategorized;
-    notifyWhenOverdue = config.notifyWhenOverdue;
-    notifyWhenTakenInWork = config.notifyWhenTakenInWork;
-    setResponseReminderConfig(selectedMailAccountId, config);
-    // Контролёр использует тот же режим определения отвечающего, что и отчёт.
-    // Сохраняем его вместе с напоминаниями, в том числе при первой настройке.
-    saveResponderAttribution();
-  }
-
-  function onResponseReminderEnabledChange(event: Event): void {
-    responseRemindersEnabled = (event.currentTarget as HTMLInputElement)
-      .checked;
-    responseReminderError = null;
-    saveResponseReminderConfig();
-  }
-
-  function onResponseReminderIntervalChange(index: number, event: Event): void {
-    const value = Number((event.currentTarget as HTMLInputElement).value);
-    if (!isValidResponseReminderInterval(value)) {
-      responseReminderError = "invalid";
-      return;
-    }
-    if (
-      responseReminderIntervals.some(
-        (interval, intervalIndex) =>
-          intervalIndex != index && interval == value,
-      )
-    ) {
-      responseReminderError = "duplicate";
-      return;
-    }
-    responseReminderIntervals = [...responseReminderIntervals]
-      .map((interval, intervalIndex) =>
-        intervalIndex == index ? value : interval,
-      )
-      .sort((a, b) => a - b);
-    responseReminderError = null;
-    saveResponseReminderConfig();
-  }
-
-  function onIncludeUncategorizedChange(event: Event): void {
-    includeUncategorizedResponses = (
-      event.currentTarget as HTMLInputElement
-    ).checked;
-    saveResponseReminderConfig();
-  }
-
-  function onExcludedResponseCategoryChange(
-    name: string,
-    event: Event,
-  ): void {
-    const selected = new Set(excludedResponseCategoryNames);
-    if ((event.currentTarget as HTMLInputElement).checked) {
-      selected.add(name);
-    } else {
-      selected.delete(name);
-    }
-    excludedResponseCategoryNames = [...selected].sort((a, b) =>
-      a.localeCompare(b),
-    );
-    saveResponseReminderConfig();
-  }
-
-  function addResponseReminderInterval(): void {
-    if (!isValidResponseReminderInterval(newResponseReminderMinutes)) {
-      responseReminderError = "invalid";
-      return;
-    }
-    if (responseReminderIntervals.includes(newResponseReminderMinutes)) {
-      responseReminderError = "duplicate";
-      return;
-    }
-    responseReminderIntervals = [
-      ...responseReminderIntervals,
-      newResponseReminderMinutes,
-    ].sort((a, b) => a - b);
-    newResponseReminderMinutes = DEFAULT_RESPONSE_REMINDER_NEW_INTERVAL_MINUTES;
-    responseReminderError = null;
-    saveResponseReminderConfig();
-  }
-
-  function removeResponseReminderInterval(index: number): void {
-    if (responseReminderIntervals.length <= 1) {
-      return;
-    }
-    responseReminderIntervals = responseReminderIntervals.filter(
-      (_interval, intervalIndex) => intervalIndex != index,
-    );
-    responseReminderError = null;
-    saveResponseReminderConfig();
-  }
-
-  function isValidResponseReminderInterval(value: number): boolean {
-    return (
-      Number.isInteger(value) &&
-      value >= MIN_RESPONSE_REMINDER_INTERVAL_MINUTES &&
-      value <= MAX_RESPONSE_REMINDER_INTERVAL_MINUTES
-    );
   }
 
   function onResponderModeChange(event: Event): void {
@@ -1654,6 +1451,13 @@
 
   function responseRate(answered: number, total: number): number {
     return total ? answered / total : 0;
+  }
+
+  function responderResponseShare(answered: number): number {
+    return calculateResponderResponseShare(
+      answered,
+      responderAnsweredTotal,
+    );
   }
 
   function formatDate(date: Date | null): string {
@@ -2151,171 +1955,6 @@
             {$t`Response statistics are grouped by the selected mailbox profile.`}
           </p>
         {/if}
-      </fieldset>
-    {/if}
-
-    {#if selectedMailAccountId != null}
-      <fieldset class="report-filter-block response-reminder-block">
-        <legend>{$t`SLA tracking and reminders`}</legend>
-        <div class="filter-block-heading">
-          <label class="reminder-toggle">
-            <input
-              type="checkbox"
-              checked={responseRemindersEnabled}
-              disabled={loading || mailFoldersLoading}
-              on:change={onResponseReminderEnabledChange}
-            />
-            <span
-              >{$t`Notify me when an unanswered request reaches a reminder point`}</span
-            >
-          </label>
-          <span class="filter-count"
-            >{responseRemindersEnabled ? $t`Enabled` : $t`Disabled`}</span
-          >
-        </div>
-        <p class="filter-help">
-          {$t`The timer starts when the incoming message is received. Reminder intervals are measured in working minutes from the schedule above.`}
-        </p>
-        <p class="filter-help">
-          {$t`A reply is confirmed only when a sent message is linked to the request.`}
-        </p>
-        {#if responderAttributionMode == "category"}
-          <p class="filter-help">
-            {$t`For this shared mailbox, only incoming messages with the selected employee tags are monitored. Excluded categories are always skipped.`}
-          </p>
-        {:else}
-          <p class="filter-help">
-            {$t`In profile mode, all incoming messages from this mailbox are monitored.`}
-          </p>
-        {/if}
-        <div class="response-tracking-rules">
-          {#if responderAttributionMode == "category"}
-            <label class="reminder-toggle">
-              <input
-                type="checkbox"
-                checked={includeUncategorizedResponses}
-                disabled={loading || mailFoldersLoading}
-                on:change={onIncludeUncategorizedChange}
-              />
-              <span>{$t`Track incoming messages without a category`}</span>
-            </label>
-            <p class="filter-help">
-              {$t`Messages without a category are excluded by default because they are not assigned to an employee yet.`}
-            </p>
-          {/if}
-          <div class="tracking-category-heading">
-            <span class="reminder-list-label"
-              >{$t`Do not track these categories`}</span
-            >
-            <span class="filter-count"
-              >{formatNumber(excludedResponseCategoryNames.length)}
-              {$t`excluded`}</span
-            >
-          </div>
-          <p class="filter-help">
-            {$t`For example, exclude “Переписка (мы в копии)” when this category means the request is already handled.`}
-          </p>
-          {#if responseTrackingCategoriesLoading}
-            <p class="filter-help" aria-live="polite">
-              {$t`Loading categories…`}
-            </p>
-          {:else if responseTrackingCategoriesError}
-            <p class="validation-message" role="alert">
-              {$t`Categories for SLA settings could not be loaded.`}
-              <button
-                type="button"
-                class="inline-action"
-                on:click={() =>
-                  loadResponseTrackingCategories(selectedMailAccountId)}
-                >{$t`Try again`}</button
-              >
-            </p>
-          {:else if availableResponseTrackingCategoryNames.length}
-            <div
-              class="category-options response-tracking-category-options"
-              aria-label={$t`Categories excluded from SLA`}
-            >
-              {#each availableResponseTrackingCategoryNames as name (name)}
-                <label class="category-option">
-                  <input
-                    type="checkbox"
-                    checked={excludedResponseCategoryNames.includes(name)}
-                    disabled={loading || mailFoldersLoading}
-                    on:change={(event) =>
-                      onExcludedResponseCategoryChange(name, event)}
-                  />
-                  <span>{name}</span>
-                </label>
-              {/each}
-            </div>
-          {:else}
-            <p class="filter-help">{$t`No categories found in this mailbox.`}</p>
-          {/if}
-        </div>
-        <div class="response-reminder-list">
-          <span class="reminder-list-label">{$t`Remind after`}</span>
-          {#each responseReminderIntervals as minutes, index}
-            <label class="reminder-interval-control">
-              <span class="sr-only">{$t`Reminder interval`}</span>
-              <input
-                type="number"
-                min={MIN_RESPONSE_REMINDER_INTERVAL_MINUTES}
-                max={MAX_RESPONSE_REMINDER_INTERVAL_MINUTES}
-                step="1"
-                value={minutes}
-                disabled={loading || mailFoldersLoading}
-                aria-invalid={responseReminderError == "invalid"}
-                on:change={(event) =>
-                  onResponseReminderIntervalChange(index, event)}
-              />
-              <span>{$t`working minutes`}</span>
-              <button
-                type="button"
-                class="inline-action"
-                disabled={responseReminderIntervals.length <= 1 ||
-                  loading ||
-                  mailFoldersLoading}
-                on:click={() => removeResponseReminderInterval(index)}
-                >{$t`Remove`}</button
-              >
-            </label>
-          {/each}
-          <label class="reminder-interval-control reminder-interval-new">
-            <span class="sr-only">{$t`New reminder interval`}</span>
-            <input
-              type="number"
-              min={MIN_RESPONSE_REMINDER_INTERVAL_MINUTES}
-              max={MAX_RESPONSE_REMINDER_INTERVAL_MINUTES}
-              step="1"
-              bind:value={newResponseReminderMinutes}
-              disabled={loading || mailFoldersLoading}
-              aria-invalid={responseReminderError == "invalid"}
-            />
-            <span>{$t`working minutes`}</span>
-          </label>
-          <button
-            type="button"
-            class="inline-action reminder-add-action"
-            disabled={loading || mailFoldersLoading}
-            on:click={addResponseReminderInterval}>+ {$t`Add reminder`}</button
-          >
-        </div>
-        <p class="filter-help">
-          {$t`Example: 10, 20 and 25 working minutes. Each point is shown once until the message receives a reply.`}
-        </p>
-        {#if responseReminderError}
-          <p class="validation-message reminder-validation" role="alert">
-            {responseReminderError == "duplicate"
-              ? $t`This reminder interval is already in the list.`
-              : $t`Enter whole minutes between 1 minute and 7 days.`}
-          </p>
-        {/if}
-        <ResponseEventNotificationSettings
-          bind:notifyWhenOverdue
-          bind:notifyWhenTakenInWork
-          disabled={loading || mailFoldersLoading}
-          on:change={saveResponseReminderConfig}
-        />
       </fieldset>
     {/if}
 
@@ -2999,7 +2638,7 @@
                   </div>
                 </div>
                 <div class="table-wrap">
-                  <table class="response-day-table">
+                    <table class="responsive-report-table response-day-table">
                     <caption class="visually-hidden"
                       >{$t`Response time by day`}</caption
                     >
@@ -3147,7 +2786,9 @@
 
               <div class="response-detail-block">
                 <div class="table-wrap">
-                  <table class="response-detail-table">
+                  <table
+                    class="responsive-report-table response-detail-table"
+                  >
                     <caption class="visually-hidden"
                       >{$t`Response details`}</caption
                     >
@@ -3383,15 +3024,18 @@
                     {$t`Mail profiles with incoming requests, verified replies and visible work rhythm.`}
                   </p>
                 {/if}
+                <p class="report-note">
+                  {$t`Share of confirmed replies within the selected period.`}
+                </p>
               </div>
               <span class="panel-icon"><UsersIcon size="19px" /></span>
             </div>
             <div class="table-wrap">
-              <table>
+              <table class="responsive-report-table responder-table">
                 <caption class="visually-hidden"
                   >{responderAttributionMode == "category"
-                    ? $t`Response rate by employee`
-                    : $t`Response rate by mail profile`}</caption
+                    ? $t`Reply share by employee`
+                    : $t`Reply share by mail profile`}</caption
                 >
                 <thead>
                   <tr>
@@ -3455,7 +3099,7 @@
                       aria-sort={reportSortAriaValue(responderSort, "rate")}
                     >
                       <ReportSortButton
-                        label={$t`Rate`}
+                        label={$t`Reply share`}
                         align="right"
                         direction={reportSortDirection(responderSort, "rate")}
                         on:sort={() =>
@@ -3627,67 +3271,73 @@
                 <tbody>
                   {#each sortedResponders as responder}
                     <tr>
-                      <th scope="row">
+                      <th
+                        scope="row"
+                        data-label={responderAttributionMode == "category"
+                          ? $t`Employee`
+                          : $t`Profile`}
+                      >
                         <span class="person-name">{responder.accountName}</span>
                         {#if responder.email}<span class="person-email"
                             >{responder.email}</span
                           >{/if}
                       </th>
-                      <td class="numeric">{formatNumber(responder.requests)}</td
+                      <td class="numeric" data-label={$t`Requests`}>{formatNumber(responder.requests)}</td
                       >
-                      <td class="numeric emphasized"
+                      <td class="numeric emphasized" data-label={$t`Answered`}
                         >{formatNumber(responder.answered)}</td
                       >
-                      <td class="numeric"
+                      <td class="numeric" data-label={$t`Reply share`}
                         ><span
                           class="rate-pill"
-                          class:good={responder.requests > 0 &&
-                            responder.answered / responder.requests >= 0.75}
+                          class:good={responderResponseShare(responder.answered) >=
+                            0.75}
                           >{formatPercent(
-                            responseRate(
-                              responder.answered,
-                              responder.requests,
-                            ),
+                            responderResponseShare(responder.answered),
                           )}</span
                         ></td
                       >
-                      <td class="numeric response-duration"
+                      <td class="numeric response-duration" data-label={$t`Average`}
                         >{formatDuration(
                           responder.responseTime.averageSeconds,
                         )}</td
                       >
-                      <td class="numeric response-duration"
+                      <td class="numeric response-duration" data-label={$t`Minimum`}
                         >{formatDuration(
                           responder.responseTime.minimumSeconds,
                         )}</td
                       >
-                      <td class="numeric response-duration"
+                      <td class="numeric response-duration" data-label={$t`Maximum`}
                         >{formatDuration(
                           responder.responseTime.maximumSeconds,
                         )}</td
                       >
-                      <td class="numeric emphasized"
-                        >{formatNumber(responder.responseTime.withinTarget)}
-                        <span class="table-rate"
-                          >({formatPercent(
-                            responseRate(
-                              responder.responseTime.withinTarget,
-                              responder.responseTime.answered,
-                            ),
-                          )})</span
+                      <td class="numeric emphasized" data-label={$t`Within target`}
+                        ><span class="table-value"
+                          >{formatNumber(responder.responseTime.withinTarget)}
+                          <span class="table-rate"
+                            >({formatPercent(
+                              responseRate(
+                                responder.responseTime.withinTarget,
+                                responder.responseTime.answered,
+                              ),
+                            )})</span
+                          ></span
                         ></td
                       >
-                      <td class="numeric overdue-value"
+                      <td class="numeric overdue-value" data-label={$t`Over target`}
                         >{formatNumber(responder.responseTime.overTarget)}</td
                       >
-                      <td class="numeric">{formatNumber(responder.sent)}</td>
-                      <td class="numeric peak-value"
+                      <td class="numeric" data-label={responderAttributionMode == "category"
+                        ? $t`Verified replies`
+                        : $t`Sent`}>{formatNumber(responder.sent)}</td>
+                      <td class="numeric peak-value" data-label={$t`Peak`}
                         >{formatResponderPeak(
                           responder.peakWeekday,
                           responder.peakHour,
                         )}</td
                       >
-                      <td class="numeric muted"
+                      <td class="numeric muted" data-label={$t`Last activity`}
                         >{formatDate(responder.lastActivity)}</td
                       >
                     </tr>
@@ -3846,7 +3496,7 @@
               <span class="panel-icon"><TagsIcon size="19px" /></span>
             </div>
             <div class="table-wrap">
-              <table>
+              <table class="responsive-report-table category-table">
                 <caption class="visually-hidden"
                   >{$t`Mail categories and tags`}</caption
                 >
@@ -4039,40 +3689,42 @@
                 <tbody>
                   {#each sortedCategories as category}
                     <tr>
-                      <th scope="row">{category.name}</th>
-                      <td class="numeric">{formatNumber(category.total)}</td>
-                      <td class="numeric">{formatNumber(category.incoming)}</td>
-                      <td class="numeric">{formatNumber(category.outgoing)}</td>
-                      <td class="numeric emphasized"
+                      <th scope="row" data-label={$t`Category`}>{category.name}</th>
+                      <td class="numeric" data-label={$t`Messages with tag`}>{formatNumber(category.total)}</td>
+                      <td class="numeric" data-label={$t`Incoming requests`}>{formatNumber(category.incoming)}</td>
+                      <td class="numeric" data-label={$t`Outgoing`}>{formatNumber(category.outgoing)}</td>
+                      <td class="numeric emphasized" data-label={$t`Verified replies`}
                         >{formatNumber(category.answered)}</td
                       >
-                      <td class="numeric response-duration"
+                      <td class="numeric response-duration" data-label={$t`Average`}
                         >{formatDuration(
                           category.responseTime.averageSeconds,
                         )}</td
                       >
-                      <td class="numeric response-duration"
+                      <td class="numeric response-duration" data-label={$t`Minimum`}
                         >{formatDuration(
                           category.responseTime.minimumSeconds,
                         )}</td
                       >
-                      <td class="numeric response-duration"
+                      <td class="numeric response-duration" data-label={$t`Maximum`}
                         >{formatDuration(
                           category.responseTime.maximumSeconds,
                         )}</td
                       >
-                      <td class="numeric emphasized"
-                        >{formatNumber(category.responseTime.withinTarget)}
-                        <span class="table-rate"
-                          >({formatPercent(
-                            responseRate(
-                              category.responseTime.withinTarget,
-                              category.responseTime.answered,
-                            ),
-                          )})</span
+                      <td class="numeric emphasized" data-label={$t`Within target`}
+                        ><span class="table-value"
+                          >{formatNumber(category.responseTime.withinTarget)}
+                          <span class="table-rate"
+                            >({formatPercent(
+                              responseRate(
+                                category.responseTime.withinTarget,
+                                category.responseTime.answered,
+                              ),
+                            )})</span
+                          ></span
                         ></td
                       >
-                      <td class="numeric overdue-value"
+                      <td class="numeric overdue-value" data-label={$t`Over target`}
                         >{formatNumber(category.responseTime.overTarget)}</td
                       >
                     </tr>
@@ -5098,87 +4750,6 @@
 
   .responder-options {
     max-height: 170px;
-  }
-
-  .reminder-toggle {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    min-width: 0;
-    color: color-mix(in srgb, var(--main-fg) 78%, transparent);
-    font-size: 12px;
-    line-height: 1.35;
-  }
-
-  .reminder-toggle input {
-    flex-shrink: 0;
-    margin-top: 1px;
-    accent-color: var(--reports-accent);
-  }
-
-  .response-tracking-rules {
-    margin-top: 13px;
-    padding-top: 11px;
-    border-top: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
-  }
-
-  .tracking-category-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 13px;
-  }
-
-  .response-tracking-category-options {
-    max-height: 170px;
-  }
-
-  .response-reminder-list {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 12px;
-    margin-top: 11px;
-  }
-
-  .reminder-list-label {
-    color: color-mix(in srgb, var(--main-fg) 67%, transparent);
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  .reminder-interval-control {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: color-mix(in srgb, var(--main-fg) 58%, transparent);
-    font-size: 11px;
-    font-weight: 550;
-  }
-
-  .reminder-interval-control input {
-    width: 74px;
-    min-height: 32px;
-    padding: 6px 8px;
-  }
-
-  .reminder-add-action {
-    white-space: nowrap;
-  }
-
-  .reminder-validation {
-    margin-top: 8px;
-  }
-
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 
   .category-option {
@@ -6299,7 +5870,9 @@
     .response-detail-table
     :global(.table-sort-button > span:first-child) {
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
   }
 
   .response-detail-table th:nth-child(1),
@@ -6367,6 +5940,8 @@
     min-width: 0;
     max-width: 100%;
     overflow-x: hidden;
+    container-type: inline-size;
+    container-name: report-table;
   }
 
   .response-detail-block .table-wrap {
@@ -6391,12 +5966,31 @@
     line-height: 1.45;
   }
 
+  .report-note {
+    margin: 6px 0 0;
+    color: color-mix(in srgb, var(--main-fg) 54%, transparent);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
   table {
     width: 100%;
     max-width: 100%;
     table-layout: fixed;
     border-collapse: collapse;
     font-size: 12px;
+  }
+
+  /* Заголовок подстраивается под фактическую ширину таблицы. Переносим его
+     только между словами: если столбец становится уже, уменьшаем кегль, а
+     не превращаем заголовок в вертикальную колонку букв. */
+  .table-wrap :global(.table-sort-button) {
+    font-size: clamp(8px, 0.58cqw, 10px);
+    letter-spacing: 0.02em;
+    overflow-wrap: normal;
+    word-break: keep-all;
+    hyphens: none;
+    text-wrap: balance;
   }
 
   th,
@@ -6406,7 +6000,9 @@
     border-bottom: 1px solid var(--border);
     text-align: left;
     vertical-align: middle;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
   }
 
   thead th {
@@ -6416,6 +6012,8 @@
     letter-spacing: 0.05em;
     text-transform: uppercase;
     white-space: normal;
+    word-break: normal;
+    hyphens: none;
   }
 
   tbody tr:last-child th,
@@ -6483,15 +6081,340 @@
   .topic-cell {
     max-width: 300px;
     overflow: hidden;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    word-break: normal;
     text-overflow: ellipsis;
     white-space: normal;
+  }
+
+  .responder-table th:nth-child(1),
+  .responder-table td:nth-child(1) {
+    width: 14%;
+  }
+
+  .responder-table th:nth-child(2),
+  .responder-table td:nth-child(2) {
+    width: 6%;
+  }
+
+  .responder-table th:nth-child(3),
+  .responder-table td:nth-child(3) {
+    width: 7%;
+  }
+
+  .responder-table th:nth-child(4),
+  .responder-table td:nth-child(4) {
+    width: 8%;
+  }
+
+  .responder-table th:nth-child(5),
+  .responder-table td:nth-child(5),
+  .responder-table th:nth-child(6),
+  .responder-table td:nth-child(6),
+  .responder-table th:nth-child(7),
+  .responder-table td:nth-child(7) {
+    width: 8%;
+  }
+
+  .responder-table th:nth-child(8),
+  .responder-table td:nth-child(8) {
+    width: 10%;
+  }
+
+  .responder-table th:nth-child(9),
+  .responder-table td:nth-child(9) {
+    width: 8%;
+  }
+
+  .responder-table th:nth-child(10),
+  .responder-table td:nth-child(10) {
+    width: 10%;
+  }
+
+  .responder-table th:nth-child(11),
+  .responder-table td:nth-child(11) {
+    width: 6%;
+  }
+
+  .responder-table th:nth-child(12),
+  .responder-table td:nth-child(12) {
+    width: 7%;
+  }
+
+  .category-table th:nth-child(1),
+  .category-table td:nth-child(1) {
+    width: 22%;
+  }
+
+  .category-table th:nth-child(2),
+  .category-table td:nth-child(2) {
+    width: 10%;
+  }
+
+  .category-table th:nth-child(3),
+  .category-table td:nth-child(3) {
+    width: 11%;
+  }
+
+  .category-table th:nth-child(4),
+  .category-table td:nth-child(4) {
+    width: 7%;
+  }
+
+  .category-table th:nth-child(5),
+  .category-table td:nth-child(5) {
+    width: 11%;
+  }
+
+  .category-table th:nth-child(6),
+  .category-table td:nth-child(6),
+  .category-table th:nth-child(7),
+  .category-table td:nth-child(7),
+  .category-table th:nth-child(8),
+  .category-table td:nth-child(8) {
+    width: 8%;
+  }
+
+  .category-table th:nth-child(9),
+  .category-table td:nth-child(9) {
+    width: 10%;
+  }
+
+  .category-table th:nth-child(10),
+  .category-table td:nth-child(10) {
+    width: 5%;
   }
 
   .empty-cell {
     padding: 24px 8px;
     color: color-mix(in srgb, var(--main-fg) 50%, transparent);
     text-align: center;
+  }
+
+  /* Таблицы с большим числом показателей превращаются в карточки внутри
+     узкого виджета. Поэтому ширина виджета не обрезает значения и не требует
+     горизонтальной прокрутки. */
+  @container dashboard-item (max-width: 1100px) {
+    .responsive-report-table,
+    .responsive-report-table tbody,
+    .responsive-report-table tr,
+    .responsive-report-table td,
+    .responsive-report-table th {
+      display: block;
+    }
+
+    .responsive-report-table thead {
+      display: none;
+    }
+
+    .responsive-report-table tbody tr {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px 14px;
+      padding: 10px 8px;
+    }
+
+    .responsive-report-table tbody tr + tr {
+      border-top: 1px solid var(--border);
+    }
+
+    .responsive-report-table tbody td,
+    .responsive-report-table tbody th {
+      display: grid;
+      grid-template-columns: minmax(84px, 42%) minmax(0, 1fr);
+      gap: 8px;
+      width: auto;
+      min-width: 0;
+      padding: 3px 0;
+      border-bottom: 0;
+      text-align: left;
+      white-space: normal;
+    }
+
+    .responsive-report-table tbody td::before,
+    .responsive-report-table tbody th::before {
+      color: color-mix(in srgb, var(--main-fg) 52%, transparent);
+      content: attr(data-label);
+      font-size: 9px;
+      font-weight: 750;
+      letter-spacing: 0.04em;
+      line-height: 1.35;
+      text-transform: uppercase;
+    }
+
+    .responsive-report-table tbody .numeric {
+      text-align: left;
+      white-space: normal;
+    }
+
+    .responsive-report-table tbody .person-email {
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    .responsive-report-table tbody .person-name,
+    .responsive-report-table tbody .person-email,
+    .responsive-report-table tbody .table-value {
+      grid-column: 2;
+    }
+
+    .responsive-report-table tbody .person-name {
+      grid-row: 1;
+    }
+
+    .responsive-report-table tbody .person-email {
+      grid-row: 2;
+      margin-top: 0;
+    }
+
+    .responsive-report-table tbody td.empty-cell {
+      display: block;
+      grid-column: 1 / -1;
+      padding: 16px 8px;
+      text-align: center;
+    }
+
+    .responsive-report-table tbody td.empty-cell::before {
+      display: none;
+    }
+  }
+
+  @container dashboard-item (max-width: 520px) {
+    .responsive-report-table tbody tr {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* Width controls must remain useful even when the browser does not apply
+     container queries to a nested dashboard item. Every non-full widget uses
+     a compact card table, so long headings never become a column of letters
+     and the user never needs horizontal scrolling to reach the last value. */
+  .dashboard-item:not(.layout-full) .responsive-report-table,
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody,
+  .dashboard-item:not(.layout-full) .responsive-report-table tr,
+  .dashboard-item:not(.layout-full) .responsive-report-table td,
+  .dashboard-item:not(.layout-full) .responsive-report-table th {
+    display: block;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table thead {
+    display: none;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 14px;
+    padding: 10px 8px;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody tr + tr {
+    border-top: 1px solid var(--border);
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody td,
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody th {
+    display: grid;
+    grid-template-columns: minmax(0, 42%) minmax(0, 1fr);
+    gap: 8px;
+    width: auto;
+    min-width: 0;
+    padding: 3px 0;
+    border-bottom: 0;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody td::before,
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody th::before {
+    min-width: 0;
+    color: color-mix(in srgb, var(--main-fg) 52%, transparent);
+    content: attr(data-label);
+    font-size: 9px;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    line-height: 1.35;
+    text-transform: uppercase;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody .numeric {
+    text-align: left;
+    white-space: normal;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody .person-name,
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody .person-email,
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody .table-value {
+    grid-column: 2;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody .person-email {
+    margin-top: 0;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody .topic-cell {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody .email-link {
+    display: flex;
+    align-items: flex-start;
+    min-width: 0;
+    width: 100%;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody .email-link span {
+    min-width: 0;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody .status-pill {
+    justify-self: start;
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody td.empty-cell {
+    display: block;
+    grid-column: 1 / -1;
+    padding: 16px 8px;
+    text-align: center;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table tbody td.empty-cell::before {
+    display: none;
+  }
+
+  .dashboard-item:not(.layout-full) .responsive-report-table :global(.table-sort-button) {
+    font-size: clamp(8px, 0.72cqw, 10px);
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: normal;
+    hyphens: none;
+    text-wrap: balance;
+  }
+
+  @container dashboard-item (max-width: 520px) {
+    .dashboard-item:not(.layout-full) .responsive-report-table tbody tr {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   .report-footnote {
@@ -6559,6 +6482,12 @@
   @container dashboard-item (max-width: 1180px) {
     .response-metrics {
       grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @container dashboard-item (max-width: 1100px) {
+    .response-detail-grid {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 

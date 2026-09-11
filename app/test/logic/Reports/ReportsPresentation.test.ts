@@ -10,6 +10,7 @@ import {
   normalizeReportDashboardLayout,
   normalizeResponderAttributionConfig,
   reportDashboardWidthColumns,
+  responderResponseShare,
 } from "../../../logic/Reports/ReportsPresentation";
 import { emptyResponseTimeStats } from "../../../logic/Reports/ReportsData";
 import type { MailResponseRow } from "../../../logic/Reports/ReportsData";
@@ -37,6 +38,11 @@ test("maps dashboard width choices to stable six-column spans", () => {
       reportDashboardWidthColumns,
     ),
   ).toEqual([2, 3, 4, 6]);
+});
+
+test("calculates responder share from all answered requests", () => {
+  expect(responderResponseShare(65, 415)).toBe(65 / 415);
+  expect(responderResponseShare(1, 0)).toBe(0);
 });
 
 test("maps selected employee name tags to responder rows", () => {

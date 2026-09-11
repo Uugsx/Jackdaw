@@ -6,6 +6,7 @@ import type {
   TimelineGranularity,
 } from "../../logic/Reports/ReportsData";
 import { formatWorkingTime } from "../../logic/Reports/WorkingHours";
+import { responderResponseShare } from "../../logic/Reports/ReportsPresentation";
 import { appGlobal } from "../../logic/app";
 import { sanitize } from "../../../lib/util/sanitizeDatatypes";
 
@@ -106,6 +107,10 @@ export function createReportHTML(
     1,
     ...report.mail.responders.map((responder) => responder.requests),
   );
+  const responderAnsweredTotal = report.mail.responders.reduce(
+    (total, responder) => total + Math.max(0, responder.answered),
+    0,
+  );
   const maxCategoryRequests = Math.max(
     1,
     ...report.mail.categories.map((category) => category.incoming),
@@ -178,7 +183,7 @@ export function createReportHTML(
             responder.accountName,
             responder.requests,
             maxResponderRequests,
-            `${formatNumber(responder.answered)} с ответом · ${formatPercent(responder.requests ? responder.answered / responder.requests : 0)}`,
+            `${formatNumber(responder.answered)} с ответом · ${formatPercent(responderResponseShare(responder.answered, responderAnsweredTotal))}`,
             responder.responseTime.overTarget ? "alert" : "accent",
           ),
         )
@@ -370,7 +375,7 @@ export function createReportHTML(
       "Электронная почта",
       "Запросы",
       "С ответом",
-      "Доля",
+      "Доля ответов",
       "Среднее время",
       "Минимум",
       "Максимум",
@@ -388,7 +393,10 @@ export function createReportHTML(
       formatNumber(responder.requests),
       formatNumber(responder.answered),
       formatPercent(
-        responder.requests ? responder.answered / responder.requests : 0,
+        responderResponseShare(
+          responder.answered,
+          responderAnsweredTotal,
+        ),
       ),
       formatDuration(responder.responseTime.averageSeconds),
       formatDuration(responder.responseTime.minimumSeconds),

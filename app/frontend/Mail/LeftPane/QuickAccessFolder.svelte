@@ -1,7 +1,7 @@
 <button type="button" class="quick-folder" class:selected={selected}
   aria-pressed={selected}
   on:click={() => dispatch("select", folder)}
-  on:contextmenu={removableFromFavorites ? contextMenu.onContextMenu : undefined}>
+  on:contextmenu={contextMenu.onContextMenu}>
   <FolderIcon {folder} size="14px" />
   <span class="label">{displayLabel}</span>
   <span class="count-cell">
@@ -11,14 +11,40 @@
   </span>
 </button>
 
-{#if removableFromFavorites}
-  <ContextMenu bind:this={contextMenu}>
+<ContextMenu bind:this={contextMenu}>
+  {#if removableFromFavorites}
+    <MenuItem
+      onClick={() => moveFavoriteFolder(folder, "up", visibleFavoriteRefs)}
+      label={$t`Move up`}
+      icon={MoveUpIcon}
+      disabled={favoriteIndex <= 0} />
+    <MenuItem
+      onClick={() => moveFavoriteFolder(folder, "down", visibleFavoriteRefs)}
+      label={$t`Move down`}
+      icon={MoveDownIcon}
+      disabled={favoriteIndex < 0 || favoriteIndex >= favoriteCount - 1} />
+    <MenuDivider />
     <MenuItem
       onClick={() => removeFavoriteFolder(folder)}
       label={$t`Remove from favorites`}
       icon={StarIcon} />
-  </ContextMenu>
-{/if}
+  {:else}
+    <MenuItem
+      onClick={() => toggleFavoriteFolder(folder)}
+      label={$t`Show in favorites`}
+      icon={StarIcon} />
+  {/if}
+  <MenuDivider />
+  <MenuItem
+    onClick={hideCurrentFolder}
+    label={$t`Hide folder`}
+    icon={EyeOffIcon}
+    disabled={!folder?.id || folder?.account?.protocol == "all"} />
+  <MenuItem
+    onClick={openFolderSettings}
+    label={$t`Folder properties`}
+    icon={FolderSettingsIcon} />
+</ContextMenu>
 
 <script lang="ts">
   import { SpecialFolder, type Folder } from "../../../logic/Mail/Folder";
@@ -26,16 +52,32 @@
   import FolderIcon from "./FolderIcon.svelte";
   import ContextMenu from "../../Shared/Menu/ContextMenu.svelte";
   import MenuItem from "../../Shared/Menu/MenuItem.svelte";
+  import MenuDivider from "../../Shared/Menu/MenuDivider.svelte";
   import StarIcon from "lucide-svelte/icons/star";
+  import MoveUpIcon from "lucide-svelte/icons/arrow-up";
+  import MoveDownIcon from "lucide-svelte/icons/arrow-down";
+  import EyeOffIcon from "lucide-svelte/icons/eye-off";
+  import FolderSettingsIcon from "lucide-svelte/icons/folder-cog";
   import { createEventDispatcher } from "svelte";
   import { t } from "../../../l10n/l10n";
-  import { removeFavoriteFolder } from "./favoriteFolders";
+  import {
+    moveFavoriteFolder,
+    removeFavoriteFolder,
+    toggleFavoriteFolder,
+    type FavoriteFolderRef,
+  } from "./favoriteFolders";
+  import { hideFolder } from "./hiddenFolders";
+  import { selectedFolder } from "../Selected";
+  import { openFolderProperties } from "../FolderPropertiesPage.svelte";
 
   export let folder: Folder;
   export let selected = false;
   export let showAccountLabel = false;
   export let accountLabel = "";
   export let removableFromFavorites = false;
+  export let favoriteIndex = -1;
+  export let favoriteCount = 0;
+  export let visibleFavoriteRefs: FavoriteFolderRef[] | undefined = undefined;
 
   const dispatch = createEventDispatcher<{ select: Folder }>();
   let contextMenu: ContextMenu;
@@ -48,6 +90,21 @@
     ? `${folderLabel} — ${accountLabel}`
     : folderLabel;
   $: count = folder.countUnread || folder.countNewArrived;
+
+  function hideCurrentFolder(): void {
+    if (!folder?.id || !folder.account || folder.account.protocol == "all") {
+      return;
+    }
+    hideFolder(folder);
+    if ($selectedFolder == folder) {
+      $selectedFolder = folder.parent ?? folder.account.inbox ?? null;
+    }
+  }
+
+  function openFolderSettings(): void {
+    $selectedFolder = folder;
+    $openFolderProperties = true;
+  }
 </script>
 
 <style>

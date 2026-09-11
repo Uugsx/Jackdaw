@@ -1,4 +1,5 @@
-<div class="h-scroll" class:edge-buttons={edgeButtons} bind:this={rootEl}>
+<div class="h-scroll {className}" class:edge-buttons={edgeButtons}
+  class:overflowing={overflows} bind:this={rootEl}>
   {#if edgeButtons && overflows}
     <button type="button" class="h-scroll-edge h-scroll-edge-start" title={$t`Scroll left`}
       disabled={!canScrollLeft}
@@ -45,6 +46,7 @@
 
   /** Outlook-style ‹ › flanking the content; otherwise a track row below. */
   export let edgeButtons = false;
+  export let className = "";
 
   let rootEl: HTMLDivElement;
   let viewportEl: HTMLDivElement;
@@ -170,7 +172,7 @@
   }
   .h-scroll.edge-buttons {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: stretch;
   }
   .h-scroll.edge-buttons:not(:has(.h-scroll-edge)) {
@@ -190,6 +192,10 @@
     display: inline-flex;
     min-width: 100%;
     width: max-content;
+    box-sizing: border-box;
+  }
+  .h-scroll.content-fit .h-scroll-content {
+    min-width: 0;
   }
   .h-scroll-content > :global(*) {
     flex-shrink: 0;

@@ -279,7 +279,7 @@ describe("ResponseReminder", () => {
         now,
         weekdaySchedule,
       ),
-    ).toEqual(now);
+    ).toEqual(receivedAt);
     expect(
       getResponseSlaStartAt(
         { ...request, receivedAt, categoryNames: [], isRead: false },
@@ -288,6 +288,23 @@ describe("ResponseReminder", () => {
         now.getTime(),
       ),
     ).toEqual(now);
+  });
+
+  test("не запускает новый таймер для уже прочитанного письма при первом наблюдении", () => {
+    const receivedAt = new Date(2026, 8, 9, 8, 56);
+    const now = new Date(2026, 8, 9, 11, 35);
+    const progress = getResponseSlaProgress(
+      { ...request, receivedAt, categoryNames: [], isRead: true },
+      30,
+      now,
+      weekdaySchedule,
+    );
+
+    expect(progress.elapsedSeconds).toBe(2 * 60 * 60 + 39 * 60);
+    expect(progress.remainingSeconds).toBe(0);
+    expect(progress.overdueSeconds).toBe(2 * 60 * 60 + 9 * 60);
+    expect(progress.deadlineAt).toEqual(new Date(2026, 8, 9, 9, 26));
+    expect(progress.status).toBe("over-target");
   });
 
   test("запускает непрерывный SLA после назначения категории вне графика", () => {

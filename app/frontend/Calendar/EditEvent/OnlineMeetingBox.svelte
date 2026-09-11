@@ -1,9 +1,19 @@
 <vbox class="online-meeting" flex>
+  <label class="provider-field">
+    <span>{$t`Video service`}</span>
+    <select bind:value={selectedProvider} on:change={onProviderChanged}>
+      <option value="custom">{$t`Custom link`}</option>
+      {#each meetingProviders as provider (provider.id)}
+        <option value={provider.id}>{providerLabel(provider.id)}</option>
+      {/each}
+    </select>
+  </label>
+  <p class="meeting-help">{$t`Select a video service and paste its meeting link. Teams can be created when you save.`}</p>
   <input type="url" bind:value={event.onlineMeetingURL}
-    placeholder={$t`Paste meeting URL`}
+    placeholder={urlPlaceholder(selectedProvider)}
     on:input={onURLChanged} />
   <hbox class="buttons">
-    {#if canCreateTeams}
+    {#if canCreateTeams && selectedProvider == "teams"}
       <Button
         label={$t`Create Teams meeting`}
         tooltip={$t`Exchange will create a Teams link when you save`}
@@ -11,6 +21,14 @@
         disabled={hasURL || pendingTeamsCreate}
         onClick={onCreateTeams}
         />
+    {/if}
+    {#if selectedProvider != "custom" && !hasURL && (selectedProvider != "teams" || !canCreateTeams)}
+      <Button
+        label={$t`Open service`}
+        icon={BrowserIcon}
+        iconSize="16px"
+        plain
+        onClick={onOpenProvider} />
     {/if}
     <Button
       label={$t`Copy`}
@@ -55,17 +73,62 @@
   import BrowserIcon from "lucide-svelte/icons/globe";
   import DeleteIcon from "lucide-svelte/icons/trash-2";
   import { t } from "../../../l10n/l10n";
+  import {
+    detectMeetingProvider,
+    getMeetingProvider,
+    meetingProviders,
+    type MeetingProviderId,
+  } from "../../../logic/Calendar/meetingProviders";
 
   export let event: Event;
+
+  let selectedProvider: MeetingProviderId = "custom";
+  let lastURL = "";
+  $: if ((event.onlineMeetingURL ?? "") != lastURL) {
+    lastURL = event.onlineMeetingURL ?? "";
+    selectedProvider = detectMeetingProvider(lastURL);
+  }
 
   $: hasURL = !!event.onlineMeetingURL?.startsWith("https://");
   $: canCreateTeams = event instanceof OWAEvent &&
     event.calendar?.account?.provider?.() == Provider.Office365;
-  $: pendingTeamsCreate = event.isOnline && !hasURL;
+  $: pendingTeamsCreate = selectedProvider == "teams" && event.isOnline && !hasURL;
 
   function onURLChanged() {
     event.isOnline = !!event.onlineMeetingURL?.trim();
     event.createOnlineMeetingWithAccount = null;
+  }
+
+  function onProviderChanged(): void {
+    if (selectedProvider == "custom") {
+      return;
+    }
+    event.createOnlineMeetingWithAccount = null;
+  }
+
+  function providerLabel(id: MeetingProviderId): string {
+    switch (id) {
+      case "teams": return "Microsoft Teams";
+      case "yandex-telemost": return "Яндекс Телемост";
+      case "google-meet": return "Google Meet";
+      case "zoom": return "Zoom";
+      case "webex": return "Cisco Webex";
+      case "jitsi": return "Jitsi Meet";
+      default: return $t`Custom link`;
+    }
+  }
+
+  function urlPlaceholder(id: MeetingProviderId): string {
+    return id == "custom"
+      ? $t`Paste meeting URL`
+      : $t`Paste ${providerLabel(id)} link`;
+  }
+
+  async function onOpenProvider(): Promise<void> {
+    const provider = getMeetingProvider(selectedProvider);
+    if (provider) {
+      await openExternalURL(provider.homepage);
+    }
   }
 
   function onCreateTeams() {
@@ -94,6 +157,26 @@
 
 <style>
   input {
+    max-width: 20em;
+  }
+  .provider-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-block-end: 6px;
+    font-size: 12px;
+  }
+  .provider-field span {
+    color: color-mix(in srgb, var(--main-fg) 62%, transparent);
+  }
+  .meeting-help {
+    max-width: 34em;
+    margin: 0 0 6px;
+    color: color-mix(in srgb, var(--main-fg) 58%, transparent);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .provider-field select {
     max-width: 20em;
   }
   .hint {

@@ -44,7 +44,7 @@
     <hbox slot="header">
       {$t`Categories`}
     </hbox>
-    <hbox class="subtitle">{$t`/bKRwM`} {$t`Drag rows to reorder.`}</hbox>
+    <hbox class="subtitle">{$t`Drag rows to reorder.`}</hbox>
 
     <vbox class="tags">
       {#each sortedTagList($availableTags.contents) as tag, index (tag.name)}
@@ -324,10 +324,7 @@
 
 <style>
   .tags-settings {
-    max-width: 40em;
-  }
-  .sync-group {
-    margin-block-start: 0;
+    max-width: 56em;
   }
   .sync-intro {
     margin-block-end: 12px;
@@ -424,7 +421,9 @@
     flex: 0 0 auto;
   }
   .tags :global(.tag) {
-    font-size: 18px;
+    font-size: 14px;
+    line-height: 1.25;
+    white-space: normal;
   }
   .tags :global(.remove) {
     padding: 2px;

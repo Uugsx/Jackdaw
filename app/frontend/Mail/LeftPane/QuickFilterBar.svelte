@@ -1,6 +1,6 @@
 <!-- Outlook-style filter + sort pills above the message list -->
 {#if folder}
-  <HorizontalScroll edgeButtons bind:this={filterScroll} class="quick-filters-scroll">
+  <HorizontalScroll edgeButtons bind:this={filterScroll} className="quick-filters-scroll content-fit">
     <hbox class="quick-filters font-smallest">
     {#each visibleDefs as filter (filter.id)}
       {#if filter.kind == "sort"}

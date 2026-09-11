@@ -33,6 +33,8 @@ export interface ResponseReminderStateEntry {
   firedIntervalsMinutes: number[];
   /** Момент, когда письмо было принято в работу вне рабочего графика. */
   startedAt?: number;
+  /** Источник сохранённого момента старта. Старые записи без него не доверяются. */
+  startedAtSource?: "taken-in-work";
   /** Последнее известное состояние: запрос взят в работу или ещё нет. */
   takenInWork?: boolean;
   /** Последнее известное состояние: запрос уже просрочен или ещё нет. */
@@ -193,7 +195,9 @@ export function shouldNotifyResponseReminderEvent(
  * такого ручного принятия таймер начинается сразу и идёт непрерывно.
  *
  * `storedStartedAt` нужен, чтобы последующие обновления не сбрасывали таймер
- * обратно в момент текущей проверки.
+ * обратно в момент текущей проверки. Если точный момент принятия в работу
+ * неизвестен (например, письмо уже было прочитано до первого наблюдения),
+ * используется время получения, а не время текущей проверки.
  */
 export function getResponseSlaStartAt(
   request: PendingResponseRequest,
@@ -211,12 +215,6 @@ export function getResponseSlaStartAt(
     return new Date(storedStartAt);
   }
 
-  if (
-    !isWithinWorkingHours(request.receivedAt, workingHours) &&
-    isResponseRequestTakenInWork(request)
-  ) {
-    return new Date(now.getTime());
-  }
   return request.receivedAt;
 }
 

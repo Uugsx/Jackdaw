@@ -1,12 +1,15 @@
 {#if visibleFavoriteEntries.length || quickFolders.length}
   <nav class="quick-access" aria-label={$t`Favorites`}>
-    {#each visibleFavoriteEntries as { ref, folder } (ref.accountId + ":" + ref.folderId)}
+    {#each visibleFavoriteEntries as { ref, folder }, index (ref.accountId + ":" + ref.folderId)}
       {#if folder}
         <QuickAccessFolder
           {folder}
+          favoriteIndex={index}
+          favoriteCount={visibleFavoriteEntries.length}
           selected={selectedFolder === folder}
           showAccountLabel={true}
           removableFromFavorites={true}
+          visibleFavoriteRefs={visibleFavoriteRefs}
           accountLabel={folder.account?.name}
           on:select={onSelectFolder} />
       {:else}
@@ -17,6 +20,7 @@
       {#if !isUserFavorite(folder, favoriteRefs)}
         <QuickAccessFolder
           {folder}
+          favoriteIndex={-1}
           selected={selectedFolder === folder}
           showAccountLabel={false}
           removableFromFavorites={false}
@@ -72,6 +76,7 @@
     visibleFavoriteEntries = favoriteEntries.filter(({ ref, folder }) =>
       !isHiddenFolderRef(ref) && (!folder || !isHiddenFolder(folder)));
   }
+  $: visibleFavoriteRefs = visibleFavoriteEntries.map(({ ref }) => ref);
   $: userFavorites = visibleFavoriteEntries.map(entry => entry.folder).filter((f): f is Folder => !!f);
   $: defaultQuickFolders = getDefaultQuickAccessFolders(account);
   $: {

@@ -25,6 +25,9 @@
               <ExpanderButton bind:expanded={showAttachments} label={$t`Attachment`} icon={AttachmentIcon} on:expand={() => catchErrors(expandAttachments)} />
             </ExpanderButtons>
           </Section>
+          {#if participantsError}
+            <p class="event-action-error" role="alert">{participantsError}</p>
+          {/if}
           {#if showRepeat}
             <Section label={$t`Repeat`} icon={RepeatIcon}>
               <RepeatBox {event} />
@@ -130,6 +133,7 @@
   $: showParticipants = $event.participants.hasItems;
   $: showLocation = !!$event.location;
   let onlineMeetingOpen = false;
+  let participantsError: string | null = null;
   $: if ($event.isOnline) onlineMeetingOpen = true;
   $: showOnlineMeeting = onlineMeetingOpen;
   $: showDescription = !!$event.descriptionHTML;
@@ -154,7 +158,12 @@
   }
 
   function expandParticipants(): void {
+    participantsError = null;
     if (event.myParticipation == InvitationResponse.Organizer) {
+      return;
+    }
+    if (!event.calendar?.identitiesAvailable?.first) {
+      participantsError = $t`Please set up an email account to send the invitation from`;
       return;
     }
     event.createMeeting();
@@ -166,7 +175,6 @@
 
   function expandOnlineMeeting(): void {
     onlineMeetingOpen = true;
-    expandParticipants();
   }
 
   function expandDescription(): void {
@@ -210,6 +218,12 @@
     align-items: center;
     gap: 6px;
     white-space: nowrap;
+  }
+  .event-action-error {
+    margin: 8px 0 0;
+    color: var(--danger-fg);
+    font-size: 12px;
+    line-height: 1.4;
   }
   .time-box :global(.calendar) {
     max-width: 300px;
