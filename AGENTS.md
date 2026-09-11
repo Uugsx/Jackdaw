@@ -4,7 +4,7 @@
 
 **Required reading:** [docs/systems/desktop-build/ota-jackdaw.md](docs/systems/desktop-build/ota-jackdaw.md)
 
-Jackdaw OTA is **not** stock electron-builder only. It includes:
+Jackdaw Mail OTA is **not** stock electron-builder only. It includes:
 
 - Private GitHub Releases + `JACKDAW_GH_UPDATE_TOKEN` (optional on public repo)
 - CI job `prepare` that must create the release **before** parallel Mac/Windows publish
@@ -23,7 +23,7 @@ Do **not** revert to parallel publish without the `prepare` release shell (cause
 
 After frontend or desktop changes, rebuild the local macOS ARM64 application for manual verification. The expected artifact is:
 
-`/Users/ng/Documents/antigravity/Jackdaw/desktop/dist/mac-arm64/Jackdaw.app/`
+`/Users/ng/Documents/antigravity/Jackdaw/desktop/dist/mac-arm64/Jackdaw Mail.app/`
 
 Use the local directory build; do not report only `app/dist` as the application build. From `desktop/`, run `rtk npm run build`, then package the ARM64 app with `rtk npx electron-builder --mac --arm64 --dir --config`.
 

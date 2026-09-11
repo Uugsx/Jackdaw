@@ -322,7 +322,7 @@ export class SignalAccount extends ChatAccount {
 
   /** A display name for this linked device (shown on the user's phone). */
   protected deviceName(): string {
-    return this.name || "Jackdaw";
+    return this.name || "Jackdaw Mail";
   }
 
   /** The `DeviceAttributes` block sent on link (Docs/02 §B.5): our own ACI + PNI

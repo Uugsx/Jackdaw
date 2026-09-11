@@ -32,7 +32,7 @@ import { RunOnce } from '../../app/logic/util/flow/RunOnce';
 const { autoUpdater } = electronUpdater;
 
 const kGhOwner = "Uugsx";
-const kGhRepo = "Jackdaw";
+const kGhRepo = "jackdaw-mail";
 
 let jpc: JPCWebSocket | null = null;
 let backendStartup: Promise<void> | null = null;
@@ -722,7 +722,7 @@ type GhRelease = { assets: GhReleaseAsset[] };
 function ghApiHeaders(): Record<string, string> {
   let headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "Jackdaw-Updater",
+    "User-Agent": "Jackdaw-Mail-Updater",
   };
   let token = resolveGhUpdateToken();
   if (token) {
@@ -786,7 +786,7 @@ function getMacAppBundlePath(): string {
     }
     dir = path.dirname(dir);
   }
-  return path.join("/Applications", "Jackdaw.app");
+  return path.join("/Applications", "Jackdaw Mail.app");
 }
 
 const kUpdateShutdownTimeoutMs = 3_000;
@@ -1055,7 +1055,7 @@ export async function installUpdate() {
 export async function openPendingReleaseDownload() {
   let version = updateState.version ?? app.getVersion();
   let tag = version.startsWith("v") ? version : `v${version}`;
-  await shell.openExternal(`https://github.com/Uugsx/Jackdaw/releases/tag/${tag}`);
+  await shell.openExternal(`https://github.com/Uugsx/jackdaw-mail/releases/tag/${tag}`);
 }
 
 function setTheme(theme: "system" | "light" | "dark") {
@@ -1517,7 +1517,10 @@ function directory(type: string): string {
   return app.getPath(type as any);
 }
 
-const kAppDir = production ? appName : appName + "Dev"; // e.g. "Jackdaw" or "JackdawDev"
+// Keep the on-disk storage name stable while the user-facing product name evolves.
+// This preserves settings and local mail data across the Jackdaw → Jackdaw Mail rename.
+const kAppStorageDir = "Jackdaw";
+const kAppDir = production ? kAppStorageDir : kAppStorageDir + "Dev"; // e.g. "Jackdaw" or "JackdawDev"
 
 /**
  * Get the user config directory on disk.

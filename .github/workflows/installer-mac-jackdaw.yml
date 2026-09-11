@@ -1,4 +1,4 @@
-name: Jackdaw Installers for Mac OS X
+name: Jackdaw Mail Installers for Mac OS X
 
 on:
   workflow_dispatch: # manually triggered

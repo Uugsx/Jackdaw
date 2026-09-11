@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="desktop/build/icon-jackdaw-github.png" width="120" alt="Jackdaw">
+<img src="desktop/build/icon-jackdaw-github.png" width="120" alt="Jackdaw Mail">
 
-# Jackdaw
+# Jackdaw Mail
 
 **Почта · Календарь · Контакты · SLA-отчёты**
 
@@ -20,16 +20,16 @@ Desktop-клиент для Exchange / OWA и связанных протоко�
 
 ## Визуальный обзор
 
-Отчёты открываются внутри Jackdaw как полноценная рабочая страница: графики, таблицы и сортировка доступны до сохранения копии в HTML. Живой контроль SLA можно держать в правой боковой панели рядом с открытым письмом.
+Отчёты открываются внутри Jackdaw Mail как полноценная рабочая страница: графики, таблицы и сортировка доступны до сохранения копии в HTML. Живой контроль SLA можно держать в правой боковой панели рядом с открытым письмом.
 
 Все данные на превью ниже синтетические: используются только вымышленные имена, темы и адрес `demo.example`. Реальные почтовые аккаунты, адреса и содержимое писем в репозиторий не добавляются.
 
 <p align="center">
-  <img src="docs/screenshots/reports-demo.svg" alt="Демонстрационный интерактивный отчёт Jackdaw" width="920">
+  <img src="docs/screenshots/reports-demo.svg" alt="Демонстрационный интерактивный отчёт Jackdaw Mail" width="920">
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/sla-control-demo.svg" alt="Демонстрационный живой контроль SLA в правой боковой панели Jackdaw" width="920">
+  <img src="docs/screenshots/sla-control-demo.svg" alt="Демонстрационный живой контроль SLA в правой боковой панели Jackdaw Mail" width="920">
 </p>
 
 <p align="center"><sub>Демонстрационные экраны · synthetic demo data</sub></p>
@@ -38,7 +38,7 @@ Desktop-клиент для Exchange / OWA и связанных протоко�
 
 ### О проекте
 
-**Jackdaw** — почтовый клиент с календарём и адресной книгой для Exchange / OWA, EWS, ActiveSync, Graph, IMAP/JMAP и CardDAV/CalDAV.
+**Jackdaw Mail** — почтовый клиент с календарём и адресной книгой для Exchange / OWA, EWS, ActiveSync, Graph, IMAP/JMAP и CardDAV/CalDAV.
 
 Desktop на **Electron**, mobile на **Capacitor**, UI — **Svelte + TypeScript**. Разработка — **[uugsx](https://github.com/Uugsx)**.
 
@@ -46,7 +46,7 @@ Desktop на **Electron**, mobile на **Capacitor**, UI — **Svelte + TypeScri
 
 - **OWA shared mailboxes** — синхронизация дополнительных ящиков: письма, категории, уведомления
 - **Боковая панель** — виджеты, календарь, встроенные web-панели
-- **Обновлённый UI** — layout'ы почты, ribbon, плавающий композер, тема Jackdaw
+- **Обновлённый UI** — layout'ы почты, ribbon, плавающий композер, тема Jackdaw Mail
 - **Почта** — тёмная тема HTML-писем, категории OWA, undo удаления, дерево папок
 - **Отчёты и SLA** — интерактивный дашборд, рабочий календарь по дням недели, живой таймер ответа и настраиваемые напоминания
 - **Desktop OTA** — автообновление через GitHub Releases (Mac + Windows); см. [`docs/systems/desktop-build/ota-jackdaw.md`](docs/systems/desktop-build/ota-jackdaw.md)
@@ -57,7 +57,7 @@ Desktop на **Electron**, mobile на **Capacitor**, UI — **Svelte + TypeScri
 | Модуль | Что умеет |
 |--------|-----------|
 | **Почта** | Папки, поиск, теги/категории OWA, композер, тёмная тема писем, undo удаления, shared OWA mailboxes, ribbon, floating compose |
-| **UI** | Боковая панель виджетов, переработанные layout'ы, Jackdaw theme |
+| **UI** | Боковая панель виджетов, переработанные layout'ы, Jackdaw Mail theme |
 | **Отчёты и SLA** | Интерактивные графики и таблицы, сортировка, фильтры ящика/папки/категорий, рабочие часы по каждому дню, живой контроль и HTML-экспорт |
 | **Календарь** | События, приглашения, онлайн-встречи |
 | **Контакты** | Личные и GAL-контакты, группы |
@@ -80,9 +80,9 @@ Desktop на **Electron**, mobile на **Capacitor**, UI — **Svelte + TypeScri
 
 Настройки живого контроля сохраняются отдельно для выбранного почтового ящика. Очередь обновляется сразу после изменения письма или категории; периодическая проверка служит резервным механизмом.
 
-### Jackdaw Pro
+### Jackdaw Mail Pro
 
-Отчёты и живой контроль SLA подготовлены как Pro-модуль: в него входят рабочий календарь, таймеры, напоминания, правила очереди, архив контроля, подробный просмотр и HTML-экспорт. Для российского запуска выбран внешний checkout ЮKassa; платёжные данные не проходят через Jackdaw, а доступ выдаётся подписанным серверным entitlement. План интеграции и список обязательных шагов находятся в [`docs/PRO-BILLING.md`](docs/PRO-BILLING.md).
+Отчёты и живой контроль SLA подготовлены как Pro-модуль: в него входят рабочий календарь, таймеры, напоминания, правила очереди, архив контроля, подробный просмотр и HTML-экспорт. Для российского запуска выбран внешний checkout ЮKassa; платёжные данные не проходят через Jackdaw Mail, а доступ выдаётся подписанным серверным entitlement. План интеграции и список обязательных шагов находятся в [`docs/PRO-BILLING.md`](docs/PRO-BILLING.md).
 
 ### Платформы
 
@@ -134,7 +134,7 @@ lib/        — общие библиотеки (JPC protocol)
 
 - **Maintainer:** [uugsx](https://github.com/Uugsx)
 - **Сайт:** [jackdaw.app](https://jackdaw.app)
-- **Репозиторий:** [github.com/Uugsx/Jackdaw](https://github.com/Uugsx/Jackdaw)
+- **Репозиторий:** [github.com/Uugsx/jackdaw-mail](https://github.com/Uugsx/jackdaw-mail)
 
 ---
 
@@ -142,7 +142,7 @@ lib/        — общие библиотеки (JPC protocol)
 
 ### About
 
-**Jackdaw** is a mail client with calendar, contacts, interactive reports and live SLA control for Exchange / OWA, EWS, ActiveSync, Graph, IMAP/JMAP, and CardDAV/CalDAV.
+**Jackdaw Mail** is a mail client with calendar, contacts, interactive reports and live SLA control for Exchange / OWA, EWS, ActiveSync, Graph, IMAP/JMAP, and CardDAV/CalDAV.
 
 **Electron** desktop, **Capacitor** mobile, **Svelte + TypeScript** UI. Maintained by **[uugsx](https://github.com/Uugsx)**.
 
@@ -150,7 +150,7 @@ lib/        — общие библиотеки (JPC protocol)
 
 - **OWA shared mailboxes** — delegated inboxes: messages, categories, notifications
 - **Sidebar** — widgets, mini-calendar, embedded web panels
-- **Updated UI** — mail layouts, ribbon, floating composer, Jackdaw theme
+- **Updated UI** — mail layouts, ribbon, floating composer, Jackdaw Mail theme
 - **Mail** — dark-mode HTML, OWA categories, delete undo, folder tree
 - **Reports & SLA** — interactive dashboard, per-weekday working calendar, live response timers and configurable reminders
 - **Desktop OTA** — auto-update via GitHub Releases (Mac + Windows); see [`docs/systems/desktop-build/ota-jackdaw.md`](docs/systems/desktop-build/ota-jackdaw.md)
@@ -161,7 +161,7 @@ lib/        — общие библиотеки (JPC protocol)
 | Module | Highlights |
 |--------|------------|
 | **Mail** | Folders, search, OWA categories/tags, composer, dark-mode email rendering, delete undo, shared OWA mailboxes, ribbon, floating compose |
-| **UI** | Widget sidebar, reworked layouts, Jackdaw theme |
+| **UI** | Widget sidebar, reworked layouts, Jackdaw Mail theme |
 | **Reports & SLA** | Interactive charts and tables, sorting, mailbox/folder/category filters, per-day working hours, live response control and HTML export |
 | **Calendar** | Events, invitations, online meetings |
 | **Contacts** | Personal & GAL contacts, groups |
@@ -184,9 +184,9 @@ Reports are generated and reviewed inside the app first. HTML is an optional sav
 
 Live-control settings are persisted per mailbox. The queue refreshes immediately after a message or category change, with a periodic safety check as a fallback.
 
-### Jackdaw Pro
+### Jackdaw Mail Pro
 
-Reports and live SLA control are prepared as a Pro module covering the working calendar, timers, reminders, queue rules, tracking archive, in-app detailed view and HTML export. YooKassa is the selected checkout for a Russian launch; payment details never pass through Jackdaw, and access is issued by a signed server entitlement. See [`docs/PRO-BILLING.md`](docs/PRO-BILLING.md) for the integration plan and launch checklist.
+Reports and live SLA control are prepared as a Pro module covering the working calendar, timers, reminders, queue rules, tracking archive, in-app detailed view and HTML export. YooKassa is the selected checkout for a Russian launch; payment details never pass through Jackdaw Mail, and access is issued by a signed server entitlement. See [`docs/PRO-BILLING.md`](docs/PRO-BILLING.md) for the integration plan and launch checklist.
 
 ### Platforms
 
@@ -238,13 +238,13 @@ lib/        — shared libraries (JPC protocol)
 
 - **Maintainer:** [uugsx](https://github.com/Uugsx)
 - **Website:** [jackdaw.app](https://jackdaw.app)
-- **Repository:** [github.com/Uugsx/Jackdaw](https://github.com/Uugsx/Jackdaw)
+- **Repository:** [github.com/Uugsx/jackdaw-mail](https://github.com/Uugsx/jackdaw-mail)
 
 ---
 
 <div align="center">
 
-<sub>Jackdaw · <a href="https://github.com/Uugsx">uugsx</a> · <a href="LICENSE">EUPL-1.2</a></sub><br>
+<sub>Jackdaw Mail · <a href="https://github.com/Uugsx">uugsx</a> · <a href="LICENSE">EUPL-1.2</a></sub><br>
 <sub>Based on prior open-source work by Ben Bucksch, Beonex GmbH and contributors.</sub>
 
 </div>

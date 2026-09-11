@@ -5,9 +5,9 @@ import { UserCancelled, UserError, assert, type URLString } from "../../util/uti
 import { gt } from "../../../l10n/l10n";
 import { kJackdawOAuthBrowserRedirectURL } from "../OAuth2Secrets";
 
-const kOAuthSuccessHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Jackdaw</title></head>
+const kOAuthSuccessHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Jackdaw Mail</title></head>
 <body style="font-family:sans-serif;text-align:center;padding:48px">
-<h2>Jackdaw</h2><p>Login successful. You can close this tab and return to the app.</p>
+<h2>Jackdaw Mail</h2><p>Login successful. You can close this tab and return to the app.</p>
 </body></html>`;
 
 /**

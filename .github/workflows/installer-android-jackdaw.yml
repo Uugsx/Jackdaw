@@ -1,4 +1,4 @@
-name: Jackdaw Installers for Android
+name: Jackdaw Mail Installers for Android
 
 on:
   workflow_dispatch: # manually triggered

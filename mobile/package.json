@@ -1,7 +1,7 @@
 {
-  "name": "jackdaw",
+  "name": "jackdaw-mail",
   "version": "0.9.38-dev",
-  "description": "Jackdaw — Mail, Calendar & Contacts",
+  "description": "Jackdaw Mail — Mail, Calendar & Contacts",
   "type": "module",
   "scripts": {
     "start": "vite",
@@ -39,8 +39,8 @@
     "vite": "^7.3.1",
     "vite-node": "^5.2.0"
   },
-  "author": "Jackdaw",
-  "copyright": "Jackdaw",
+  "author": "Jackdaw Mail",
+  "copyright": "Jackdaw Mail",
   "homepage": "https://jackdaw.app",
   "license": "EUPL-1.2",
   "licenseText": "See LICENSE file at top level"

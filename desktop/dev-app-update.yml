@@ -1,5 +1,5 @@
 provider: github
 owner: Uugsx
-repo: Jackdaw
+repo: jackdaw-mail
 private: false
 updaterCacheDirName: jackdaw-updater

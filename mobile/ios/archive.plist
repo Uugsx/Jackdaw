@@ -7,7 +7,7 @@
 	<key>provisioningProfiles</key>
 	<dict>
 		<key>app.jackdaw.mail</key>
-		<string>Jackdaw</string>
+		<string>Jackdaw Mail</string>
 	</dict>
 </dict>
 </plist>

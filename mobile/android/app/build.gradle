@@ -39,7 +39,7 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-    def appName = "Jackdaw"
+    def appName = "Jackdaw Mail"
     def version = android.defaultConfig.versionName
 
     applicationVariants.all { variant ->

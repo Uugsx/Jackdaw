@@ -1,4 +1,4 @@
-name: Jackdaw Installers for Linux ARM
+name: Jackdaw Mail Installers for Linux ARM
 
 on:
   workflow_dispatch: # manually triggered

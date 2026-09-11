@@ -5,7 +5,7 @@
 
     <div>
       <T msg={$t`Copyright 2026 # and other contributors`}>
-        <a href="{siteRoot}" target="_blank">Jackdaw</a>
+        <a href="{siteRoot}" target="_blank">{appName}</a>
       </T>
     </div>
 

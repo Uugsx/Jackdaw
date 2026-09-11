@@ -1,5 +1,5 @@
 appId: app.jackdaw.client
-productName: Jackdaw
+productName: Jackdaw Mail
 copyright: Copyright © 2026
 directories:
   buildResources: build
@@ -16,7 +16,7 @@ win:
   target:
     - nsis
     - msi
-  executableName: jackdaw
+  executableName: jackdaw-mail
   icon: build/icon.ico
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
@@ -48,7 +48,7 @@ linux:
     - deb
     - pacman
     - rpm
-  maintainer: Jackdaw
+  maintainer: Jackdaw Mail
   category: Network
   icon: build/icon.icns
   mimeTypes:
@@ -56,7 +56,7 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 deb:
-  packageName: jackdaw
+  packageName: jackdaw-mail
 pacman:
   depends:
     - c-ares
@@ -81,7 +81,7 @@ extraResources:
   - from: build/gh-update-token.txt
     to: gh-update-token.txt
 extraMetadata:
-  productName: Jackdaw
+  productName: Jackdaw Mail
 electronUpdaterCompatibility: ">=2.16"
 releaseInfo:
   releaseNotes: ""
@@ -94,6 +94,6 @@ fileAssociations:
 publish:
   provider: github
   owner: Uugsx
-  repo: Jackdaw
+  repo: jackdaw-mail
   private: false
   releaseType: release

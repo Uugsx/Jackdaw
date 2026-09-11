@@ -21,8 +21,8 @@
 # Release
 * Polish based on feedback
 * License notification bar
-* Payment: Jackdaw Pro
-  * Upgrade page in Settings: Jackdaw Pro — client foundation done
+* Payment: Jackdaw Mail Pro
+  * Upgrade page in Settings: Jackdaw Mail Pro — client foundation done
   * License server — pending deployment
   * YooKassa onboarding and production checkout — pending
 * OAuth

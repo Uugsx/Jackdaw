@@ -1,4 +1,4 @@
-name: Jackdaw Installers for iOS
+name: Jackdaw Mail Installers for iOS
 
 on:
   workflow_dispatch: # manually triggered

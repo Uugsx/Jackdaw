@@ -1,4 +1,4 @@
-name: Jackdaw Installers for Windows
+name: Jackdaw Mail Installers for Windows
 
 on:
   workflow_dispatch: # manually triggered

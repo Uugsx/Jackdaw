@@ -1,6 +1,6 @@
 # [Capacitor-NodeJS](https://github.com/hampoelz/Capacitor-NodeJS)
 
-This plugin is a wrapper around Node.js Mobile that starts Node.js Mobile library. Jackdaw uses upstream [Capacitor-NodeJS](https://github.com/hampoelz/Capacitor-NodeJS) v1.0.0-beta.10 on Android. We have custom code in `mobile/ios` for iOS instead of this.
+This plugin is a wrapper around Node.js Mobile that starts Node.js Mobile library. Jackdaw Mail uses upstream [Capacitor-NodeJS](https://github.com/hampoelz/Capacitor-NodeJS) v1.0.0-beta.10 on Android. We have custom code in `mobile/ios` for iOS instead of this.
 
 ## Why did we choose this?
 
@@ -38,10 +38,10 @@ from `mobile/ios/App/App/NodeRunner.swift`.
 2. Checks if the variable `nodeStarted` is `false` and if not, it returns early to avoid starting Node.js Mobile more than once.
 3. Sets `nodeStarted` to `true` and continues to start Node.js Mobile.
 4. Starts a background thread with the `.default` priority because anything that is higher priority would block the UI and stay on the Splash Screen frozen or for a longer time. Anything that was lower priority would load the backend later which caused the `JPC: not connected` error.
-5. `mobile/ios/App/App/NodeRunner.swift` checks if `nodejs-project/override-dlopen-paths-preload.js` is present in the `Jackdaw.app`.
+5. `mobile/ios/App/App/NodeRunner.swift` checks if `nodejs-project/override-dlopen-paths-preload.js` is present in the `Jackdaw Mail.app`.
 6. Starts Node.js Mobile with `override-dlopen-paths-preload.js` as the preload script.
 7. The preload script is executed before the main backend script starts.
 8. The preload script overrides the `dlopen` paths to load from paths from the `nodejs-project/override-dlopen-paths-data.json` file. `override-dlopen-paths-data.json` is generated JSON file that maps `.node` files to `.framework` files. This is because of the code signing requirements and packaging requirements to upload to TestFlight otherwise it works locally without mapping and with `.node` files directly.
-9. The `.node` files are loaded from `Frameworks` directory of the `Jackdaw.app` as a `node-[hash].framework` directory with a `node-[hash]` executable file inside.
+9. The `.node` files are loaded from `Frameworks` directory of the `Jackdaw Mail.app` as a `node-[hash].framework` directory with a `node-[hash]` executable file inside.
 
 See `docs/systems/mobile-build/overview.md` the `Building for iOS` section for how the `.node` files are packaged on iOS.

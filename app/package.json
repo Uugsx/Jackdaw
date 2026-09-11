@@ -1,6 +1,6 @@
 {
   "name": "jackdaw-frontend",
-  "description": "Jackdaw UI",
+  "description": "Jackdaw Mail UI",
   "private": true,
   "version": "0.9.38-dev",
   "scripts": {
@@ -115,8 +115,8 @@
   "resolutions": {
     "vite": "^7.3.1"
   },
-  "author": "Jackdaw",
-  "copyright": "Jackdaw",
+  "author": "Jackdaw Mail",
+  "copyright": "Jackdaw Mail",
   "homepage": "https://jackdaw.app",
   "license": "EUPL-1.2",
   "licenseText": "See LICENSE file at top level",

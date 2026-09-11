@@ -1,10 +1,10 @@
 {
-  "name": "jackdaw",
+  "name": "jackdaw-mail",
   "version": "0.9.38-dev",
-  "description": "Jackdaw — Mail, Calendar & Contacts",
+  "description": "Jackdaw Mail — Mail, Calendar & Contacts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Uugsx/Jackdaw.git"
+    "url": "https://github.com/Uugsx/jackdaw-mail.git"
   },
   "main": "./out/main/index.js",
   "type": "module",
@@ -73,8 +73,8 @@
     "vite-plugin-conditional-compile": "^1.4.5",
     "vite-plugin-node-polyfills": "^0.24.0"
   },
-  "author": "Jackdaw",
-  "copyright": "Jackdaw",
+  "author": "Jackdaw Mail",
+  "copyright": "Jackdaw Mail",
   "license": "EUPL-1.2",
   "licenseText": "See LICENSE file at top level",
   "homepage": "https://jackdaw.app"

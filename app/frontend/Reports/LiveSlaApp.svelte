@@ -684,7 +684,7 @@
 </script>
 
 <svelte:head>
-  <title>{$t`Live response control`} — Jackdaw</title>
+  <title>{$t`Live response control`} — Jackdaw Mail</title>
 </svelte:head>
 
 <main class="live-page" class:embedded>

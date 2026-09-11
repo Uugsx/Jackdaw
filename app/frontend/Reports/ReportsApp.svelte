@@ -1509,7 +1509,7 @@
     downloadedFilename = "";
     try {
       const exportReport = reportForExport();
-      const filename = `jackdaw-report-${report.range.from}-${report.range.to}.html`;
+      const filename = `jackdaw-mail-report-${report.range.from}-${report.range.to}.html`;
     downloadedFilename = await downloadTextFile(
       createReportHTML(exportReport, exportOptions()),
       filename,
@@ -1791,7 +1791,7 @@
 </script>
 
 <svelte:head>
-  <title>{$t`Reports`} — Jackdaw</title>
+  <title>{$t`Reports`} — Jackdaw Mail</title>
 </svelte:head>
 
 <main class="reports-page" aria-busy={loading}>

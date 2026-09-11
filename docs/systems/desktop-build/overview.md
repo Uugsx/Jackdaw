@@ -5,7 +5,7 @@
 1. `electron-vite` builds the HTML, CSS, and JavaScript for the application.
 2. `electron-builder` packages the application into a distributable format.
 
-**Jackdaw OTA (auto-update):** see [ota-jackdaw.md](./ota-jackdaw.md) — required reading before changing publish CI or updater code.
+**Jackdaw Mail OTA (auto-update):** see [ota-jackdaw.md](./ota-jackdaw.md) — required reading before changing publish CI or updater code.
 
 ## Dependencies
 

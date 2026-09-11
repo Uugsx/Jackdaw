@@ -1,6 +1,6 @@
-# Jackdaw desktop OTA (Over-The-Air updates)
+# Jackdaw Mail desktop OTA (Over-The-Air updates)
 
-Runbook for **automatic updates** of the Jackdaw Electron desktop app via **GitHub Releases** (public repo `Uugsx/Jackdaw`).
+Runbook for **automatic updates** of the Jackdaw Mail Electron desktop app via **GitHub Releases** (public repo `Uugsx/jackdaw-mail`).
 
 **Read this file before changing OTA, CI publish, or updater UI.**
 
@@ -21,6 +21,8 @@ Related generic docs: [electron-builder.md](./electron-builder.md), [macos.md](.
 | **Branding / token** | `app/build/jackdaw-brand.sh` — version bump, `gh-update-token.txt` |
 
 Push to `main` builds **both** platforms. Manual **workflow_dispatch** can choose `platform: mac | windows | both`.
+
+Пользовательское имя продукта и GitHub-репозиторий — **Jackdaw Mail** / `jackdaw-mail`. При этом `app.jackdaw.client` и внутреннее имя каталога данных `Jackdaw` сохраняются намеренно: это удерживает существующие настройки, локальную почту и совместимость обновлений при переименовании.
 
 ---
 
@@ -128,7 +130,7 @@ Auth: `autoUpdater.addAuthHeader('token …')` — **do not use `setFeedURL()`**
 
 - **Check + download:** `electron-updater` (Squirrel / NSIS) — `latest.yml` on the release
 - **Install:** `autoUpdater.quitAndInstall()` on quit or “Install update”
-- **Metadata:** `latest.yml`, `jackdaw-*-setup.exe`
+- **Metadata:** `latest.yml`, `jackdaw-mail-*-setup.exe`
 
 ### macOS (no Apple Developer signing on prerelease builds)
 
@@ -137,7 +139,7 @@ Auth: `autoUpdater.addAuthHeader('token …')` — **do not use `setFeedURL()`**
 - **Install:** **Not** Squirrel/ShipIt (ad-hoc builds fail code signature validation)
   1. Spawn detached bash script
   2. **Quit** running app (`shutdownBackend`, `app.exit`)
-  3. Script waits for PID, mounts DMG, `ditto` to `/Applications/Jackdaw.app`, `open` new app
+  3. Script waits for PID, mounts DMG, `ditto` to `/Applications/Jackdaw Mail.app`, `open` new app
 - **Metadata on release:** `latest-mac.yml`, `.zip` (for metadata); user-facing install path is **DMG**
 
 If Apple Developer ID + notarization are added later, Mac could switch back to zip + `quitAndInstall` — until then, keep DMG path.
@@ -167,7 +169,7 @@ Dev/local builds without timestamp suffix show **“Automatic updates are not co
 ## Manual publish
 
 ```bash
-# workflow_dispatch → "Jackdaw Publish Desktop Update"
+# workflow_dispatch → "Jackdaw Mail Publish Desktop Update"
 # release_type: prerelease (default) or release
 # platform: both (default) | mac | windows  — single-OS keeps other platform via carry-forward
 ```
@@ -215,7 +217,7 @@ Do not poll every few minutes — wastes GitHub API and user bandwidth. 4 h is a
 
 1. Read this doc and `electron-builder.yml`
 2. Change backend + UI + CI together if behaviour crosses layers
-3. Push to `main`, watch [Actions → Jackdaw Publish Desktop Update](https://github.com/Uugsx/Jackdaw/actions)
+3. Push to `main`, watch [Actions → Jackdaw Mail Publish Desktop Update](https://github.com/Uugsx/jackdaw-mail/actions)
 4. Verify **one** release contains: `latest.yml`, `latest-mac.yml`, `setup.exe`, `*.dmg`, zips
 5. Test Mac: Settings → About → check update → progress → quit → reinstall → new version
 6. Test Windows: same; confirm OTA from previous CI `setup.exe` build

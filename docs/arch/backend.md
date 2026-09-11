@@ -1,6 +1,6 @@
 # Backend Architecture
 
-The Jackdaw frontend is running in a browser context, using HTML, CSS,
+The Jackdaw Mail frontend is running in a browser context, using HTML, CSS,
 JavaScript/TypeScript and Svelte. Most of our code lives there.
 
 The browser context also runs a "logic" layer, which represents all the

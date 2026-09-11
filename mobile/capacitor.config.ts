@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: "app.jackdaw.client",
-  appName: "Jackdaw",
+  appName: "Jackdaw Mail",
   webDir: "./dist",
   plugins: {
     CapacitorNodeJS: {

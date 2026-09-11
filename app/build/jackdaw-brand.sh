@@ -1,27 +1,27 @@
 # Run from app/build/ directory
-# Syncs version into build.ts and package metadata; branding is Jackdaw.
+# Syncs version into build.ts and package metadata; branding is Jackdaw Mail.
 VERSION=`grep "\"version\"" ../../app/package.json | sed -e "s|^.*\"version\": \"||" -e "s|\",$||"`
 if [ -n "${OTA_BUILD_SUFFIX:-}" ]; then
   BASE=$(echo "$VERSION" | sed 's/-dev.*//')
   VERSION="${BASE}-dev.${OTA_BUILD_SUFFIX}"
   perl -p -i -e "s|\"version\": \".*\"|\"version\": \"$VERSION\"|;" ../package.json
 fi
-echo Building Jackdaw version $VERSION
+echo Building Jackdaw Mail version $VERSION
 
 perl -p -i \
   -e "s|production = false|production = true|;" \
-  -e "s|appName: string = '.*';|appName: string = 'Jackdaw';|;" \
+  -e "s|appName: string = '.*';|appName: string = 'Jackdaw Mail';|;" \
   -e "s|siteRoot: string = '.*';|siteRoot: string = 'https://jackdaw.app';|;" \
   -e "s|appVersion: string = '.*';\$|appVersion: string = '$VERSION';|;" \
   ../logic/build.ts
 
 perl -p -i \
-  -e "s|\"name\": \".*\"|\"name\": \"jackdaw\"| if \$. < 5;" \
+  -e "s|\"name\": \".*\"|\"name\": \"jackdaw-mail\"| if \$. < 5;" \
   -e "s|\"version\": \".*\"|\"version\": \"$VERSION\"|;" \
   ../../desktop/package.json
 
 perl -p -i \
-  -e "s|\"name\": \".*\"|\"name\": \"jackdaw\"| if \$. < 5;" \
+  -e "s|\"name\": \".*\"|\"name\": \"jackdaw-mail\"| if \$. < 5;" \
   -e "s|\"version\": \".*\"|\"version\": \"$VERSION\"|;" \
   ../../mobile/package.json
 
@@ -49,7 +49,7 @@ if [ -f ../../desktop/build/icon-jackdaw.png ]; then
   perl -MFile::Copy -e "copy('../../desktop/build/icon-jackdaw.png', '../../mobile/assets/icon.png')"
 fi
 
-echo Jackdaw brand sync done.
+echo Jackdaw Mail brand sync done.
 
 mkdir -p ../../desktop/build
 if [ -n "${JACKDAW_GH_UPDATE_TOKEN:-}" ]; then

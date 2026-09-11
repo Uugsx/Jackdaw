@@ -1,6 +1,6 @@
 # Node.js Mobile
 
-Node.js Mobile is the library and the app toolkit that builds the library. Jackdaw uses [upstream Node.js Mobile](https://github.com/nodejs-mobile/nodejs-mobile) releases (currently v18.20.4 for Android and iOS).
+Node.js Mobile is the library and the app toolkit that builds the library. Jackdaw Mail uses [upstream Node.js Mobile](https://github.com/nodejs-mobile/nodejs-mobile) releases (currently v18.20.4 for Android and iOS).
 
 ## How does it work?
 

@@ -9,7 +9,7 @@ set -euo pipefail
 
 TARGET_TAG="${1:?target tag required, e.g. v0.9.38-dev.20260830231500}"
 BUILT_PLATFORM="${2:?built platform required: mac or windows}"
-REPO="${3:-Uugsx/Jackdaw}"
+REPO="${3:-Uugsx/jackdaw-mail}"
 
 if [[ "$BUILT_PLATFORM" != "mac" && "$BUILT_PLATFORM" != "windows" ]]; then
   echo "ERROR: built platform must be mac or windows, got: $BUILT_PLATFORM"

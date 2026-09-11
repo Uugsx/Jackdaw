@@ -96,7 +96,7 @@ export function createReportHTML(
   report: ReportData,
   options: ReportExportOptions = {},
 ): string {
-  const title = "Отчёт об активности Jackdaw";
+  const title = "Отчёт об активности Jackdaw Mail";
   const maxTimeline = Math.max(
     1,
     ...report.timeline.map((point) => point.total),
