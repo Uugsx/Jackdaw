@@ -16,6 +16,7 @@ import {
   getDueResponseReminderIntervals,
   getResponseSlaStartAt,
   getResponseSlaProgress,
+  isResponseRequestExcluded,
   isResponseRequestTakenInWork,
   isResponseReminderRequestAfterActivation,
   normalizeResponseReminderIntervals,
@@ -281,22 +282,30 @@ async function evaluateResponseReminders(): Promise<void> {
       }
 
       try {
-        const pending = await loadPendingResponseRequests(
-          accountId,
-          categoryNames,
-          now,
-          undefined,
-          readStoredFolderId(accountId),
-          {
-            mailboxAddress: account.emailAddress,
-            excludedCategoryNames: config.excludedCategoryNames,
-            // В режиме профиля личный ящик контролируется целиком: категория
-            // может появиться позже, но отсчёт SLA начинается сразу.
-            includeUncategorized:
-              attribution.mode == "profile"
-                ? true
-                : config.includeUncategorized,
-          },
+        const pending = (
+          await loadPendingResponseRequests(
+            accountId,
+            categoryNames,
+            now,
+            undefined,
+            readStoredFolderId(accountId),
+            {
+              mailboxAddress: account.emailAddress,
+              excludedCategoryNames: config.excludedCategoryNames,
+              // В режиме профиля личный ящик контролируется целиком: категория
+              // может появиться позже, но отсчёт SLA начинается сразу.
+              includeUncategorized:
+                attribution.mode == "profile"
+                  ? true
+                  : config.includeUncategorized,
+            },
+          )
+        ).filter(
+          (request) =>
+            !isResponseRequestExcluded(
+              request,
+              config.excludedCategoryNames,
+            ),
         );
         const activeKeys = new Set<string>();
         const targetMinutes = readStoredTargetMinutes(accountId);
@@ -363,7 +372,10 @@ async function evaluateResponseReminders(): Promise<void> {
             continue;
           }
 
-          const takenInWork = isResponseRequestTakenInWork(candidate);
+          const takenInWork = isResponseRequestTakenInWork(
+            candidate,
+            config.excludedCategoryNames,
+          );
           const overdue = progress.status == "over-target";
           let stateTakenInWork = takenInWork;
           let stateOverdue = overdue;
@@ -494,10 +506,14 @@ async function evaluateResponseReminders(): Promise<void> {
     });
     liveStatePublished = true;
     for (const job of jobs) {
-      await showResponseReminder(job, now);
+      if (isCurrentResponseReminderCandidate(job.candidate)) {
+        await showResponseReminder(job, now);
+      }
     }
     for (const job of eventJobs) {
-      await showResponseEventNotification(job, now);
+      if (isCurrentResponseReminderCandidate(job.candidate, job.event)) {
+        await showResponseEventNotification(job, now);
+      }
     }
   } finally {
     if (!liveStatePublished) {
@@ -514,6 +530,26 @@ async function evaluateResponseReminders(): Promise<void> {
       scheduleEvaluation();
     }
   }
+}
+
+/** Не доставляет уведомления, которые устарели после изменения настроек. */
+function isCurrentResponseReminderCandidate(
+  candidate: ResponseReminderCandidate,
+  event?: ResponseReminderEvent,
+): boolean {
+  const config = getResponseReminderConfig(candidate.accountId);
+  if (
+    !config.enabled ||
+    isResponseRequestExcluded(candidate, config.excludedCategoryNames) ||
+    isResponseTrackingArchived(candidate, getResponseTrackingArchive())
+  ) {
+    return false;
+  }
+  return event == null
+    ? true
+    : event == "overdue"
+      ? config.notifyWhenOverdue
+      : config.notifyWhenTakenInWork;
 }
 
 function readStoredTargetMinutes(accountId: number): number {

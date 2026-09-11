@@ -135,10 +135,31 @@ export function responseReminderKey(request: PendingResponseRequest): string {
   return `${request.accountId}:${request.folderId}:${request.emailId}`;
 }
 
+/** Проверяет, исключено ли письмо настройками SLA по одной из его категорий. */
+export function isResponseRequestExcluded(
+  request: PendingResponseRequest,
+  excludedCategoryNames: readonly string[] | undefined,
+): boolean {
+  if (!excludedCategoryNames?.length || !request.categoryNames.length) {
+    return false;
+  }
+  const excluded = new Set(
+    excludedCategoryNames
+      .filter((name): name is string => typeof name == "string")
+      .map((name) => name.trim())
+      .filter(Boolean),
+  );
+  return request.categoryNames.some((name) => excluded.has(name.trim()));
+}
+
 /** Считает письмо взятым в работу по тем же правилам, что и SLA-таймер. */
 export function isResponseRequestTakenInWork(
   request: PendingResponseRequest,
+  excludedCategoryNames: readonly string[] = [],
 ): boolean {
+  if (isResponseRequestExcluded(request, excludedCategoryNames)) {
+    return false;
+  }
   return (
     request.isRead === true ||
     request.categoryNames.some((name) => name.trim().length > 0)

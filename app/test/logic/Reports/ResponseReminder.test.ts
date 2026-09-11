@@ -9,6 +9,7 @@ import {
   normalizeResponseReminderConfig,
   normalizeResponseReminderIntervals,
   responseReminderKey,
+  isResponseRequestExcluded,
   shouldNotifyResponseReminderEvent,
   isResponseRequestTakenInWork,
   type PendingResponseRequest,
@@ -82,6 +83,22 @@ describe("ResponseReminder", () => {
     ).toBe(false);
     expect(
       isResponseRequestTakenInWork({ ...request, categoryNames: ["  "] }),
+    ).toBe(false);
+  });
+
+  test("не считает письмо взятым в работу, если его категория исключена из SLA", () => {
+    const excludedRequest = {
+      ...request,
+      categoryNames: ["Переписка (мы в копии)"],
+    };
+    expect(
+      isResponseRequestExcluded(excludedRequest, ["Переписка (мы в копии)"]),
+    ).toBe(true);
+    expect(
+      isResponseRequestTakenInWork(
+        { ...excludedRequest, isRead: true },
+        ["Переписка (мы в копии)"],
+      ),
     ).toBe(false);
   });
 
