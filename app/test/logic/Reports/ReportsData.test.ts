@@ -8,6 +8,7 @@ import { mailDatabaseSchema } from "../../../logic/Mail/SQL/createDatabase";
 import { InProcessSQLiteDatabase } from "../util/inProcessSQLite";
 import {
   buildResponseTimeStats,
+  clipReportEventInterval,
   defaultReportDateRange,
   loadReportMailAccounts,
   loadReportMailData,
@@ -35,6 +36,31 @@ describe("ReportsData helpers", () => {
     ).toBe("reversed");
     expect(
       validateReportDateRange({ from: "2026-04-01", to: "2026-04-01" }),
+    ).toBeNull();
+  });
+
+  test("clips calendar events to the selected period", () => {
+    const periodStart = new Date(2026, 8, 10, 0, 0);
+    const periodEndExclusive = new Date(2026, 8, 11, 0, 0);
+
+    expect(
+      clipReportEventInterval(
+        new Date(2026, 8, 9, 23, 0),
+        new Date(2026, 8, 11, 2, 0),
+        periodStart,
+        periodEndExclusive,
+      ),
+    ).toEqual({
+      start: periodStart,
+      end: periodEndExclusive,
+    });
+    expect(
+      clipReportEventInterval(
+        new Date(2026, 8, 11, 0, 0),
+        new Date(2026, 8, 11, 1, 0),
+        periodStart,
+        periodEndExclusive,
+      ),
     ).toBeNull();
   });
 
@@ -142,8 +168,8 @@ function insertEmail(
       ${values.id}, ${values.folderID}, ${values.messageID},
       ${values.parentMsgID}, ${values.threadID}, ${values.date}, ${values.date},
       ${values.outgoing},
-      ${values.outgoing ? "user@example.com" : values.contactEmail ?? "requester@example.com"},
-      ${values.outgoing ? "User" : values.contactName ?? "Requester"},
+      ${values.outgoing ? "user@example.com" : (values.contactEmail ?? "requester@example.com")},
+      ${values.outgoing ? "User" : (values.contactName ?? "Requester")},
       ${values.subject}, ${values.isReplied},
       ${values.json ?? null}
     )
@@ -176,7 +202,7 @@ function insertRecipient(
   `);
 }
 
-test("counts verified replies, unique tags, and selected mail account scope", async () => {
+test("counts verified replies, evaluates categorized out-of-hours replies, and scopes mail by account", async () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "reports-mail-"));
   const database = new InProcessSQLiteDatabase(path.join(tempDir, "mail.db"));
   try {
@@ -341,7 +367,7 @@ test("counts verified replies, unique tags, and selected mail account scope", as
       "2026-09-09",
     ]);
     expect(allMail.responseTimes.map((response) => response.emailId)).toEqual([
-      7, 1, 4,
+      7, 4, 1,
     ]);
     expect(allMail.responseTimes[0]).toMatchObject({
       emailId: 7,
@@ -352,9 +378,9 @@ test("counts verified replies, unique tags, and selected mail account scope", as
     expect(
       allMail.responseTimes.find((response) => response.emailId === 4),
     ).toMatchObject({
-      durationSeconds: null,
-      withinTarget: null,
-      responseTimeStatus: "outside-working-hours",
+      durationSeconds: 3_600,
+      withinTarget: false,
+      responseTimeStatus: "measured",
     });
     expect(
       allMail.responseTimes.find((response) => response.emailId === 1),
@@ -363,12 +389,12 @@ test("counts verified replies, unique tags, and selected mail account scope", as
       categoryNames: ["Никита Левченко"],
     });
     expect(allMail.summary.responseTime).toEqual({
-      answered: 2,
-      averageSeconds: 7_200,
+      answered: 3,
+      averageSeconds: 6_000,
       minimumSeconds: 3_600,
       maximumSeconds: 10_800,
       withinTarget: 0,
-      overTarget: 2,
+      overTarget: 3,
     });
     expect(allMail.categories).toContainEqual({
       name: "Никита Левченко",
@@ -407,12 +433,12 @@ test("counts verified replies, unique tags, and selected mail account scope", as
       sent: 3,
     });
     expect(selectedMail.responders[0].responseTime).toMatchObject({
-      answered: 2,
-      averageSeconds: 7_200,
+      answered: 3,
+      averageSeconds: 6_000,
       minimumSeconds: 3_600,
       maximumSeconds: 10_800,
       withinTarget: 0,
-      overTarget: 2,
+      overTarget: 3,
     });
 
     const selectedInboxMail = await loadReportMailData(
@@ -459,7 +485,7 @@ test("counts verified replies, unique tags, and selected mail account scope", as
       database,
     );
     expect(customTargetMail.summary.responseTime).toMatchObject({
-      withinTarget: 1,
+      withinTarget: 2,
       overTarget: 1,
     });
 
@@ -476,6 +502,70 @@ test("counts verified replies, unique tags, and selected mail account scope", as
     });
     expect(otherMail.responseTimes).toEqual([]);
     expect(otherMail.categories).toEqual([]);
+  } finally {
+    database.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("measures a categorized request received outside the schedule in real time", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "reports-categorized-after-hours-"));
+  const database = new InProcessSQLiteDatabase(path.join(tempDir, "mail.db"));
+  try {
+    await database.migrate(mailDatabaseSchema, createReportReplyIndexes);
+    database.run(sql`
+      INSERT INTO emailAccount (id, idStr, protocol)
+      VALUES (1, ${"account-1"}, ${"imap"})
+    `);
+    database.run(sql`
+      INSERT INTO folder (id, accountID, name, path, specialUse)
+      VALUES (101, 1, ${"Inbox"}, ${"INBOX"}, ${"inbox"})
+    `);
+    insertEmail(database, {
+      id: 1,
+      folderID: 101,
+      messageID: "<categorized-after-hours-request>",
+      parentMsgID: null,
+      threadID: "<categorized-after-hours-thread>",
+      date: localSeconds(6, 23),
+      outgoing: 0,
+      isReplied: 0,
+      subject: "Categorized after-hours request",
+    });
+    insertEmail(database, {
+      id: 2,
+      folderID: 101,
+      messageID: "<categorized-after-hours-reply>",
+      parentMsgID: "<categorized-after-hours-request>",
+      threadID: "<categorized-after-hours-thread>",
+      date: localSeconds(7, 1),
+      outgoing: 1,
+      isReplied: 0,
+      subject: "Re: Categorized after-hours request",
+    });
+    database.run(sql`
+      INSERT INTO emailTag (emailID, tagName)
+      VALUES (1, ${"Никита Левченко"})
+    `);
+
+    const report = await loadReportMailData(
+      { from: "2026-09-06", to: "2026-09-07" },
+      {},
+      database,
+    );
+
+    expect(report.responseTimes).toHaveLength(1);
+    expect(report.responseTimes[0]).toMatchObject({
+      durationSeconds: 7_200,
+      responseTimeStatus: "measured",
+      withinTarget: false,
+      categoryNames: ["Никита Левченко"],
+    });
+    expect(report.summary.responseTime).toMatchObject({
+      answered: 1,
+      averageSeconds: 7_200,
+      overTarget: 1,
+    });
   } finally {
     database.close();
     rmSync(tempDir, { recursive: true, force: true });
@@ -507,7 +597,9 @@ test("recognizes provider reply flags and replies from a personal sent folder", 
       date: localSeconds(9, 9),
       outgoing: 0,
       isReplied: 1,
-      json: JSON.stringify({ lastVerbAt: (localSeconds(9, 9) + 2 * 60) * 1000 }),
+      json: JSON.stringify({
+        lastVerbAt: (localSeconds(9, 9) + 2 * 60) * 1000,
+      }),
       subject: "Answered according to the provider",
     });
     insertEmail(database, {
@@ -546,8 +638,13 @@ test("recognizes provider reply flags and replies from a personal sent folder", 
       outgoing: 1,
       answered: 2,
     });
-    expect(report.responseTimes.map((response) => response.emailId)).toEqual([2, 1]);
-    expect(report.responseTimes[0].durationSeconds).toBe(1_800);
+    expect(report.responseTimes.map((response) => response.emailId)).toEqual([
+      2, 1,
+    ]);
+    expect(report.responseTimes[0]).toMatchObject({
+      durationSeconds: 1_800,
+      responderAccountId: 2,
+    });
     expect(report.responseTimes[1].durationSeconds).toBe(120);
     expect(report.summary.responseTime).toMatchObject({
       answered: 2,
@@ -555,6 +652,69 @@ test("recognizes provider reply flags and replies from a personal sent folder", 
       minimumSeconds: 120,
       maximumSeconds: 1_800,
       withinTarget: 2,
+      overTarget: 0,
+    });
+  } finally {
+    database.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("measures a same-timestamp reply during working hours", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "reports-zero-duration-"));
+  const database = new InProcessSQLiteDatabase(path.join(tempDir, "mail.db"));
+  try {
+    await database.migrate(mailDatabaseSchema, createReportReplyIndexes);
+    database.run(sql`
+      INSERT INTO emailAccount (id, idStr, protocol)
+      VALUES (1, ${"account-1"}, ${"imap"})
+    `);
+    database.run(sql`
+      INSERT INTO folder (id, accountID, name, path, specialUse)
+      VALUES (101, 1, ${"Inbox"}, ${"INBOX"}, ${"inbox"})
+    `);
+    const timestamp = localSeconds(9, 9);
+    insertEmail(database, {
+      id: 1,
+      folderID: 101,
+      messageID: "<same-time-request>",
+      parentMsgID: null,
+      threadID: "<same-time-thread>",
+      date: timestamp,
+      outgoing: 0,
+      isReplied: 0,
+      subject: "Immediate request",
+    });
+    insertEmail(database, {
+      id: 2,
+      folderID: 101,
+      messageID: "<same-time-reply>",
+      parentMsgID: "<same-time-request>",
+      threadID: "<same-time-thread>",
+      date: timestamp,
+      outgoing: 1,
+      isReplied: 0,
+      subject: "Re: Immediate request",
+    });
+
+    const report = await loadReportMailData(
+      { from: "2026-09-09", to: "2026-09-09" },
+      {},
+      database,
+    );
+
+    expect(report.responseTimes).toHaveLength(1);
+    expect(report.responseTimes[0]).toMatchObject({
+      durationSeconds: 0,
+      responseTimeStatus: "measured",
+      withinTarget: true,
+    });
+    expect(report.summary.responseTime).toEqual({
+      answered: 1,
+      averageSeconds: 0,
+      minimumSeconds: 0,
+      maximumSeconds: 0,
+      withinTarget: 1,
       overTarget: 0,
     });
   } finally {

@@ -42,6 +42,7 @@
     DEFAULT_WORKING_HOURS_SCHEDULE,
     cloneWorkingHoursSchedule,
     formatWorkingTime,
+    isWithinWorkingHours,
     normalizeWorkingHoursSchedule,
     parseWorkingTime,
     validateWorkingHoursSchedule,
@@ -50,6 +51,7 @@
   } from "../../logic/Reports/WorkingHours";
   import {
     REPORT_DASHBOARD_DEFAULT_LAYOUT,
+    buildCategoryRhythmRows,
     buildCategoryResponderRows,
     defaultResponderCategoryNames,
     filterReportResponsesByCategories,
@@ -60,6 +62,8 @@
     normalizeResponderAttributionConfig,
     reportDashboardWidthColumns,
     responderResponseShare as calculateResponderResponseShare,
+    sortCategoryRhythmRows,
+    type CategoryRhythmRow,
     type ReportDashboardPanelLayout,
     type ReportDashboardSectionId,
     type ReportDashboardWidth,
@@ -94,18 +98,9 @@
 
   type PresetID = "7d" | "30d" | "90d" | "year" | "all";
   type ResponseDaySortColumn =
-    | "day"
-    | "answered"
-    | "average"
-    | "maximum"
-    | "overTarget";
+    "day" | "answered" | "average" | "maximum" | "overTarget";
   type ResponseDetailSortColumn =
-    | "received"
-    | "replied"
-    | "responseTime"
-    | "responder"
-    | "topic"
-    | "status";
+    "received" | "replied" | "responseTime" | "responder" | "topic" | "status";
   type ResponderSortColumn =
     | "name"
     | "requests"
@@ -186,6 +181,7 @@
   let exporting: "html" | null = null;
   let responseOpenError: Error | null = null;
   let openingResponseEmailId: number | null = null;
+  let selectedRhythmCategoryName = "";
   let reportRequestId = 0;
   let categoryFilter: string[] | null = null;
   let responderAttributionMode: ResponderAttributionMode = "profile";
@@ -260,9 +256,24 @@
         report.summary.responseTargetMinutes,
       )
     : emptyResponseTimeStats();
-  $: outsideWorkingHoursResponseCount = visibleResponseTimes.filter(
+  $: unmeasuredOutsideWorkingHoursResponseCount = visibleResponseTimes.filter(
     (response) => response.responseTimeStatus == "outside-working-hours",
   ).length;
+  $: outsideWorkingHoursResponseTimes = visibleResponseTimes
+    .filter(
+      (response) =>
+        !isWithinWorkingHours(
+          response.responseAt,
+          report?.workingHours ?? workingHours,
+        ),
+    )
+    .sort(
+      (a, b) =>
+        b.responseAt.getTime() - a.responseAt.getTime() ||
+        b.emailId - a.emailId,
+    );
+  $: categorizedOutsideWorkingHoursResponseCount =
+    outsideWorkingHoursResponseTimes.filter(responseHasEmployeeCategory).length;
   $: visibleResponseTimeDays = report
     ? buildResponseTimeDays(
         visibleResponseTimes,
@@ -289,10 +300,12 @@
   );
   $: reportCategories = report?.mail.categories ?? [];
   $: selectedMailAccount =
-    mailAccounts.find((account) => account.accountId == selectedMailAccountId) ??
-    null;
+    mailAccounts.find(
+      (account) => account.accountId == selectedMailAccountId,
+    ) ?? null;
   $: selectedMailFolder =
-    mailFolders.find((folder) => folder.folderId == selectedMailFolderId) ?? null;
+    mailFolders.find((folder) => folder.folderId == selectedMailFolderId) ??
+    null;
   $: visibleReportCategories =
     categoryFilter == null
       ? reportCategories
@@ -310,6 +323,44 @@
     selectedResponderCategoryNames,
     categoryFilter,
   );
+  $: rhythmCategoryNames =
+    responderAttributionMode == "category"
+      ? effectiveResponderCategoryNames
+      : responderCategoryCandidates.length
+        ? responderCategoryCandidates.filter(
+            (name) => categoryFilter == null || categoryFilter.includes(name),
+          )
+        : visibleReportCategories.map((category) => category.name);
+  $: categoryRhythmRows = report
+    ? buildCategoryRhythmRows(
+        visibleResponseTimes,
+        report.mail.categories,
+        report.workingHours,
+        rhythmCategoryNames,
+      )
+    : [];
+  $: sortedCategoryRhythmRows = sortCategoryRhythmRows(categoryRhythmRows);
+  $: afterHoursCategoryRows = sortedCategoryRhythmRows.filter(
+    (row) => row.afterHours > 0,
+  );
+  $: afterHoursCategoryMax = Math.max(
+    1,
+    ...afterHoursCategoryRows.map((row) => row.afterHours),
+  );
+  $: topAfterHoursCategory = afterHoursCategoryRows[0] ?? null;
+  $: effectiveRhythmCategoryName = categoryRhythmRows.some(
+    (row) => row.name == selectedRhythmCategoryName,
+  )
+    ? selectedRhythmCategoryName
+    : (afterHoursCategoryRows[0]?.name ??
+      sortedCategoryRhythmRows[0]?.name ??
+      "");
+  $: selectedCategoryRhythmRow =
+    categoryRhythmRows.find((row) => row.name == effectiveRhythmCategoryName) ??
+    null;
+  $: categoryRhythmHeatmapMax = selectedCategoryRhythmRow
+    ? Math.max(1, ...selectedCategoryRhythmRow.activity)
+    : 1;
   $: visibleResponders =
     report &&
     responderAttributionMode == "category" &&
@@ -318,7 +369,7 @@
           report.mail.categories,
           selectedMailAccountId,
           effectiveResponderCategoryNames,
-      )
+        )
       : (report?.mail.responders ?? []);
   $: responderAnsweredTotal = visibleResponders.reduce(
     (total, responder) => total + Math.max(0, responder.answered),
@@ -354,11 +405,10 @@
     ? sortReportRows(report.chat.rooms, chatSort, chatSortValue).slice(0, 10)
     : [];
   $: sortedFileDirectories = report
-    ? sortReportRows(
-        report.files.directories,
-        fileSort,
-        fileSortValue,
-      ).slice(0, 10)
+    ? sortReportRows(report.files.directories, fileSort, fileSortValue).slice(
+        0,
+        10,
+      )
     : [];
 
   // Svelte помечает прямой вызов onMount в этом компоненте как чистый,
@@ -450,7 +500,8 @@
     fileSort = restoreSortState(snapshot.fileSort);
     dashboardLayout = normalizeReportDashboardLayout(snapshot.dashboardLayout);
     reportViewerOpen = snapshot.reportViewerOpen;
-    dashboardLayoutMode = snapshot.reportViewerOpen && snapshot.dashboardLayoutMode;
+    dashboardLayoutMode =
+      snapshot.reportViewerOpen && snapshot.dashboardLayoutMode;
     reportViewerScrollTop = Math.max(0, snapshot.reportViewerScrollTop || 0);
     return snapshot;
   }
@@ -565,7 +616,10 @@
 
   async function runReport(): Promise<boolean> {
     const range: ReportDateRange = { from: fromDate, to: toDate };
-    if (validateReportDateRange(range) || validateWorkingHoursSchedule(workingHours)) {
+    if (
+      validateReportDateRange(range) ||
+      validateWorkingHoursSchedule(workingHours)
+    ) {
       return false;
     }
     const requestId = ++reportRequestId;
@@ -649,9 +703,7 @@
 
   function scrollReportSection(sectionId: string): void {
     const viewer = reportViewerContentElement;
-    const section = viewer?.querySelector<HTMLElement>(
-      `#${sectionId}`,
-    );
+    const section = viewer?.querySelector<HTMLElement>(`#${sectionId}`);
     if (!viewer || !section) {
       return;
     }
@@ -1077,6 +1129,11 @@
     );
   }
 
+  function onRhythmCategoryChange(event: Event): void {
+    selectedRhythmCategoryName = (event.currentTarget as HTMLSelectElement)
+      .value;
+  }
+
   function selectAllCategories(): void {
     categoryFilter = null;
   }
@@ -1124,6 +1181,8 @@
         return $t`First response speed`;
       case "response-details":
         return $t`Response details`;
+      case "category-rhythm":
+        return $t`Employee work rhythm`;
       case "responders":
         return $t`Who answers`;
       case "topics":
@@ -1225,6 +1284,7 @@
 
   function responseResponderLabel(response: {
     accountName: string;
+    responderAccountName?: string | null;
     categoryNames: string[];
   }): string {
     if (responderAttributionMode == "category") {
@@ -1236,7 +1296,34 @@
       }
       return $t`Employee not identified`;
     }
-    return response.accountName;
+    return response.responderAccountName || response.accountName;
+  }
+
+  function currentEmployeeCategoryNames(): string[] {
+    return responderAttributionMode == "category"
+      ? effectiveResponderCategoryNames
+      : responderCategoryCandidates;
+  }
+
+  function responseHasEmployeeCategory(response: {
+    categoryNames: string[];
+  }): boolean {
+    return response.categoryNames.some((name) =>
+      currentEmployeeCategoryNames().includes(name.trim()),
+    );
+  }
+
+  function responseAfterHoursOwnerLabel(response: {
+    accountName: string;
+    responderAccountName?: string | null;
+    categoryNames: string[];
+  }): string {
+    const employeeNames = response.categoryNames.filter((name) =>
+      currentEmployeeCategoryNames().includes(name.trim()),
+    );
+    return employeeNames.length
+      ? employeeNames.join(", ")
+      : response.responderAccountName || response.accountName;
   }
 
   async function openReportEmail(
@@ -1307,12 +1394,12 @@
     try {
       const exportReport = reportForExport();
       const filename = `jackdaw-mail-report-${report.range.from}-${report.range.to}.html`;
-    downloadedFilename = await downloadTextFile(
-      createReportHTML(exportReport, exportOptions()),
-      filename,
-      "text/html;charset=utf-8",
-    );
-    exportNotice = true;
+      downloadedFilename = await downloadTextFile(
+        createReportHTML(exportReport, exportOptions()),
+        filename,
+        "text/html;charset=utf-8",
+      );
+      exportNotice = true;
     } catch (ex) {
       exportError = ex instanceof Error ? ex : new Error(String(ex));
       exportNotice = false;
@@ -1325,14 +1412,10 @@
     if (!report) {
       throw new Error("Отчёт ещё не построен");
     }
-    const responseTimes = visibleResponseTimes.map((response) =>
-      responderAttributionMode == "category"
-        ? {
-            ...response,
-            accountName: responseResponderLabel(response),
-          }
-        : response,
-    );
+    const responseTimes = visibleResponseTimes.map((response) => ({
+      ...response,
+      accountName: responseResponderLabel(response),
+    }));
     return {
       ...report,
       summary: {
@@ -1361,6 +1444,11 @@
           : `${categoryFilter.length} / ${reportCategories.length}`,
       responderColumnLabel:
         responderAttributionMode == "category" ? "Сотрудник" : "Профиль",
+      responderMetricLabel:
+        responderAttributionMode == "category"
+          ? "Подтверждённые ответы"
+          : "Отправлено",
+      employeeCategoryNames: currentEmployeeCategoryNames(),
     };
   }
 
@@ -1441,6 +1529,15 @@
     return response.withinTarget ? $t`On time` : $t`Overdue`;
   }
 
+  function isResponseOutsideWorkingHours(response: {
+    responseAt: Date;
+  }): boolean {
+    return !isWithinWorkingHours(
+      response.responseAt,
+      report?.workingHours ?? workingHours,
+    );
+  }
+
   function formatPercent(value: number): string {
     const normalized = Number.isFinite(value) ? Math.max(0, value) : 0;
     return new Intl.NumberFormat(getDateTimeLocale(), {
@@ -1454,10 +1551,7 @@
   }
 
   function responderResponseShare(answered: number): number {
-    return calculateResponderResponseShare(
-      answered,
-      responderAnsweredTotal,
-    );
+    return calculateResponderResponseShare(answered, responderAnsweredTotal);
   }
 
   function formatDate(date: Date | null): string {
@@ -1549,6 +1643,27 @@
     return Math.max(0.14, Math.min(1, count / heatmapMax));
   }
 
+  function categoryRhythmHeatmapCount(
+    row: CategoryRhythmRow,
+    weekday: number,
+    hour: number,
+  ): number {
+    return row.activity[weekday * heatmapHours.length + hour] ?? 0;
+  }
+
+  function categoryRhythmHeatmapOpacity(
+    count: number,
+    maximum: number,
+  ): number {
+    if (!count) return 0;
+    return Math.max(0.14, Math.min(1, count / maximum));
+  }
+
+  function rhythmBarWidth(value: number, maximum: number): string {
+    if (!value || maximum <= 0) return "0%";
+    return `${Math.max(4, Math.round((value / maximum) * 100))}%`;
+  }
+
   function formatHour(hour: number | null): string {
     return hour == null ? "—" : `${String(hour).padStart(2, "0")}:00`;
   }
@@ -1579,6 +1694,15 @@
       return "—";
     }
     return `${weekdays[weekday] ?? "—"} ${formatHour(hour)}`;
+  }
+
+  function formatRhythmSlot(
+    weekday: number | null,
+    hour: number | null,
+  ): string {
+    return weekday == null || hour == null
+      ? "—"
+      : `${weekdays[weekday] ?? "—"} ${formatHour(hour)}`;
   }
 
   function parseInputDate(value: string): Date | null {
@@ -1761,7 +1885,10 @@
       <button
         type="button"
         class="primary-button"
-        disabled={loading || !!rangeError || !!responseTargetError || !!workingHoursError}
+        disabled={loading ||
+          !!rangeError ||
+          !!responseTargetError ||
+          !!workingHoursError}
         on:click={buildDetailedReport}
       >
         <ChartIcon size="16px" />
@@ -1773,16 +1900,14 @@
       {$t`The selected mailbox and folder limit mail metrics. When an account is selected, Inbox is used by default; choose All folders to include the full account history. Calendar, chat and files remain combined.`}
     </p>
     <p id="response-target-help" class="filter-scope-note response-target-note">
-      {$t`The target is applied in working minutes to the first verified reply. Change it and build the report to recalculate SLA metrics.`}
+      {$t`The target is applied in working minutes to the first verified reply. If a specialist assigns a category outside the schedule, that reply is measured in real elapsed minutes. Change it and build the report to recalculate SLA metrics.`}
     </p>
 
     <fieldset class="report-filter-block working-hours-block">
       <legend>{$t`Working hours for response SLA`}</legend>
       <div class="filter-block-heading">
         <span class="filter-count"
-          >{formatNumber(
-            workingHours.days.filter((day) => day.enabled).length,
-          )}
+          >{formatNumber(workingHours.days.filter((day) => day.enabled).length)}
           {$t`working days`}</span
         >
         <button
@@ -1794,7 +1919,7 @@
         >
       </div>
       <p class="filter-help">
-        {$t`Only time inside the selected daily schedule counts toward response time. Nights, days off and weekends do not increase the SLA clock.`}
+        {$t`Only time inside the selected daily schedule counts toward response time. If a specialist assigns a category outside the schedule, that reply is measured in real elapsed time; otherwise nights and days off do not increase the SLA clock.`}
       </p>
       <div class="working-hours-list" aria-label={$t`Working calendar`}>
         {#each workingHours.days as day, index}
@@ -1805,8 +1930,7 @@
                 checked={day.enabled}
                 disabled={loading || mailFoldersLoading}
                 aria-label={`${weekdayNames[index]}: ${day.enabled ? $t`Working day` : $t`Day off`}`}
-                on:change={(event) =>
-                  onWorkingDayEnabledChange(index, event)}
+                on:change={(event) => onWorkingDayEnabledChange(index, event)}
               />
               <span>{weekdayNames[index]}</span>
             </label>
@@ -1958,13 +2082,22 @@
       </fieldset>
     {/if}
 
-    <section class="live-control-launch" aria-labelledby="live-control-launch-title">
+    <section
+      class="live-control-launch"
+      aria-labelledby="live-control-launch-title"
+    >
       <div class="live-control-launch-icon"><ClockIcon size="18px" /></div>
       <div>
         <h2 id="live-control-launch-title">{$t`Live response control`}</h2>
-        <p>{$t`Open the operational SLA queue in the right panel next to the open email. Historical metrics remain here in Reports.`}</p>
+        <p>
+          {$t`Open the operational SLA queue in the right panel next to the open email. Historical metrics remain here in Reports.`}
+        </p>
       </div>
-      <button type="button" class="secondary-button" on:click={openLiveSlaControl}>
+      <button
+        type="button"
+        class="secondary-button"
+        on:click={openLiveSlaControl}
+      >
         <ClockIcon size="15px" />
         <span>{$t`Open live control`}</span>
       </button>
@@ -2069,595 +2202,1458 @@
         <span>{$t`Show all time`}</span>
       </button>
     </section>
-  {:else}
-    {#if reportViewerOpen}
-      <div
-        class="report-viewer"
-        bind:this={reportViewerElement}
-        on:keydown|capture={onReportViewerKeydown}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="report-viewer-title"
-        tabindex="-1"
-      >
-        <div class="report-viewer-topbar">
-          <div class="report-viewer-header">
-            <div>
-              <p class="eyebrow">{$t`DETAILED REPORT`}</p>
-              <h2 id="report-viewer-title">{$t`Detailed report`}</h2>
-              <p>
-                {$t`Review charts, tables and response details inside Jackdaw. Save an HTML copy when you are ready.`}
-              </p>
-            </div>
-            <div class="header-actions">
-              <button
-                type="button"
-                class="header-button"
-                disabled={!report || loading || exporting != null}
-                aria-busy={exporting == "html"}
-                on:click={exportHTML}
-              >
-                <DownloadIcon size="15px" />
-                <span>{$t`Save HTML`}</span>
-              </button>
-              <button
-                type="button"
-                class="header-button"
-                on:click={closeReportViewer}
-              >
-                <span>{$t`Close report`}</span>
-              </button>
-              <button
-                type="button"
-                class="header-button"
-                class:active={dashboardLayoutMode}
-                disabled={!report}
-                aria-pressed={dashboardLayoutMode}
-                on:click={() => (dashboardLayoutMode = !dashboardLayoutMode)}
-              >
-                <LayoutDashboardIcon size="15px" />
-                <span
-                  >{dashboardLayoutMode
-                    ? $t`Finish layout`
-                    : $t`Customize layout`}</span
-                >
-              </button>
-              {#if dashboardLayoutMode}
-                <button
-                  type="button"
-                  class="header-button"
-                  on:click={resetDashboardLayout}
-                  title={$t`Reset dashboard layout`}
-                >
-                  <RefreshIcon size="15px" />
-                  <span>{$t`Reset layout`}</span>
-                </button>
-              {/if}
-            </div>
-          </div>
-          <nav class="report-viewer-nav" aria-label={$t`Report sections`}>
-            <button
-              type="button"
-              on:click={() => scrollReportSection("report-summary")}
-              >{$t`Summary`}</button
-            >
-            <button
-              type="button"
-              on:click={() => scrollReportSection("timeline-title")}
-              >{$t`Activity over time`}</button
-            >
-            <button
-              type="button"
-              on:click={() => scrollReportSection("heatmap-title")}
-              >{$t`When activity happens`}</button
-            >
-            <button
-              type="button"
-              on:click={() => scrollReportSection("response-time-title")}
-              >{$t`First response speed`}</button
-            >
-            <button
-              type="button"
-              on:click={() => scrollReportSection("responders-title")}
-              >{$t`Who answers`}</button
-            >
-            <button
-              type="button"
-              on:click={() => scrollReportSection("topics-title")}
-              >{$t`Frequent requests`}</button
-            >
-            <button
-              type="button"
-              on:click={() => scrollReportSection("categories-title")}
-              >{$t`Categories and tags`}</button
-            >
-            <button
-              type="button"
-              on:click={() => scrollReportSection("calendar-title")}
-              >{$t`Calendar workload`}</button
-            >
-          </nav>
-        </div>
-        <div
-          class="report-viewer-content"
-          bind:this={reportViewerContentElement}
-          on:scroll={() =>
-            (reportViewerScrollTop = reportViewerContentElement?.scrollTop ?? 0)}
-        >
-    <div class="report-meta">
-      <span class="period-label">{formatRange(report.range)}</span>
-      <span class="meta-divider">·</span>
-      {#if report.mailAccountFilter}
-        <span class="scope-label"
-          >{$t`Mailbox`}: {report.mailAccountFilter.accountName}{report
-            .mailAccountFilter.email
-            ? ` — ${report.mailAccountFilter.email}`
-            : ""}</span
-        >
-        <span class="meta-divider">·</span>
-      {/if}
-      {#if report.mailFolderFilter}
-        <span class="scope-label"
-          >{$t`Folder`}: {report.mailFolderFilter.name}</span
-        >
-        <span class="meta-divider">·</span>
-      {/if}
-      <span>{$t`Updated`} {formatDateTime(report.generatedAt)}</span>
-      <span class="meta-divider">·</span>
-      <span>{$t`Granularity`}: {granularityLabel(report.granularity)}</span>
-      <span class="meta-divider">·</span>
-      <span
-        >{$t`Response target`}: {formatNumber(
-          report.summary.responseTargetMinutes,
-        )}
-        {$t`working minutes`}</span
-      >
-    </div>
-
-    {#if exportError}
-      <p class="export-error" role="alert">
-        {$t`The report could not be exported.`}
-        {exportError.message}
-      </p>
-    {/if}
-    {#if exportNotice}
-      <p class="export-success" role="status">
-        {$t`Report downloaded.`}
-        <span class="export-file-name">{downloadedFilename}</span> · {$t`Downloads`}
-      </p>
-    {/if}
-
-    <section
-      id="report-summary"
-      class="summary-grid"
-      aria-label={$t`Summary`}
-    >
-      <article class="summary-card summary-primary">
-        <div class="summary-card-heading">
-          <span>{$t`Observed activity`}</span>
-          <ActivityIcon size="17px" />
-        </div>
-        <strong>{formatNumber(report.summary.activityCount)}</strong>
-        <p>{$t`outgoing messages, events and file changes`}</p>
-      </article>
-      <article class="summary-card">
-        <div class="summary-card-heading">
-          <span>{$t`Mail`}</span>
-          <MailIcon size="17px" />
-        </div>
-        <strong>{formatNumber(report.summary.mailMessages)}</strong>
-        <p>
-          {formatNumber(report.summary.mailIncoming)}
-          {$t`received`} · {formatNumber(report.summary.mailOutgoing)}
-          {$t`sent`}
-        </p>
-      </article>
-      <article class="summary-card response-card">
-        <div class="summary-card-heading">
-          <span>{$t`Requests answered`}</span>
-          <ArrowUpIcon size="17px" />
-        </div>
-        <strong>{formatPercent(report.summary.responseRate)}</strong>
-        <p>
-          <span class="response-count"
-            >{formatNumber(report.summary.mailAnswered)} /
-            {formatNumber(report.summary.mailIncoming)}</span
-          >
-          {$t`incoming requests answered in the selected period`}
-        </p>
-      </article>
-      <article class="summary-card">
-        <div class="summary-card-heading">
-          <span>{$t`Calendar`}</span>
-          <CalendarIcon size="17px" />
-        </div>
-        <strong>{formatHours(report.summary.calendarHours)}</strong>
-        <p>
-          {formatNumber(report.summary.calendarEvents)}
-          {$t`events`} · {formatNumber(report.calendar.summary.onlineMeetings)}
-          {$t`online`}
-        </p>
-      </article>
-      <article class="summary-card">
-        <div class="summary-card-heading">
-          <span>{$t`Chat`}</span>
-          <ChatIcon size="17px" />
-        </div>
-        <strong>{formatNumber(report.summary.chatMessages)}</strong>
-        <p>
-          {formatNumber(report.summary.chatOutgoing)}
-          {$t`sent`} · {formatNumber(report.summary.chatIncoming)}
-          {$t`received`}
-        </p>
-      </article>
-      <article class="summary-card">
-        <div class="summary-card-heading">
-          <span>{$t`Files changed`}</span>
-          <FilesIcon size="17px" />
-        </div>
-        <strong>{formatNumber(report.summary.filesChanged)}</strong>
-        <p>
-          {formatBytes(report.summary.fileBytes)} · {formatPeakDay(
-            report.summary.peakWeekday,
-          )}
-        </p>
-      </article>
-    </section>
-
-    {#if dashboardLayoutMode}
-      <p class="layout-help" role="status">
-        {$t`Drag blocks by the handle, use the arrows to reorder them, and choose a width or height. The layout is saved on this device.`}
-      </p>
-    {/if}
-
+  {:else if reportViewerOpen}
     <div
-      class="dashboard-grid"
-      class:layout-editing={dashboardLayoutMode}
-      role="list"
+      class="report-viewer"
+      bind:this={reportViewerElement}
+      on:keydown|capture={onReportViewerKeydown}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="report-viewer-title"
+      tabindex="-1"
     >
-      <div
-        class={dashboardPanelClass("timeline", dashboardLayout)}
-        style={dashboardPanelStyle("timeline", dashboardLayout)}
-        role="listitem"
-        draggable={dashboardLayoutMode}
-        on:dragstart={(event) => onDashboardDragStart("timeline", event)}
-        on:dragover|preventDefault
-        on:drop={(event) => onDashboardDrop("timeline", event)}
-        on:dragend={onDashboardDragEnd}
-      >
-        {#if dashboardLayoutMode}
-          <ReportPanelControls
-            sectionId="timeline"
-            sectionLabel={dashboardSectionLabel("timeline")}
-            width={dashboardPanel("timeline").width}
-            tall={dashboardPanel("timeline").tall}
-            on:move={(event) => onDashboardMove("timeline", event)}
-            on:width={(event) => onDashboardWidth("timeline", event)}
-            on:height={(event) => onDashboardHeight("timeline", event)}
-          />
-        {/if}
-        <section class="panel timeline-panel" aria-labelledby="timeline-title">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">{$t`TREND`}</p>
-              <h2 id="timeline-title">{$t`Activity over time`}</h2>
-              <p>{$t`Communication, meetings and file changes in one view.`}</p>
-            </div>
-            <div class="legend" aria-label={$t`Chart legend`}>
-              <span><i class="legend-dot mail-in"></i>{$t`Mail in`}</span>
-              <span><i class="legend-dot mail-out"></i>{$t`Mail out`}</span>
-              <span><i class="legend-dot chat-out"></i>{$t`Chat`}</span>
-              <span><i class="legend-dot calendar"></i>{$t`Calendar`}</span>
-              <span><i class="legend-dot files"></i>{$t`Files`}</span>
-            </div>
+      <div class="report-viewer-topbar">
+        <div class="report-viewer-header">
+          <div>
+            <p class="eyebrow">{$t`DETAILED REPORT`}</p>
+            <h2 id="report-viewer-title">{$t`Detailed report`}</h2>
+            <p>
+              {$t`Review charts, tables and response details inside Jackdaw. Save an HTML copy when you are ready.`}
+            </p>
           </div>
-          <div
-            class="timeline-scroll"
-            tabindex="0"
-            aria-label={$t`Activity chart`}
-          >
-            <div
-              class="timeline-chart"
-              style={`--timeline-columns: ${Math.max(report.timeline.length, 1)}`}
+          <div class="header-actions">
+            <button
+              type="button"
+              class="header-button"
+              disabled={!report || loading || exporting != null}
+              aria-busy={exporting == "html"}
+              on:click={exportHTML}
             >
-              {#each report.timeline as point}
-                <div class="timeline-item" title={timelineTitle(point)}>
-                  <div class="bar-area">
-                    <div class="bar-stack">
-                      <span
-                        class="bar mail-in"
-                        style={`height: ${barHeight(point.mailIncoming)}%`}
-                      ></span>
-                      <span
-                        class="bar mail-out"
-                        style={`height: ${barHeight(point.mailOutgoing)}%`}
-                      ></span>
-                      <span
-                        class="bar chat-out"
-                        style={`height: ${barHeight(point.chatIncoming + point.chatOutgoing)}%`}
-                      ></span>
-                      <span
-                        class="bar calendar"
-                        style={`height: ${barHeight(point.calendarEvents)}%`}
-                      ></span>
-                      <span
-                        class="bar files"
-                        style={`height: ${barHeight(point.filesChanged)}%`}
-                      ></span>
+              <DownloadIcon size="15px" />
+              <span>{$t`Save HTML`}</span>
+            </button>
+            <button
+              type="button"
+              class="header-button"
+              on:click={closeReportViewer}
+            >
+              <span>{$t`Close report`}</span>
+            </button>
+            <button
+              type="button"
+              class="header-button"
+              class:active={dashboardLayoutMode}
+              disabled={!report}
+              aria-pressed={dashboardLayoutMode}
+              on:click={() => (dashboardLayoutMode = !dashboardLayoutMode)}
+            >
+              <LayoutDashboardIcon size="15px" />
+              <span
+                >{dashboardLayoutMode
+                  ? $t`Finish layout`
+                  : $t`Customize layout`}</span
+              >
+            </button>
+            {#if dashboardLayoutMode}
+              <button
+                type="button"
+                class="header-button"
+                on:click={resetDashboardLayout}
+                title={$t`Reset dashboard layout`}
+              >
+                <RefreshIcon size="15px" />
+                <span>{$t`Reset layout`}</span>
+              </button>
+            {/if}
+          </div>
+        </div>
+        <nav class="report-viewer-nav" aria-label={$t`Report sections`}>
+          <button
+            type="button"
+            on:click={() => scrollReportSection("report-summary")}
+            >{$t`Summary`}</button
+          >
+          <button
+            type="button"
+            on:click={() => scrollReportSection("timeline-title")}
+            >{$t`Activity over time`}</button
+          >
+          <button
+            type="button"
+            on:click={() => scrollReportSection("heatmap-title")}
+            >{$t`When activity happens`}</button
+          >
+          <button
+            type="button"
+            on:click={() => scrollReportSection("response-time-title")}
+            >{$t`First response speed`}</button
+          >
+          <button
+            type="button"
+            on:click={() => scrollReportSection("responders-title")}
+            >{$t`Who answers`}</button
+          >
+          <button
+            type="button"
+            on:click={() => scrollReportSection("category-rhythm-title")}
+            >{$t`Work rhythm by employee`}</button
+          >
+          <button
+            type="button"
+            on:click={() => scrollReportSection("topics-title")}
+            >{$t`Frequent requests`}</button
+          >
+          <button
+            type="button"
+            on:click={() => scrollReportSection("categories-title")}
+            >{$t`Categories and tags`}</button
+          >
+          <button
+            type="button"
+            on:click={() => scrollReportSection("calendar-title")}
+            >{$t`Calendar workload`}</button
+          >
+        </nav>
+      </div>
+      <div
+        class="report-viewer-content"
+        bind:this={reportViewerContentElement}
+        on:scroll={() =>
+          (reportViewerScrollTop = reportViewerContentElement?.scrollTop ?? 0)}
+      >
+        <div class="report-meta">
+          <span class="period-label">{formatRange(report.range)}</span>
+          <span class="meta-divider">·</span>
+          {#if report.mailAccountFilter}
+            <span class="scope-label"
+              >{$t`Mailbox`}: {report.mailAccountFilter.accountName}{report
+                .mailAccountFilter.email
+                ? ` — ${report.mailAccountFilter.email}`
+                : ""}</span
+            >
+            <span class="meta-divider">·</span>
+          {/if}
+          {#if report.mailFolderFilter}
+            <span class="scope-label"
+              >{$t`Folder`}: {report.mailFolderFilter.name}</span
+            >
+            <span class="meta-divider">·</span>
+          {/if}
+          <span>{$t`Updated`} {formatDateTime(report.generatedAt)}</span>
+          <span class="meta-divider">·</span>
+          <span>{$t`Granularity`}: {granularityLabel(report.granularity)}</span>
+          <span class="meta-divider">·</span>
+          <span
+            >{$t`Response target`}: {formatNumber(
+              report.summary.responseTargetMinutes,
+            )}
+            {$t`working minutes`}</span
+          >
+        </div>
+
+        {#if exportError}
+          <p class="export-error" role="alert">
+            {$t`The report could not be exported.`}
+            {exportError.message}
+          </p>
+        {/if}
+        {#if exportNotice}
+          <p class="export-success" role="status">
+            {$t`Report downloaded.`}
+            <span class="export-file-name">{downloadedFilename}</span> · {$t`Downloads`}
+          </p>
+        {/if}
+
+        <section
+          id="report-summary"
+          class="summary-grid"
+          aria-label={$t`Summary`}
+        >
+          <article class="summary-card summary-primary">
+            <div class="summary-card-heading">
+              <span>{$t`Observed activity`}</span>
+              <ActivityIcon size="17px" />
+            </div>
+            <strong>{formatNumber(report.summary.activityCount)}</strong>
+            <p>{$t`outgoing messages, events and file changes`}</p>
+          </article>
+          <article class="summary-card">
+            <div class="summary-card-heading">
+              <span>{$t`Mail`}</span>
+              <MailIcon size="17px" />
+            </div>
+            <strong>{formatNumber(report.summary.mailMessages)}</strong>
+            <p>
+              {formatNumber(report.summary.mailIncoming)}
+              {$t`received`} · {formatNumber(report.summary.mailOutgoing)}
+              {$t`sent`}
+            </p>
+          </article>
+          <article class="summary-card response-card">
+            <div class="summary-card-heading">
+              <span>{$t`Requests answered`}</span>
+              <ArrowUpIcon size="17px" />
+            </div>
+            <strong>{formatPercent(report.summary.responseRate)}</strong>
+            <p>
+              <span class="response-count"
+                >{formatNumber(report.summary.mailAnswered)} /
+                {formatNumber(report.summary.mailIncoming)}</span
+              >
+              {$t`incoming requests answered in the selected period`}
+            </p>
+          </article>
+          <article class="summary-card">
+            <div class="summary-card-heading">
+              <span>{$t`Calendar`}</span>
+              <CalendarIcon size="17px" />
+            </div>
+            <strong>{formatHours(report.summary.calendarHours)}</strong>
+            <p>
+              {formatNumber(report.summary.calendarEvents)}
+              {$t`events`} · {formatNumber(
+                report.calendar.summary.onlineMeetings,
+              )}
+              {$t`online`}
+            </p>
+          </article>
+          <article class="summary-card">
+            <div class="summary-card-heading">
+              <span>{$t`Chat`}</span>
+              <ChatIcon size="17px" />
+            </div>
+            <strong>{formatNumber(report.summary.chatMessages)}</strong>
+            <p>
+              {formatNumber(report.summary.chatOutgoing)}
+              {$t`sent`} · {formatNumber(report.summary.chatIncoming)}
+              {$t`received`}
+            </p>
+          </article>
+          <article class="summary-card">
+            <div class="summary-card-heading">
+              <span>{$t`Files changed`}</span>
+              <FilesIcon size="17px" />
+            </div>
+            <strong>{formatNumber(report.summary.filesChanged)}</strong>
+            <p>
+              {formatBytes(report.summary.fileBytes)} · {formatPeakDay(
+                report.summary.peakWeekday,
+              )}
+            </p>
+          </article>
+        </section>
+
+        {#if dashboardLayoutMode}
+          <p class="layout-help" role="status">
+            {$t`Drag blocks by the handle, use the arrows to reorder them, and choose a width or height. The layout is saved on this device.`}
+          </p>
+        {/if}
+
+        <div
+          class="dashboard-grid"
+          class:layout-editing={dashboardLayoutMode}
+          role="list"
+        >
+          <div
+            class={dashboardPanelClass("timeline", dashboardLayout)}
+            style={dashboardPanelStyle("timeline", dashboardLayout)}
+            role="listitem"
+            draggable={dashboardLayoutMode}
+            on:dragstart={(event) => onDashboardDragStart("timeline", event)}
+            on:dragover|preventDefault
+            on:drop={(event) => onDashboardDrop("timeline", event)}
+            on:dragend={onDashboardDragEnd}
+          >
+            {#if dashboardLayoutMode}
+              <ReportPanelControls
+                sectionId="timeline"
+                sectionLabel={dashboardSectionLabel("timeline")}
+                width={dashboardPanel("timeline").width}
+                tall={dashboardPanel("timeline").tall}
+                on:move={(event) => onDashboardMove("timeline", event)}
+                on:width={(event) => onDashboardWidth("timeline", event)}
+                on:height={(event) => onDashboardHeight("timeline", event)}
+              />
+            {/if}
+            <section
+              class="panel timeline-panel"
+              aria-labelledby="timeline-title"
+            >
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">{$t`TREND`}</p>
+                  <h2 id="timeline-title">{$t`Activity over time`}</h2>
+                  <p>
+                    {$t`Communication, meetings and file changes in one view.`}
+                  </p>
+                </div>
+                <div class="legend" aria-label={$t`Chart legend`}>
+                  <span><i class="legend-dot mail-in"></i>{$t`Mail in`}</span>
+                  <span><i class="legend-dot mail-out"></i>{$t`Mail out`}</span>
+                  <span><i class="legend-dot chat-out"></i>{$t`Chat`}</span>
+                  <span><i class="legend-dot calendar"></i>{$t`Calendar`}</span>
+                  <span><i class="legend-dot files"></i>{$t`Files`}</span>
+                </div>
+              </div>
+              <div
+                class="timeline-scroll"
+                tabindex="0"
+                aria-label={$t`Activity chart`}
+              >
+                <div
+                  class="timeline-chart"
+                  style={`--timeline-columns: ${Math.max(report.timeline.length, 1)}`}
+                >
+                  {#each report.timeline as point}
+                    <div class="timeline-item" title={timelineTitle(point)}>
+                      <div class="bar-area">
+                        <div class="bar-stack">
+                          <span
+                            class="bar mail-in"
+                            style={`height: ${barHeight(point.mailIncoming)}%`}
+                          ></span>
+                          <span
+                            class="bar mail-out"
+                            style={`height: ${barHeight(point.mailOutgoing)}%`}
+                          ></span>
+                          <span
+                            class="bar chat-out"
+                            style={`height: ${barHeight(point.chatIncoming + point.chatOutgoing)}%`}
+                          ></span>
+                          <span
+                            class="bar calendar"
+                            style={`height: ${barHeight(point.calendarEvents)}%`}
+                          ></span>
+                          <span
+                            class="bar files"
+                            style={`height: ${barHeight(point.filesChanged)}%`}
+                          ></span>
+                        </div>
+                      </div>
+                      {#if shouldShowTimelineLabel(point, report.timeline)}
+                        <span class="timeline-label"
+                          >{timelineLabel(
+                            point.start,
+                            report.granularity,
+                          )}</span
+                        >
+                      {/if}
                     </div>
-                  </div>
-                  {#if shouldShowTimelineLabel(point, report.timeline)}
-                    <span class="timeline-label"
-                      >{timelineLabel(point.start, report.granularity)}</span
+                  {/each}
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div
+            class={dashboardPanelClass("heatmap", dashboardLayout)}
+            style={dashboardPanelStyle("heatmap", dashboardLayout)}
+            role="listitem"
+            draggable={dashboardLayoutMode}
+            on:dragstart={(event) => onDashboardDragStart("heatmap", event)}
+            on:dragover|preventDefault
+            on:drop={(event) => onDashboardDrop("heatmap", event)}
+            on:dragend={onDashboardDragEnd}
+          >
+            {#if dashboardLayoutMode}
+              <ReportPanelControls
+                sectionId="heatmap"
+                sectionLabel={dashboardSectionLabel("heatmap")}
+                width={dashboardPanel("heatmap").width}
+                tall={dashboardPanel("heatmap").tall}
+                on:move={(event) => onDashboardMove("heatmap", event)}
+                on:width={(event) => onDashboardWidth("heatmap", event)}
+                on:height={(event) => onDashboardHeight("heatmap", event)}
+              />
+            {/if}
+            <section
+              class="panel heatmap-panel"
+              aria-labelledby="heatmap-title"
+            >
+              <div class="panel-header heatmap-header">
+                <div>
+                  <p class="panel-kicker">{$t`WORK RHYTHM`}</p>
+                  <h2 id="heatmap-title">{$t`When activity happens`}</h2>
+                  <p>
+                    {$t`A proxy for working rhythm: outgoing communication, meetings and file changes.`}
+                  </p>
+                </div>
+                <div class="peak-callout">
+                  <ClockIcon size="16px" />
+                  <span
+                    >{$t`Peak`}
+                    <strong>{formatPeakDay(report.summary.peakWeekday)}</strong
+                    >,
+                    <strong>{formatPeakHour(report.summary.peakHour)}</strong
+                    ></span
+                  >
+                </div>
+              </div>
+              <div class="heatmap-scroll" tabindex="0">
+                <div
+                  class="heatmap"
+                  role="img"
+                  aria-label={$t`Activity by weekday and hour`}
+                >
+                  <span class="heat-corner"></span>
+                  {#each heatmapHours as hour}
+                    <span class="heat-hour"
+                      >{hour % 4 === 0 ? formatHour(hour) : ""}</span
                     >
+                  {/each}
+                  {#each weekdays as day, weekday}
+                    <span class="heat-day">{day}</span>
+                    {#each heatmapHours as hour}
+                      {@const count = heatmapCount(
+                        report.activity,
+                        weekday,
+                        hour,
+                      )}
+                      <span
+                        class="heat-cell"
+                        style={`--cell-opacity: ${heatmapOpacity(count)};`}
+                        title={`${day}, ${formatHour(hour)} — ${formatNumber(count)}`}
+                        aria-label={`${day}, ${formatHour(hour)} — ${formatNumber(count)}`}
+                      >
+                      </span>
+                    {/each}
+                  {/each}
+                </div>
+              </div>
+              <div class="heatmap-scale" aria-hidden="true">
+                <span>{$t`Less`}</span><i class="scale-cell low"></i><i
+                  class="scale-cell medium"
+                ></i><i class="scale-cell high"></i><span>{$t`More`}</span>
+              </div>
+            </section>
+          </div>
+
+          <div
+            class={dashboardPanelClass("response-time", dashboardLayout)}
+            style={dashboardPanelStyle("response-time", dashboardLayout)}
+            role="listitem"
+            draggable={dashboardLayoutMode}
+            on:dragstart={(event) =>
+              onDashboardDragStart("response-time", event)}
+            on:dragover|preventDefault
+            on:drop={(event) => onDashboardDrop("response-time", event)}
+            on:dragend={onDashboardDragEnd}
+          >
+            {#if dashboardLayoutMode}
+              <ReportPanelControls
+                sectionId="response-time"
+                sectionLabel={dashboardSectionLabel("response-time")}
+                width={dashboardPanel("response-time").width}
+                tall={dashboardPanel("response-time").tall}
+                on:move={(event) => onDashboardMove("response-time", event)}
+                on:width={(event) => onDashboardWidth("response-time", event)}
+                on:height={(event) => onDashboardHeight("response-time", event)}
+              />
+            {/if}
+            <section
+              class="panel response-time-panel"
+              aria-labelledby="response-time-title"
+            >
+              <div class="panel-header">
+                <div>
+                  <p class="panel-kicker">{$t`RESPONSE TIME`}</p>
+                  <h2 id="response-time-title">{$t`First response speed`}</h2>
+                  <p>
+                    {$t`Time from receiving a request to the first verified reply.`}
+                    {$t`Target`}: {formatNumber(
+                      report.summary.responseTargetMinutes,
+                    )}
+                    {$t`working minutes`}.
+                    {$t`Working calendar`}: {formatWorkingHoursSummary(
+                      report.workingHours,
+                    )}.
+                  </p>
+                  {#if unmeasuredOutsideWorkingHoursResponseCount}
+                    <p class="response-time-note">
+                      {$t`${unmeasuredOutsideWorkingHoursResponseCount} replies without a category have no measurable working interval and are excluded from SLA metrics.`}
+                    </p>
                   {/if}
                 </div>
-              {/each}
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <div
-        class={dashboardPanelClass("heatmap", dashboardLayout)}
-        style={dashboardPanelStyle("heatmap", dashboardLayout)}
-        role="listitem"
-        draggable={dashboardLayoutMode}
-        on:dragstart={(event) => onDashboardDragStart("heatmap", event)}
-        on:dragover|preventDefault
-        on:drop={(event) => onDashboardDrop("heatmap", event)}
-        on:dragend={onDashboardDragEnd}
-      >
-        {#if dashboardLayoutMode}
-          <ReportPanelControls
-            sectionId="heatmap"
-            sectionLabel={dashboardSectionLabel("heatmap")}
-            width={dashboardPanel("heatmap").width}
-            tall={dashboardPanel("heatmap").tall}
-            on:move={(event) => onDashboardMove("heatmap", event)}
-            on:width={(event) => onDashboardWidth("heatmap", event)}
-            on:height={(event) => onDashboardHeight("heatmap", event)}
-          />
-        {/if}
-        <section class="panel heatmap-panel" aria-labelledby="heatmap-title">
-          <div class="panel-header heatmap-header">
-            <div>
-              <p class="panel-kicker">{$t`WORK RHYTHM`}</p>
-              <h2 id="heatmap-title">{$t`When activity happens`}</h2>
-              <p>
-                {$t`A proxy for working rhythm: outgoing communication, meetings and file changes.`}
-              </p>
-            </div>
-            <div class="peak-callout">
-              <ClockIcon size="16px" />
-              <span
-                >{$t`Peak`}
-                <strong>{formatPeakDay(report.summary.peakWeekday)}</strong>,
-                <strong>{formatPeakHour(report.summary.peakHour)}</strong></span
-              >
-            </div>
-          </div>
-          <div class="heatmap-scroll" tabindex="0">
-            <div
-              class="heatmap"
-              role="img"
-              aria-label={$t`Activity by weekday and hour`}
-            >
-              <span class="heat-corner"></span>
-              {#each heatmapHours as hour}
-                <span class="heat-hour"
-                  >{hour % 4 === 0 ? formatHour(hour) : ""}</span
-                >
-              {/each}
-              {#each weekdays as day, weekday}
-                <span class="heat-day">{day}</span>
-                {#each heatmapHours as hour}
-                  {@const count = heatmapCount(report.activity, weekday, hour)}
+                <div class="response-target-callout">
+                  <ClockIcon size="16px" />
                   <span
-                    class="heat-cell"
-                    style={`--cell-opacity: ${heatmapOpacity(count)};`}
-                    title={`${day}, ${formatHour(hour)} — ${formatNumber(count)}`}
-                    aria-label={`${day}, ${formatHour(hour)} — ${formatNumber(count)}`}
+                    >{$t`Within target`}
+                    <strong
+                      >{formatNumber(visibleResponseTimeStats.withinTarget)} /
+                      {formatNumber(visibleResponseTimeStats.answered)}</strong
+                    ></span
                   >
-                  </span>
-                {/each}
-              {/each}
-            </div>
-          </div>
-          <div class="heatmap-scale" aria-hidden="true">
-            <span>{$t`Less`}</span><i class="scale-cell low"></i><i
-              class="scale-cell medium"
-            ></i><i class="scale-cell high"></i><span>{$t`More`}</span>
-          </div>
-        </section>
-      </div>
-
-      <div
-        class={dashboardPanelClass("response-time", dashboardLayout)}
-        style={dashboardPanelStyle("response-time", dashboardLayout)}
-        role="listitem"
-        draggable={dashboardLayoutMode}
-        on:dragstart={(event) => onDashboardDragStart("response-time", event)}
-        on:dragover|preventDefault
-        on:drop={(event) => onDashboardDrop("response-time", event)}
-        on:dragend={onDashboardDragEnd}
-      >
-        {#if dashboardLayoutMode}
-          <ReportPanelControls
-            sectionId="response-time"
-            sectionLabel={dashboardSectionLabel("response-time")}
-            width={dashboardPanel("response-time").width}
-            tall={dashboardPanel("response-time").tall}
-            on:move={(event) => onDashboardMove("response-time", event)}
-            on:width={(event) => onDashboardWidth("response-time", event)}
-            on:height={(event) => onDashboardHeight("response-time", event)}
-          />
-        {/if}
-        <section
-          class="panel response-time-panel"
-          aria-labelledby="response-time-title"
-        >
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">{$t`RESPONSE TIME`}</p>
-              <h2 id="response-time-title">{$t`First response speed`}</h2>
-              <p>
-                {$t`Time from receiving a request to the first verified reply.`}
-                {$t`Target`}: {formatNumber(
-                  report.summary.responseTargetMinutes,
-                )}
-                {$t`working minutes`}.
-                {$t`Working calendar`}: {formatWorkingHoursSummary(
-                  report.workingHours,
-                )}.
-              </p>
-              {#if outsideWorkingHoursResponseCount}
-                <p class="response-time-note">
-                  {$t`${outsideWorkingHoursResponseCount} replies were answered outside working hours and are excluded from SLA metrics.`}
-                </p>
-              {/if}
-            </div>
-            <div class="response-target-callout">
-              <ClockIcon size="16px" />
-              <span
-                >{$t`Within target`}
-                <strong
-                  >{formatNumber(visibleResponseTimeStats.withinTarget)} /
-                  {formatNumber(visibleResponseTimeStats.answered)}</strong
-                ></span
-              >
-            </div>
-          </div>
-
-          <div class="response-metrics">
-            <article class="response-metric">
-              <span>{$t`Average response time`}</span>
-              <strong
-                >{formatDuration(
-                  visibleResponseTimeStats.averageSeconds,
-                )}</strong
-              >
-              <small>{$t`for replies with measured working time`}</small>
-            </article>
-            <article class="response-metric">
-              <span>{$t`Minimum response time`}</span>
-              <strong
-                >{formatDuration(
-                  visibleResponseTimeStats.minimumSeconds,
-                )}</strong
-              >
-              <small>{$t`fastest first reply`}</small>
-            </article>
-            <article class="response-metric response-metric-alert">
-              <span>{$t`Maximum response time`}</span>
-              <strong
-                >{formatDuration(
-                  visibleResponseTimeStats.maximumSeconds,
-                )}</strong
-              >
-              <small>{$t`slowest first reply`}</small>
-            </article>
-            <article class="response-metric response-metric-good">
-              <span>{$t`Within target`}</span>
-              <strong
-                >{formatPercent(
-                  responseRate(
-                    visibleResponseTimeStats.withinTarget,
-                    visibleResponseTimeStats.answered,
-                  ),
-                )}</strong
-              >
-              <small
-                >{formatNumber(visibleResponseTimeStats.withinTarget)}
-                {$t`on time`}</small
-              >
-            </article>
-            <article class="response-metric response-metric-alert">
-              <span>{$t`Over target`}</span>
-              <strong
-                >{formatNumber(visibleResponseTimeStats.overTarget)}</strong
-              >
-              <small>{$t`overdue replies`}</small>
-            </article>
-          </div>
-
-          {#if !visibleResponseTimes.length}
-            <div class="response-empty" role="status">
-              <ClockIcon size="18px" />
-              <span
-                >{$t`No verified replies in this period, so response time is not calculated.`}</span
-              >
-            </div>
-          {/if}
-        </section>
-      </div>
-
-      {#if visibleResponseTimes.length}
-        <div
-          class={dashboardPanelClass("response-details", dashboardLayout)}
-          style={dashboardPanelStyle("response-details", dashboardLayout)}
-          role="listitem"
-          draggable={dashboardLayoutMode}
-          on:dragstart={(event) => onDashboardDragStart("response-details", event)}
-          on:dragover|preventDefault
-          on:drop={(event) => onDashboardDrop("response-details", event)}
-          on:dragend={onDashboardDragEnd}
-        >
-          {#if dashboardLayoutMode}
-            <ReportPanelControls
-              sectionId="response-details"
-              sectionLabel={dashboardSectionLabel("response-details")}
-              width={dashboardPanel("response-details").width}
-              tall={dashboardPanel("response-details").tall}
-              on:move={(event) => onDashboardMove("response-details", event)}
-              on:width={(event) => onDashboardWidth("response-details", event)}
-              on:height={(event) => onDashboardHeight("response-details", event)}
-            />
-          {/if}
-          <section
-            class="panel response-details-panel"
-            aria-labelledby="response-details-title"
-          >
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">{$t`RESPONSE TIME`}</p>
-                <h2 id="response-details-title">{$t`Response details`}</h2>
-                <p>
-                  {$t`All first-response intervals in the selected period. Click a column to sort.`}
-                </p>
+                </div>
               </div>
-            </div>
-            <div class="response-detail-grid">
-              <div class="response-detail-block">
-                <div class="subpanel-heading">
+
+              <div class="response-metrics">
+                <article class="response-metric">
+                  <span>{$t`Average response time`}</span>
+                  <strong
+                    >{formatDuration(
+                      visibleResponseTimeStats.averageSeconds,
+                    )}</strong
+                  >
+                  <small>{$t`for replies with measured response time`}</small>
+                </article>
+                <article class="response-metric">
+                  <span>{$t`Minimum response time`}</span>
+                  <strong
+                    >{formatDuration(
+                      visibleResponseTimeStats.minimumSeconds,
+                    )}</strong
+                  >
+                  <small>{$t`fastest first reply`}</small>
+                </article>
+                <article class="response-metric response-metric-alert">
+                  <span>{$t`Maximum response time`}</span>
+                  <strong
+                    >{formatDuration(
+                      visibleResponseTimeStats.maximumSeconds,
+                    )}</strong
+                  >
+                  <small>{$t`slowest first reply`}</small>
+                </article>
+                <article class="response-metric response-metric-good">
+                  <span>{$t`Within target`}</span>
+                  <strong
+                    >{formatPercent(
+                      responseRate(
+                        visibleResponseTimeStats.withinTarget,
+                        visibleResponseTimeStats.answered,
+                      ),
+                    )}</strong
+                  >
+                  <small
+                    >{formatNumber(visibleResponseTimeStats.withinTarget)}
+                    {$t`on time`}</small
+                  >
+                </article>
+                <article class="response-metric response-metric-alert">
+                  <span>{$t`Over target`}</span>
+                  <strong
+                    >{formatNumber(visibleResponseTimeStats.overTarget)}</strong
+                  >
+                  <small>{$t`overdue replies`}</small>
+                </article>
+                <article class="response-metric response-metric-after-hours">
+                  <span>{$t`First replies outside working hours`}</span>
+                  <strong
+                    >{formatNumber(
+                      outsideWorkingHoursResponseTimes.length,
+                    )}</strong
+                  >
+                  <small
+                    >{formatNumber(categorizedOutsideWorkingHoursResponseCount)}
+                    {$t`with an employee category`}</small
+                  >
+                </article>
+              </div>
+
+              {#if !visibleResponseTimes.length}
+                <div class="response-empty" role="status">
+                  <ClockIcon size="18px" />
+                  <span
+                    >{$t`No verified replies in this period, so response time is not calculated.`}</span
+                  >
+                </div>
+              {/if}
+            </section>
+          </div>
+
+          {#if visibleResponseTimes.length}
+            <div
+              class={dashboardPanelClass("response-details", dashboardLayout)}
+              style={dashboardPanelStyle("response-details", dashboardLayout)}
+              role="listitem"
+              draggable={dashboardLayoutMode}
+              on:dragstart={(event) =>
+                onDashboardDragStart("response-details", event)}
+              on:dragover|preventDefault
+              on:drop={(event) => onDashboardDrop("response-details", event)}
+              on:dragend={onDashboardDragEnd}
+            >
+              {#if dashboardLayoutMode}
+                <ReportPanelControls
+                  sectionId="response-details"
+                  sectionLabel={dashboardSectionLabel("response-details")}
+                  width={dashboardPanel("response-details").width}
+                  tall={dashboardPanel("response-details").tall}
+                  on:move={(event) =>
+                    onDashboardMove("response-details", event)}
+                  on:width={(event) =>
+                    onDashboardWidth("response-details", event)}
+                  on:height={(event) =>
+                    onDashboardHeight("response-details", event)}
+                />
+              {/if}
+              <section
+                class="panel response-details-panel"
+                aria-labelledby="response-details-title"
+              >
+                <div class="panel-header">
                   <div>
-                    <h3>{$t`Days with overdue replies`}</h3>
+                    <p class="panel-kicker">{$t`RESPONSE TIME`}</p>
+                    <h2 id="response-details-title">{$t`Response details`}</h2>
                     <p>
-                      {$t`Days with replies beyond the target. Click a column to sort.`}
+                      {$t`All first-response intervals in the selected period. Click a column to sort.`}
                     </p>
                   </div>
                 </div>
+                <div class="response-detail-grid">
+                  <div class="response-detail-block">
+                    <div class="subpanel-heading">
+                      <div>
+                        <h3>{$t`Days with overdue replies`}</h3>
+                        <p>
+                          {$t`Days with replies beyond the target. Click a column to sort.`}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="table-wrap">
+                      <table class="responsive-report-table response-day-table">
+                        <caption class="visually-hidden"
+                          >{$t`Response time by day`}</caption
+                        >
+                        <thead>
+                          <tr>
+                            <th
+                              scope="col"
+                              aria-sort={reportSortAriaValue(
+                                responseDaySort,
+                                "day",
+                              )}
+                            >
+                              <ReportSortButton
+                                label={$t`Day`}
+                                direction={reportSortDirection(
+                                  responseDaySort,
+                                  "day",
+                                )}
+                                on:sort={() =>
+                                  (responseDaySort = toggleReportSort(
+                                    responseDaySort,
+                                    "day",
+                                  ))}
+                              />
+                            </th>
+                            <th
+                              scope="col"
+                              class="numeric"
+                              aria-sort={reportSortAriaValue(
+                                responseDaySort,
+                                "answered",
+                              )}
+                            >
+                              <ReportSortButton
+                                label={$t`Answered`}
+                                align="right"
+                                direction={reportSortDirection(
+                                  responseDaySort,
+                                  "answered",
+                                )}
+                                on:sort={() =>
+                                  (responseDaySort = toggleReportSort(
+                                    responseDaySort,
+                                    "answered",
+                                  ))}
+                              />
+                            </th>
+                            <th
+                              scope="col"
+                              class="numeric"
+                              aria-sort={reportSortAriaValue(
+                                responseDaySort,
+                                "average",
+                              )}
+                            >
+                              <ReportSortButton
+                                label={$t`Average`}
+                                align="right"
+                                direction={reportSortDirection(
+                                  responseDaySort,
+                                  "average",
+                                )}
+                                on:sort={() =>
+                                  (responseDaySort = toggleReportSort(
+                                    responseDaySort,
+                                    "average",
+                                  ))}
+                              />
+                            </th>
+                            <th
+                              scope="col"
+                              class="numeric"
+                              aria-sort={reportSortAriaValue(
+                                responseDaySort,
+                                "maximum",
+                              )}
+                            >
+                              <ReportSortButton
+                                label={$t`Maximum`}
+                                align="right"
+                                direction={reportSortDirection(
+                                  responseDaySort,
+                                  "maximum",
+                                )}
+                                on:sort={() =>
+                                  (responseDaySort = toggleReportSort(
+                                    responseDaySort,
+                                    "maximum",
+                                  ))}
+                              />
+                            </th>
+                            <th
+                              scope="col"
+                              class="numeric"
+                              aria-sort={reportSortAriaValue(
+                                responseDaySort,
+                                "overTarget",
+                              )}
+                            >
+                              <ReportSortButton
+                                label={$t`Over target`}
+                                align="right"
+                                direction={reportSortDirection(
+                                  responseDaySort,
+                                  "overTarget",
+                                )}
+                                on:sort={() =>
+                                  (responseDaySort = toggleReportSort(
+                                    responseDaySort,
+                                    "overTarget",
+                                  ))}
+                              />
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {#each sortedResponseTimeDays as day}
+                            <tr>
+                              <th scope="row" data-label={$t`Day`}
+                                >{formatDate(parseInputDate(day.day))}</th
+                              >
+                              <td class="numeric" data-label={$t`Answered`}
+                                >{formatNumber(day.answered)}</td
+                              >
+                              <td class="numeric" data-label={$t`Average`}
+                                >{formatDuration(day.averageSeconds)}</td
+                              >
+                              <td class="numeric" data-label={$t`Maximum`}
+                                >{formatDuration(day.maximumSeconds)}</td
+                              >
+                              <td
+                                class="numeric overdue-value"
+                                data-label={$t`Over target`}
+                                >{formatNumber(day.overTarget)}</td
+                              >
+                            </tr>
+                          {:else}
+                            <tr>
+                              <td colspan="5" class="empty-cell"
+                                >{$t`No overdue replies in this period.`}</td
+                              >
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div class="response-detail-block">
+                    <div class="table-wrap">
+                      <table
+                        class="responsive-report-table response-detail-table"
+                      >
+                        <caption class="visually-hidden"
+                          >{$t`Response details`}</caption
+                        >
+                        <thead>
+                          <tr>
+                            <th
+                              scope="col"
+                              aria-sort={reportSortAriaValue(
+                                responseDetailSort,
+                                "received",
+                              )}
+                            >
+                              <ReportSortButton
+                                label={$t`Received`}
+                                direction={reportSortDirection(
+                                  responseDetailSort,
+                                  "received",
+                                )}
+                                on:sort={() =>
+                                  (responseDetailSort = toggleReportSort(
+                                    responseDetailSort,
+                                    "received",
+                                  ))}
+                              />
+                            </th>
+                            <th
+                              scope="col"
+                              aria-sort={reportSortAriaValue(
+                                responseDetailSort,
+                                "replied",
+                              )}
+                            >
+                              <ReportSortButton
+                                label={$t`Replied`}
+                                direction={reportSortDirection(
+                                  responseDetailSort,
+                                  "replied",
+                                )}
+                                on:sort={() =>
+                                  (responseDetailSort = toggleReportSort(
+                                    responseDetailSort,
+                                    "replied",
+                                  ))}
+                              />
+                            </th>
+                            <th
+                              scope="col"
+                              class="numeric"
+                              aria-sort={reportSortAriaValue(
+                                responseDetailSort,
+                                "responseTime",
+                              )}
+                            >
+                              <ReportSortButton
+                                label={$t`Response time`}
+                                align="right"
+                                direction={reportSortDirection(
+                                  responseDetailSort,
+                                  "responseTime",
+                                )}
+                                on:sort={() =>
+                                  (responseDetailSort = toggleReportSort(
+                                    responseDetailSort,
+                                    "responseTime",
+                                  ))}
+                              />
+                            </th>
+                            <th
+                              scope="col"
+                              aria-sort={reportSortAriaValue(
+                                responseDetailSort,
+                                "responder",
+                              )}
+                            >
+                              <ReportSortButton
+                                label={responderAttributionMode == "category"
+                                  ? $t`Responder`
+                                  : $t`Profile`}
+                                direction={reportSortDirection(
+                                  responseDetailSort,
+                                  "responder",
+                                )}
+                                on:sort={() =>
+                                  (responseDetailSort = toggleReportSort(
+                                    responseDetailSort,
+                                    "responder",
+                                  ))}
+                              />
+                            </th>
+                            <th
+                              scope="col"
+                              aria-sort={reportSortAriaValue(
+                                responseDetailSort,
+                                "topic",
+                              )}
+                            >
+                              <ReportSortButton
+                                label={$t`Topic`}
+                                direction={reportSortDirection(
+                                  responseDetailSort,
+                                  "topic",
+                                )}
+                                on:sort={() =>
+                                  (responseDetailSort = toggleReportSort(
+                                    responseDetailSort,
+                                    "topic",
+                                  ))}
+                              />
+                            </th>
+                            <th
+                              scope="col"
+                              aria-sort={reportSortAriaValue(
+                                responseDetailSort,
+                                "status",
+                              )}
+                            >
+                              <ReportSortButton
+                                label={$t`Status`}
+                                direction={reportSortDirection(
+                                  responseDetailSort,
+                                  "status",
+                                )}
+                                on:sort={() =>
+                                  (responseDetailSort = toggleReportSort(
+                                    responseDetailSort,
+                                    "status",
+                                  ))}
+                              />
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {#each sortedResponseTimes as response}
+                            <tr
+                              class:overdue-row={response.withinTarget ===
+                                false}
+                              class:outside-hours-row={isResponseOutsideWorkingHours(
+                                response,
+                              )}
+                            >
+                              <td data-label={$t`Received`}
+                                >{formatDateTime(response.requestAt)}</td
+                              >
+                              <td data-label={$t`Replied`}
+                                >{formatDateTime(response.responseAt)}</td
+                              >
+                              <td class="numeric" data-label={$t`Response time`}
+                                >{formatResponseDuration(response)}</td
+                              >
+                              <td
+                                data-label={responderAttributionMode ==
+                                "category"
+                                  ? $t`Responder`
+                                  : $t`Profile`}
+                                >{responseResponderLabel(response)}</td
+                              >
+                              <td
+                                class="topic-cell"
+                                data-label={$t`Topic`}
+                                title={response.subject}
+                              >
+                                <button
+                                  type="button"
+                                  class="email-link"
+                                  disabled={openingResponseEmailId ==
+                                    response.emailId}
+                                  aria-label={`${$t`Open email`}: ${response.subject}`}
+                                  on:click={() => openReportEmail(response)}
+                                >
+                                  <MailIcon size="13px" />
+                                  <span>{response.subject}</span>
+                                </button>
+                              </td>
+                              <td data-label={$t`Status`}>
+                                <div class="response-status-stack">
+                                  <span
+                                    class="status-pill"
+                                    class:within={response.withinTarget ===
+                                      true}
+                                    class:overdue={response.withinTarget ===
+                                      false}
+                                    class:outside-hours={response.responseTimeStatus ==
+                                      "outside-working-hours"}
+                                    >{formatResponseStatus(response)}</span
+                                  >
+                                  {#if isResponseOutsideWorkingHours(response) && response.responseTimeStatus != "outside-working-hours"}
+                                    <span class="outside-hours-marker"
+                                      >{$t`Outside working hours`}</span
+                                    >
+                                  {/if}
+                                </div>
+                              </td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p class="table-note">
+                      {$t`All response details for this period are shown here. Scroll to review the full list.`}
+                      <span class="outside-hours-legend"
+                        ><i aria-hidden="true"
+                        ></i>{$t`Outside working hours`}</span
+                      >
+                    </p>
+                    {#if responseOpenError}
+                      <p class="response-open-error" role="alert">
+                        {$t`The message could not be opened.`}
+                        {responseOpenError.message}
+                      </p>
+                    {/if}
+                  </div>
+                </div>
+                <div class="response-detail-block after-hours-response-block">
+                  <div class="subpanel-heading">
+                    <div>
+                      <h3>{$t`Who answered outside working hours`}</h3>
+                      <p>
+                        {$t`First verified replies sent outside the selected schedule. An employee category is shown when available; otherwise the mail profile is shown.`}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="table-wrap">
+                    <table
+                      class="responsive-report-table after-hours-response-table"
+                    >
+                      <caption class="visually-hidden"
+                        >{$t`Replies outside working hours`}</caption
+                      >
+                      <thead>
+                        <tr>
+                          <th scope="col">{$t`Replied`}</th>
+                          <th scope="col">{$t`Employee / profile`}</th>
+                          <th scope="col" class="numeric"
+                            >{$t`Response time`}</th
+                          >
+                          <th scope="col">{$t`Topic`}</th>
+                          <th scope="col">{$t`Status`}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {#each outsideWorkingHoursResponseTimes as response}
+                          <tr>
+                            <td data-label={$t`Replied`}
+                              >{formatDateTime(response.responseAt)}</td
+                            >
+                            <td data-label={$t`Employee / profile`}
+                              >{responseAfterHoursOwnerLabel(response)}</td
+                            >
+                            <td class="numeric" data-label={$t`Response time`}
+                              >{formatResponseDuration(response)}</td
+                            >
+                            <td
+                              class="topic-cell"
+                              data-label={$t`Topic`}
+                              title={response.subject}
+                            >
+                              <button
+                                type="button"
+                                class="email-link"
+                                disabled={openingResponseEmailId ==
+                                  response.emailId}
+                                aria-label={`${$t`Open email`}: ${response.subject}`}
+                                on:click={() => openReportEmail(response)}
+                              >
+                                <MailIcon size="13px" />
+                                <span>{response.subject}</span>
+                              </button>
+                            </td>
+                            <td data-label={$t`Status`}>
+                              <span
+                                class="status-pill"
+                                class:within={response.withinTarget === true}
+                                class:overdue={response.withinTarget === false}
+                                class:outside-hours={response.responseTimeStatus ==
+                                  "outside-working-hours"}
+                                >{formatResponseStatus(response)}</span
+                              >
+                            </td>
+                          </tr>
+                        {:else}
+                          <tr>
+                            <td colspan="5" class="empty-cell"
+                              >{$t`No first replies were sent outside working hours in this period.`}</td
+                            >
+                          </tr>
+                        {/each}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p class="table-note">
+                    {$t`The list is sorted by reply time, newest first. Click a topic to open the email.`}
+                  </p>
+                </div>
+              </section>
+            </div>
+          {/if}
+
+          <div
+            class={dashboardPanelClass("category-rhythm", dashboardLayout)}
+            style={dashboardPanelStyle("category-rhythm", dashboardLayout)}
+            role="listitem"
+            draggable={dashboardLayoutMode}
+            on:dragstart={(event) =>
+              onDashboardDragStart("category-rhythm", event)}
+            on:dragover|preventDefault
+            on:drop={(event) => onDashboardDrop("category-rhythm", event)}
+            on:dragend={onDashboardDragEnd}
+          >
+            {#if dashboardLayoutMode}
+              <ReportPanelControls
+                sectionId="category-rhythm"
+                sectionLabel={dashboardSectionLabel("category-rhythm")}
+                width={dashboardPanel("category-rhythm", dashboardLayout).width}
+                tall={dashboardPanel("category-rhythm", dashboardLayout).tall}
+                on:move={(event) => onDashboardMove("category-rhythm", event)}
+                on:width={(event) => onDashboardWidth("category-rhythm", event)}
+                on:height={(event) =>
+                  onDashboardHeight("category-rhythm", event)}
+              />
+            {/if}
+            <section
+              class="panel category-rhythm-panel"
+              aria-labelledby="category-rhythm-title"
+            >
+              <div class="panel-header category-rhythm-header">
+                <div>
+                  <p class="panel-kicker">{$t`EMPLOYEE RHYTHM`}</p>
+                  <h2 id="category-rhythm-title">
+                    {$t`Work rhythm by employee`}
+                  </h2>
+                  <p>
+                    {$t`First verified replies grouped by employee categories. Empty slots mean no recorded reply, not proven absence.`}
+                  </p>
+                </div>
+                <div class="rhythm-leader-callout">
+                  <UsersIcon size="16px" />
+                  <span>
+                    {$t`After-hours leader`}
+                    {#if topAfterHoursCategory}
+                      <strong>{topAfterHoursCategory.name}</strong>
+                      <strong
+                        >{formatNumber(
+                          topAfterHoursCategory.afterHours,
+                        )}</strong
+                      >
+                    {:else}
+                      <strong>—</strong>
+                    {/if}
+                  </span>
+                </div>
+              </div>
+
+              {#if categoryRhythmRows.length}
+                <div class="category-rhythm-grid">
+                  <div class="rhythm-ranking">
+                    <div class="subpanel-heading">
+                      <div>
+                        <h3>{$t`Who answers most outside working hours`}</h3>
+                        <p>
+                          {$t`Ranked by first replies sent outside the selected schedule.`}
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      class="rhythm-bar-chart"
+                      role="list"
+                      aria-label={$t`After-hours replies by employee`}
+                    >
+                      {#each afterHoursCategoryRows.slice(0, 12) as row, index}
+                        <button
+                          type="button"
+                          class="rhythm-rank-row"
+                          class:active={effectiveRhythmCategoryName == row.name}
+                          aria-pressed={effectiveRhythmCategoryName == row.name}
+                          aria-label={`${row.name}: ${formatNumber(row.afterHours)} ${$t`after-hours replies`}`}
+                          on:click={() =>
+                            (selectedRhythmCategoryName = row.name)}
+                        >
+                          <span class="rhythm-rank-index">{index + 1}</span>
+                          <span class="rhythm-rank-name">{row.name}</span>
+                          <span class="rhythm-rank-track" aria-hidden="true"
+                            ><span
+                              style={`width: ${rhythmBarWidth(row.afterHours, afterHoursCategoryMax)}`}
+                            ></span></span
+                          >
+                          <strong class="rhythm-rank-count"
+                            >{formatNumber(row.afterHours)}</strong
+                          >
+                          <small>{formatPercent(row.afterHoursRate)}</small>
+                        </button>
+                      {:else}
+                        <div class="response-empty" role="status">
+                          <ClockIcon size="18px" />
+                          <span
+                            >{$t`No categorized replies were sent outside working hours in this period.`}</span
+                          >
+                        </div>
+                      {/each}
+                    </div>
+                    <p class="table-note">
+                      {$t`One reply with several categories is counted once for each category.`}
+                    </p>
+                  </div>
+
+                  <div class="category-rhythm-focus">
+                    <div class="subpanel-heading rhythm-focus-heading">
+                      <div>
+                        <h3>{$t`Rhythm for one employee`}</h3>
+                        <p>
+                          {$t`Choose a category to see its response pattern by weekday and hour.`}
+                        </p>
+                      </div>
+                      <label class="rhythm-category-select">
+                        <span class="visually-hidden"
+                          >{$t`Employee category`}</span
+                        >
+                        <select
+                          value={effectiveRhythmCategoryName}
+                          aria-label={$t`Choose employee category`}
+                          on:change={onRhythmCategoryChange}
+                        >
+                          {#each sortedCategoryRhythmRows as row}
+                            <option value={row.name}>{row.name}</option>
+                          {/each}
+                        </select>
+                      </label>
+                    </div>
+                    {#if selectedCategoryRhythmRow}
+                      <div class="rhythm-focus-stats">
+                        <div>
+                          <span>{$t`Peak`}</span>
+                          <strong
+                            >{formatRhythmSlot(
+                              selectedCategoryRhythmRow.peakWeekday,
+                              selectedCategoryRhythmRow.peakHour,
+                            )}</strong
+                          >
+                          <small
+                            >{formatNumber(selectedCategoryRhythmRow.peakCount)}
+                            {$t`replies`}</small
+                          >
+                        </div>
+                        <div>
+                          <span>{$t`Quietest recorded slot`}</span>
+                          <strong
+                            >{formatRhythmSlot(
+                              selectedCategoryRhythmRow.quietSlotWeekday,
+                              selectedCategoryRhythmRow.quietSlotHour,
+                            )}</strong
+                          >
+                          <small
+                            >{formatNumber(
+                              selectedCategoryRhythmRow.quietSlotCount,
+                            )}
+                            {$t`replies in this slot`}</small
+                          >
+                        </div>
+                        <div>
+                          <span>{$t`Active days`}</span>
+                          <strong
+                            >{formatNumber(
+                              selectedCategoryRhythmRow.activeDays,
+                            )}</strong
+                          >
+                          <small
+                            >{formatNumber(
+                              selectedCategoryRhythmRow.activeWeekdays,
+                            )}
+                            {$t`weekdays with replies`}</small
+                          >
+                        </div>
+                        <div>
+                          <span>{$t`Quiet work slots`}</span>
+                          <strong
+                            >{formatNumber(
+                              selectedCategoryRhythmRow.quietWorkingSlots,
+                            )}</strong
+                          >
+                          <small
+                            >{$t`of`}
+                            {formatNumber(
+                              selectedCategoryRhythmRow.workingSlots,
+                            )}
+                            {$t`scheduled slots`}</small
+                          >
+                        </div>
+                      </div>
+                      <div class="category-rhythm-heatmap-scroll" tabindex="0">
+                        <div
+                          class="category-rhythm-heatmap"
+                          role="img"
+                          aria-label={`${selectedCategoryRhythmRow.name}: ${$t`activity by weekday and hour`}`}
+                        >
+                          <span class="heat-corner"></span>
+                          {#each heatmapHours as hour}
+                            <span class="heat-hour"
+                              >{hour % 4 === 0 ? formatHour(hour) : ""}</span
+                            >
+                          {/each}
+                          {#each weekdays as day, weekday}
+                            <span class="heat-day">{day}</span>
+                            {#each heatmapHours as hour}
+                              {@const count = categoryRhythmHeatmapCount(
+                                selectedCategoryRhythmRow,
+                                weekday,
+                                hour,
+                              )}
+                              <span
+                                class="heat-cell"
+                                style={`--cell-opacity: ${categoryRhythmHeatmapOpacity(count, categoryRhythmHeatmapMax)};`}
+                                title={`${day}, ${formatHour(hour)} — ${formatNumber(count)}`}
+                                aria-label={`${day}, ${formatHour(hour)} — ${formatNumber(count)}`}
+                              ></span>
+                            {/each}
+                          {/each}
+                        </div>
+                      </div>
+                      <div class="heatmap-scale" aria-hidden="true">
+                        <span>{$t`Less`}</span><i class="scale-cell low"></i><i
+                          class="scale-cell medium"
+                        ></i><i class="scale-cell high"></i><span
+                          >{$t`More`}</span
+                        >
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+
+                <div class="rhythm-overview">
+                  <div class="subpanel-heading">
+                    <div>
+                      <h3>{$t`Employee category overview`}</h3>
+                      <p>
+                        {$t`Use the table to compare response volume, unanswered requests and quiet periods.`}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="table-wrap">
+                    <table
+                      class="responsive-report-table rhythm-overview-table"
+                    >
+                      <caption class="visually-hidden"
+                        >{$t`Employee work rhythm overview`}</caption
+                      >
+                      <thead>
+                        <tr>
+                          <th scope="col">{$t`Employee category`}</th>
+                          <th scope="col" class="numeric">{$t`Replies`}</th>
+                          <th scope="col" class="numeric">{$t`After-hours`}</th>
+                          <th scope="col" class="numeric"
+                            >{$t`No confirmed reply`}</th
+                          >
+                          <th scope="col" class="numeric">{$t`Active days`}</th>
+                          <th scope="col" class="numeric">{$t`Quiet days`}</th>
+                          <th scope="col" class="numeric">{$t`Quiet slots`}</th>
+                          <th scope="col">{$t`Peak`}</th>
+                          <th scope="col">{$t`Quietest`}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {#each sortedCategoryRhythmRows as row}
+                          <tr>
+                            <th scope="row" data-label={$t`Employee category`}
+                              >{row.name}</th
+                            >
+                            <td class="numeric" data-label={$t`Replies`}
+                              >{formatNumber(row.answered)}</td
+                            >
+                            <td class="numeric" data-label={$t`After-hours`}
+                              >{formatNumber(row.afterHours)}</td
+                            >
+                            <td
+                              class="numeric"
+                              data-label={$t`No confirmed reply`}
+                              >{formatNumber(row.unanswered)}</td
+                            >
+                            <td class="numeric" data-label={$t`Active days`}
+                              >{formatNumber(row.activeDays)}</td
+                            >
+                            <td class="numeric" data-label={$t`Quiet days`}
+                              >{formatNumber(row.quietWeekdays)}</td
+                            >
+                            <td class="numeric" data-label={$t`Quiet slots`}
+                              >{formatNumber(row.quietWorkingSlots)} /
+                              {formatNumber(row.workingSlots)}</td
+                            >
+                            <td data-label={$t`Peak`}
+                              >{formatRhythmSlot(
+                                row.peakWeekday,
+                                row.peakHour,
+                              )}</td
+                            >
+                            <td data-label={$t`Quietest`}
+                              >{formatRhythmSlot(
+                                row.quietSlotWeekday,
+                                row.quietSlotHour,
+                              )}</td
+                            >
+                          </tr>
+                        {/each}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <p class="table-note rhythm-disclaimer">
+                  {$t`A quiet day or slot means that no first reply was recorded for this category. It is not proof that the employee was absent; compare it with assigned requests and synchronization completeness.`}
+                </p>
+              {:else}
+                <div class="response-empty" role="status">
+                  <UsersIcon size="18px" />
+                  <span
+                    >{$t`No employee categories are available for this period.`}</span
+                  >
+                </div>
+              {/if}
+            </section>
+          </div>
+
+          <div class="report-columns">
+            <div
+              class={dashboardPanelClass("responders", dashboardLayout)}
+              style={dashboardPanelStyle("responders", dashboardLayout)}
+              role="listitem"
+              draggable={dashboardLayoutMode}
+              on:dragstart={(event) =>
+                onDashboardDragStart("responders", event)}
+              on:dragover|preventDefault
+              on:drop={(event) => onDashboardDrop("responders", event)}
+              on:dragend={onDashboardDragEnd}
+            >
+              {#if dashboardLayoutMode}
+                <ReportPanelControls
+                  sectionId="responders"
+                  sectionLabel={dashboardSectionLabel("responders")}
+                  width={dashboardPanel("responders").width}
+                  tall={dashboardPanel("responders").tall}
+                  on:move={(event) => onDashboardMove("responders", event)}
+                  on:width={(event) => onDashboardWidth("responders", event)}
+                  on:height={(event) => onDashboardHeight("responders", event)}
+                />
+              {/if}
+              <section
+                class="panel wide-panel"
+                aria-labelledby="responders-title"
+              >
+                <div class="panel-header">
+                  <div>
+                    <p class="panel-kicker">{$t`RESPONSES`}</p>
+                    <h2 id="responders-title">{$t`Who answers`}</h2>
+                    {#if responderAttributionMode == "category"}
+                      <p>
+                        {$t`Employees are identified by their selected name tags on the shared mailbox.`}
+                      </p>
+                    {:else}
+                      <p>
+                        {$t`Mail profiles with incoming requests, verified replies and visible work rhythm.`}
+                      </p>
+                    {/if}
+                    <p class="report-note">
+                      {$t`Share of confirmed replies within the selected period.`}
+                    </p>
+                  </div>
+                  <span class="panel-icon"><UsersIcon size="19px" /></span>
+                </div>
                 <div class="table-wrap">
-                    <table class="responsive-report-table response-day-table">
+                  <table class="responsive-report-table responder-table">
                     <caption class="visually-hidden"
-                      >{$t`Response time by day`}</caption
+                      >{responderAttributionMode == "category"
+                        ? $t`Reply share by employee`
+                        : $t`Reply share by mail profile`}</caption
                     >
                     <thead>
                       <tr>
                         <th
                           scope="col"
-                          aria-sort={reportSortAriaValue(responseDaySort, "day")}
+                          aria-sort={reportSortAriaValue(responderSort, "name")}
                         >
                           <ReportSortButton
-                            label={$t`Day`}
+                            label={responderAttributionMode == "category"
+                              ? $t`Employee`
+                              : $t`Profile`}
                             direction={reportSortDirection(
-                              responseDaySort,
-                              "day",
+                              responderSort,
+                              "name",
                             )}
                             on:sort={() =>
-                              (responseDaySort = toggleReportSort(
-                                responseDaySort,
-                                "day",
+                              (responderSort = toggleReportSort(
+                                responderSort,
+                                "name",
                               ))}
                           />
                         </th>
@@ -2665,7 +3661,29 @@
                           scope="col"
                           class="numeric"
                           aria-sort={reportSortAriaValue(
-                            responseDaySort,
+                            responderSort,
+                            "requests",
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Requests`}
+                            align="right"
+                            direction={reportSortDirection(
+                              responderSort,
+                              "requests",
+                            )}
+                            on:sort={() =>
+                              (responderSort = toggleReportSort(
+                                responderSort,
+                                "requests",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
+                            responderSort,
                             "answered",
                           )}
                         >
@@ -2673,12 +3691,12 @@
                             label={$t`Answered`}
                             align="right"
                             direction={reportSortDirection(
-                              responseDaySort,
+                              responderSort,
                               "answered",
                             )}
                             on:sort={() =>
-                              (responseDaySort = toggleReportSort(
-                                responseDaySort,
+                              (responderSort = toggleReportSort(
+                                responderSort,
                                 "answered",
                               ))}
                           />
@@ -2686,8 +3704,27 @@
                         <th
                           scope="col"
                           class="numeric"
+                          aria-sort={reportSortAriaValue(responderSort, "rate")}
+                        >
+                          <ReportSortButton
+                            label={$t`Reply share`}
+                            align="right"
+                            direction={reportSortDirection(
+                              responderSort,
+                              "rate",
+                            )}
+                            on:sort={() =>
+                              (responderSort = toggleReportSort(
+                                responderSort,
+                                "rate",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
                           aria-sort={reportSortAriaValue(
-                            responseDaySort,
+                            responderSort,
                             "average",
                           )}
                         >
@@ -2695,12 +3732,12 @@
                             label={$t`Average`}
                             align="right"
                             direction={reportSortDirection(
-                              responseDaySort,
+                              responderSort,
                               "average",
                             )}
                             on:sort={() =>
-                              (responseDaySort = toggleReportSort(
-                                responseDaySort,
+                              (responderSort = toggleReportSort(
+                                responderSort,
                                 "average",
                               ))}
                           />
@@ -2709,7 +3746,29 @@
                           scope="col"
                           class="numeric"
                           aria-sort={reportSortAriaValue(
-                            responseDaySort,
+                            responderSort,
+                            "minimum",
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Minimum`}
+                            align="right"
+                            direction={reportSortDirection(
+                              responderSort,
+                              "minimum",
+                            )}
+                            on:sort={() =>
+                              (responderSort = toggleReportSort(
+                                responderSort,
+                                "minimum",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
+                            responderSort,
                             "maximum",
                           )}
                         >
@@ -2717,12 +3776,12 @@
                             label={$t`Maximum`}
                             align="right"
                             direction={reportSortDirection(
-                              responseDaySort,
+                              responderSort,
                               "maximum",
                             )}
                             on:sort={() =>
-                              (responseDaySort = toggleReportSort(
-                                responseDaySort,
+                              (responderSort = toggleReportSort(
+                                responderSort,
                                 "maximum",
                               ))}
                           />
@@ -2731,106 +3790,21 @@
                           scope="col"
                           class="numeric"
                           aria-sort={reportSortAriaValue(
-                            responseDaySort,
-                            "overTarget",
+                            responderSort,
+                            "withinTarget",
                           )}
                         >
                           <ReportSortButton
-                            label={$t`Over target`}
+                            label={$t`Within target`}
                             align="right"
                             direction={reportSortDirection(
-                              responseDaySort,
-                              "overTarget",
+                              responderSort,
+                              "withinTarget",
                             )}
                             on:sort={() =>
-                              (responseDaySort = toggleReportSort(
-                                responseDaySort,
-                                "overTarget",
-                              ))}
-                          />
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {#each sortedResponseTimeDays as day}
-                        <tr>
-                          <th scope="row" data-label={$t`Day`}
-                            >{formatDate(parseInputDate(day.day))}</th
-                          >
-                          <td class="numeric" data-label={$t`Answered`}
-                            >{formatNumber(day.answered)}</td
-                          >
-                          <td class="numeric" data-label={$t`Average`}
-                            >{formatDuration(day.averageSeconds)}</td
-                          >
-                          <td class="numeric" data-label={$t`Maximum`}
-                            >{formatDuration(day.maximumSeconds)}</td
-                          >
-                          <td
-                            class="numeric overdue-value"
-                            data-label={$t`Over target`}
-                            >{formatNumber(day.overTarget)}</td
-                          >
-                        </tr>
-                      {:else}
-                        <tr>
-                          <td colspan="5" class="empty-cell"
-                            >{$t`No overdue replies in this period.`}</td
-                          >
-                        </tr>
-                      {/each}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div class="response-detail-block">
-                <div class="table-wrap">
-                  <table
-                    class="responsive-report-table response-detail-table"
-                  >
-                    <caption class="visually-hidden"
-                      >{$t`Response details`}</caption
-                    >
-                    <thead>
-                      <tr>
-                        <th
-                          scope="col"
-                          aria-sort={reportSortAriaValue(
-                            responseDetailSort,
-                            "received",
-                          )}
-                        >
-                          <ReportSortButton
-                            label={$t`Received`}
-                            direction={reportSortDirection(
-                              responseDetailSort,
-                              "received",
-                            )}
-                            on:sort={() =>
-                              (responseDetailSort = toggleReportSort(
-                                responseDetailSort,
-                                "received",
-                              ))}
-                          />
-                        </th>
-                        <th
-                          scope="col"
-                          aria-sort={reportSortAriaValue(
-                            responseDetailSort,
-                            "replied",
-                          )}
-                        >
-                          <ReportSortButton
-                            label={$t`Replied`}
-                            direction={reportSortDirection(
-                              responseDetailSort,
-                              "replied",
-                            )}
-                            on:sort={() =>
-                              (responseDetailSort = toggleReportSort(
-                                responseDetailSort,
-                                "replied",
+                              (responderSort = toggleReportSort(
+                                responderSort,
+                                "withinTarget",
                               ))}
                           />
                         </th>
@@ -2838,1446 +3812,1263 @@
                           scope="col"
                           class="numeric"
                           aria-sort={reportSortAriaValue(
-                            responseDetailSort,
-                            "responseTime",
+                            responderSort,
+                            "overTarget",
                           )}
                         >
                           <ReportSortButton
-                            label={$t`Response time`}
+                            label={$t`Over target`}
                             align="right"
                             direction={reportSortDirection(
-                              responseDetailSort,
-                              "responseTime",
+                              responderSort,
+                              "overTarget",
                             )}
                             on:sort={() =>
-                              (responseDetailSort = toggleReportSort(
-                                responseDetailSort,
-                                "responseTime",
+                              (responderSort = toggleReportSort(
+                                responderSort,
+                                "overTarget",
                               ))}
                           />
                         </th>
                         <th
                           scope="col"
-                          aria-sort={reportSortAriaValue(
-                            responseDetailSort,
-                            "responder",
-                          )}
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(responderSort, "sent")}
                         >
                           <ReportSortButton
                             label={responderAttributionMode == "category"
-                              ? $t`Responder`
-                              : $t`Profile`}
+                              ? $t`Verified replies`
+                              : $t`Sent`}
+                            align="right"
                             direction={reportSortDirection(
-                              responseDetailSort,
-                              "responder",
+                              responderSort,
+                              "sent",
                             )}
                             on:sort={() =>
-                              (responseDetailSort = toggleReportSort(
-                                responseDetailSort,
-                                "responder",
+                              (responderSort = toggleReportSort(
+                                responderSort,
+                                "sent",
                               ))}
                           />
                         </th>
                         <th
                           scope="col"
-                          aria-sort={reportSortAriaValue(
-                            responseDetailSort,
-                            "topic",
-                          )}
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(responderSort, "peak")}
                         >
                           <ReportSortButton
-                            label={$t`Topic`}
+                            label={$t`Peak`}
+                            align="right"
                             direction={reportSortDirection(
-                              responseDetailSort,
-                              "topic",
+                              responderSort,
+                              "peak",
                             )}
                             on:sort={() =>
-                              (responseDetailSort = toggleReportSort(
-                                responseDetailSort,
-                                "topic",
+                              (responderSort = toggleReportSort(
+                                responderSort,
+                                "peak",
                               ))}
                           />
                         </th>
                         <th
                           scope="col"
+                          class="numeric"
                           aria-sort={reportSortAriaValue(
-                            responseDetailSort,
-                            "status",
+                            responderSort,
+                            "lastActivity",
                           )}
                         >
                           <ReportSortButton
-                            label={$t`Status`}
+                            label={$t`Last activity`}
+                            align="right"
                             direction={reportSortDirection(
-                              responseDetailSort,
-                              "status",
+                              responderSort,
+                              "lastActivity",
                             )}
                             on:sort={() =>
-                              (responseDetailSort = toggleReportSort(
-                                responseDetailSort,
-                                "status",
+                              (responderSort = toggleReportSort(
+                                responderSort,
+                                "lastActivity",
                               ))}
                           />
                         </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {#each sortedResponseTimes as response}
-                        <tr
-                          class:overdue-row={response.withinTarget === false}
-                          class:outside-hours-row={response.responseTimeStatus ==
-                            "outside-working-hours"}
-                        >
-                          <td data-label={$t`Received`}
-                            >{formatDateTime(response.requestAt)}</td
+                      {#each sortedResponders as responder}
+                        <tr>
+                          <th
+                            scope="row"
+                            data-label={responderAttributionMode == "category"
+                              ? $t`Employee`
+                              : $t`Profile`}
                           >
-                          <td data-label={$t`Replied`}
-                            >{formatDateTime(response.responseAt)}</td
-                          >
-                          <td class="numeric" data-label={$t`Response time`}
-                            >{formatResponseDuration(response)}</td
-                          >
-                          <td data-label={responderAttributionMode == "category"
-                            ? $t`Responder`
-                            : $t`Profile`}
-                            >{responseResponderLabel(response)}</td
+                            <span class="person-name"
+                              >{responder.accountName}</span
+                            >
+                            {#if responder.email}<span class="person-email"
+                                >{responder.email}</span
+                              >{/if}
+                          </th>
+                          <td class="numeric" data-label={$t`Requests`}
+                            >{formatNumber(responder.requests)}</td
                           >
                           <td
-                            class="topic-cell"
-                            data-label={$t`Topic`}
-                            title={response.subject}
+                            class="numeric emphasized"
+                            data-label={$t`Answered`}
+                            >{formatNumber(responder.answered)}</td
                           >
-                            <button
-                              type="button"
-                              class="email-link"
-                              disabled={openingResponseEmailId ==
-                                response.emailId}
-                              aria-label={`${$t`Open email`}: ${response.subject}`}
-                              on:click={() => openReportEmail(response)}
-                            >
-                              <MailIcon size="13px" />
-                              <span>{response.subject}</span>
-                            </button>
-                          </td>
-                          <td data-label={$t`Status`}>
-                            <span
-                              class="status-pill"
-                              class:within={response.withinTarget === true}
-                              class:overdue={response.withinTarget === false}
-                              class:outside-hours={response.responseTimeStatus ==
-                                "outside-working-hours"}
-                              >{formatResponseStatus(response)}</span
-                            >
-                          </td>
+                          <td class="numeric" data-label={$t`Reply share`}
+                            ><span
+                              class="rate-pill"
+                              class:good={responderResponseShare(
+                                responder.answered,
+                              ) >= 0.75}
+                              >{formatPercent(
+                                responderResponseShare(responder.answered),
+                              )}</span
+                            ></td
+                          >
+                          <td
+                            class="numeric response-duration"
+                            data-label={$t`Average`}
+                            >{formatDuration(
+                              responder.responseTime.averageSeconds,
+                            )}</td
+                          >
+                          <td
+                            class="numeric response-duration"
+                            data-label={$t`Minimum`}
+                            >{formatDuration(
+                              responder.responseTime.minimumSeconds,
+                            )}</td
+                          >
+                          <td
+                            class="numeric response-duration"
+                            data-label={$t`Maximum`}
+                            >{formatDuration(
+                              responder.responseTime.maximumSeconds,
+                            )}</td
+                          >
+                          <td
+                            class="numeric emphasized"
+                            data-label={$t`Within target`}
+                            ><span class="table-value"
+                              >{formatNumber(
+                                responder.responseTime.withinTarget,
+                              )}
+                              <span class="table-rate"
+                                >({formatPercent(
+                                  responseRate(
+                                    responder.responseTime.withinTarget,
+                                    responder.responseTime.answered,
+                                  ),
+                                )})</span
+                              ></span
+                            ></td
+                          >
+                          <td
+                            class="numeric overdue-value"
+                            data-label={$t`Over target`}
+                            >{formatNumber(
+                              responder.responseTime.overTarget,
+                            )}</td
+                          >
+                          <td
+                            class="numeric"
+                            data-label={responderAttributionMode == "category"
+                              ? $t`Verified replies`
+                              : $t`Sent`}>{formatNumber(responder.sent)}</td
+                          >
+                          <td class="numeric peak-value" data-label={$t`Peak`}
+                            >{formatResponderPeak(
+                              responder.peakWeekday,
+                              responder.peakHour,
+                            )}</td
+                          >
+                          <td
+                            class="numeric muted"
+                            data-label={$t`Last activity`}
+                            >{formatDate(responder.lastActivity)}</td
+                          >
                         </tr>
+                      {:else}
+                        <tr
+                          ><td colspan="12" class="empty-cell"
+                            >{responderAttributionMode == "category"
+                              ? $t`No employee category data for this period.`
+                              : $t`No mail profile data for this period.`}</td
+                          ></tr
+                        >
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+
+            <div
+              class={dashboardPanelClass("topics", dashboardLayout)}
+              style={dashboardPanelStyle("topics", dashboardLayout)}
+              role="listitem"
+              draggable={dashboardLayoutMode}
+              on:dragstart={(event) => onDashboardDragStart("topics", event)}
+              on:dragover|preventDefault
+              on:drop={(event) => onDashboardDrop("topics", event)}
+              on:dragend={onDashboardDragEnd}
+            >
+              {#if dashboardLayoutMode}
+                <ReportPanelControls
+                  sectionId="topics"
+                  sectionLabel={dashboardSectionLabel("topics")}
+                  width={dashboardPanel("topics").width}
+                  tall={dashboardPanel("topics").tall}
+                  on:move={(event) => onDashboardMove("topics", event)}
+                  on:width={(event) => onDashboardWidth("topics", event)}
+                  on:height={(event) => onDashboardHeight("topics", event)}
+                />
+              {/if}
+              <section class="panel" aria-labelledby="topics-title">
+                <div class="panel-header">
+                  <div>
+                    <p class="panel-kicker">{$t`DEMAND`}</p>
+                    <h2 id="topics-title">{$t`Frequent requests`}</h2>
+                    <p>
+                      {$t`Repeated incoming subjects, grouped without Re:/Fwd: prefixes.`}
+                    </p>
+                  </div>
+                  <span class="panel-icon"><SearchIcon size="19px" /></span>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <caption class="visually-hidden"
+                      >{$t`Frequent request topics`}</caption
+                    >
+                    <thead>
+                      <tr>
+                        <th
+                          scope="col"
+                          aria-sort={reportSortAriaValue(topicSort, "topic")}
+                        >
+                          <ReportSortButton
+                            label={$t`Topic`}
+                            direction={reportSortDirection(topicSort, "topic")}
+                            on:sort={() =>
+                              (topicSort = toggleReportSort(
+                                topicSort,
+                                "topic",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(topicSort, "requests")}
+                        >
+                          <ReportSortButton
+                            label={$t`Count`}
+                            align="right"
+                            direction={reportSortDirection(
+                              topicSort,
+                              "requests",
+                            )}
+                            on:sort={() =>
+                              (topicSort = toggleReportSort(
+                                topicSort,
+                                "requests",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(topicSort, "answered")}
+                        >
+                          <ReportSortButton
+                            label={$t`Answered`}
+                            align="right"
+                            direction={reportSortDirection(
+                              topicSort,
+                              "answered",
+                            )}
+                            on:sort={() =>
+                              (topicSort = toggleReportSort(
+                                topicSort,
+                                "answered",
+                              ))}
+                          />
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each sortedTopics as topic}
+                        <tr>
+                          <th scope="row" class="topic-cell"
+                            >{topic.topic === "(без темы)"
+                              ? $t`(no subject)`
+                              : topic.topic}</th
+                          >
+                          <td class="numeric">{formatNumber(topic.requests)}</td
+                          >
+                          <td class="numeric emphasized"
+                            >{formatNumber(topic.answered)}
+                            <span class="table-rate"
+                              >({formatPercent(
+                                responseRate(topic.answered, topic.requests),
+                              )})</span
+                            ></td
+                          >
+                        </tr>
+                      {:else}
+                        <tr
+                          ><td colspan="3" class="empty-cell"
+                            >{$t`No repeated requests for this period.`}</td
+                          ></tr
+                        >
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+
+            <div
+              class={dashboardPanelClass("categories", dashboardLayout)}
+              style={dashboardPanelStyle("categories", dashboardLayout)}
+              role="listitem"
+              draggable={dashboardLayoutMode}
+              on:dragstart={(event) =>
+                onDashboardDragStart("categories", event)}
+              on:dragover|preventDefault
+              on:drop={(event) => onDashboardDrop("categories", event)}
+              on:dragend={onDashboardDragEnd}
+            >
+              {#if dashboardLayoutMode}
+                <ReportPanelControls
+                  sectionId="categories"
+                  sectionLabel={dashboardSectionLabel("categories")}
+                  width={dashboardPanel("categories").width}
+                  tall={dashboardPanel("categories").tall}
+                  on:move={(event) => onDashboardMove("categories", event)}
+                  on:width={(event) => onDashboardWidth("categories", event)}
+                  on:height={(event) => onDashboardHeight("categories", event)}
+                />
+              {/if}
+              <section class="panel" aria-labelledby="categories-title">
+                <div class="panel-header">
+                  <div>
+                    <p class="panel-kicker">{$t`CATEGORIES`}</p>
+                    <h2 id="categories-title">{$t`Categories and tags`}</h2>
+                    <p>
+                      {$t`Each row counts unique messages carrying that tag.`}
+                    </p>
+                  </div>
+                  <span class="panel-icon"><TagsIcon size="19px" /></span>
+                </div>
+                <div class="table-wrap">
+                  <table class="responsive-report-table category-table">
+                    <caption class="visually-hidden"
+                      >{$t`Mail categories and tags`}</caption
+                    >
+                    <thead>
+                      <tr>
+                        <th
+                          scope="col"
+                          aria-sort={reportSortAriaValue(categorySort, "name")}
+                        >
+                          <ReportSortButton
+                            label={$t`Category`}
+                            direction={reportSortDirection(
+                              categorySort,
+                              "name",
+                            )}
+                            on:sort={() =>
+                              (categorySort = toggleReportSort(
+                                categorySort,
+                                "name",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(categorySort, "total")}
+                        >
+                          <ReportSortButton
+                            label={$t`Messages with tag`}
+                            align="right"
+                            direction={reportSortDirection(
+                              categorySort,
+                              "total",
+                            )}
+                            on:sort={() =>
+                              (categorySort = toggleReportSort(
+                                categorySort,
+                                "total",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
+                            categorySort,
+                            "incoming",
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Incoming requests`}
+                            align="right"
+                            direction={reportSortDirection(
+                              categorySort,
+                              "incoming",
+                            )}
+                            on:sort={() =>
+                              (categorySort = toggleReportSort(
+                                categorySort,
+                                "incoming",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
+                            categorySort,
+                            "outgoing",
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Outgoing`}
+                            align="right"
+                            direction={reportSortDirection(
+                              categorySort,
+                              "outgoing",
+                            )}
+                            on:sort={() =>
+                              (categorySort = toggleReportSort(
+                                categorySort,
+                                "outgoing",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
+                            categorySort,
+                            "answered",
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Verified replies`}
+                            align="right"
+                            direction={reportSortDirection(
+                              categorySort,
+                              "answered",
+                            )}
+                            on:sort={() =>
+                              (categorySort = toggleReportSort(
+                                categorySort,
+                                "answered",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
+                            categorySort,
+                            "average",
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Average`}
+                            align="right"
+                            direction={reportSortDirection(
+                              categorySort,
+                              "average",
+                            )}
+                            on:sort={() =>
+                              (categorySort = toggleReportSort(
+                                categorySort,
+                                "average",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
+                            categorySort,
+                            "minimum",
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Minimum`}
+                            align="right"
+                            direction={reportSortDirection(
+                              categorySort,
+                              "minimum",
+                            )}
+                            on:sort={() =>
+                              (categorySort = toggleReportSort(
+                                categorySort,
+                                "minimum",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
+                            categorySort,
+                            "maximum",
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Maximum`}
+                            align="right"
+                            direction={reportSortDirection(
+                              categorySort,
+                              "maximum",
+                            )}
+                            on:sort={() =>
+                              (categorySort = toggleReportSort(
+                                categorySort,
+                                "maximum",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
+                            categorySort,
+                            "withinTarget",
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Within target`}
+                            align="right"
+                            direction={reportSortDirection(
+                              categorySort,
+                              "withinTarget",
+                            )}
+                            on:sort={() =>
+                              (categorySort = toggleReportSort(
+                                categorySort,
+                                "withinTarget",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
+                            categorySort,
+                            "overTarget",
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Over target`}
+                            align="right"
+                            direction={reportSortDirection(
+                              categorySort,
+                              "overTarget",
+                            )}
+                            on:sort={() =>
+                              (categorySort = toggleReportSort(
+                                categorySort,
+                                "overTarget",
+                              ))}
+                          />
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each sortedCategories as category}
+                        <tr>
+                          <th scope="row" data-label={$t`Category`}
+                            >{category.name}</th
+                          >
+                          <td class="numeric" data-label={$t`Messages with tag`}
+                            >{formatNumber(category.total)}</td
+                          >
+                          <td class="numeric" data-label={$t`Incoming requests`}
+                            >{formatNumber(category.incoming)}</td
+                          >
+                          <td class="numeric" data-label={$t`Outgoing`}
+                            >{formatNumber(category.outgoing)}</td
+                          >
+                          <td
+                            class="numeric emphasized"
+                            data-label={$t`Verified replies`}
+                            >{formatNumber(category.answered)}</td
+                          >
+                          <td
+                            class="numeric response-duration"
+                            data-label={$t`Average`}
+                            >{formatDuration(
+                              category.responseTime.averageSeconds,
+                            )}</td
+                          >
+                          <td
+                            class="numeric response-duration"
+                            data-label={$t`Minimum`}
+                            >{formatDuration(
+                              category.responseTime.minimumSeconds,
+                            )}</td
+                          >
+                          <td
+                            class="numeric response-duration"
+                            data-label={$t`Maximum`}
+                            >{formatDuration(
+                              category.responseTime.maximumSeconds,
+                            )}</td
+                          >
+                          <td
+                            class="numeric emphasized"
+                            data-label={$t`Within target`}
+                            ><span class="table-value"
+                              >{formatNumber(
+                                category.responseTime.withinTarget,
+                              )}
+                              <span class="table-rate"
+                                >({formatPercent(
+                                  responseRate(
+                                    category.responseTime.withinTarget,
+                                    category.responseTime.answered,
+                                  ),
+                                )})</span
+                              ></span
+                            ></td
+                          >
+                          <td
+                            class="numeric overdue-value"
+                            data-label={$t`Over target`}
+                            >{formatNumber(
+                              category.responseTime.overTarget,
+                            )}</td
+                          >
+                        </tr>
+                      {:else}
+                        <tr
+                          ><td colspan="10" class="empty-cell"
+                            >{$t`No categories are used in this period.`}</td
+                          ></tr
+                        >
                       {/each}
                     </tbody>
                   </table>
                 </div>
                 <p class="table-note">
-                  {$t`All response details for this period are shown here. Scroll to review the full list.`}
+                  {$t`One message can have multiple tags, so category rows are not additive.`}
                 </p>
-                {#if responseOpenError}
-                  <p class="response-open-error" role="alert">
-                    {$t`The message could not be opened.`}
-                    {responseOpenError.message}
-                  </p>
-                {/if}
-              </div>
+              </section>
             </div>
-          </section>
-        </div>
-      {/if}
 
-      <div class="report-columns">
-        <div
-          class={dashboardPanelClass("responders", dashboardLayout)}
-          style={dashboardPanelStyle("responders", dashboardLayout)}
-          role="listitem"
-          draggable={dashboardLayoutMode}
-          on:dragstart={(event) => onDashboardDragStart("responders", event)}
-          on:dragover|preventDefault
-          on:drop={(event) => onDashboardDrop("responders", event)}
-          on:dragend={onDashboardDragEnd}
-        >
-          {#if dashboardLayoutMode}
-            <ReportPanelControls
-              sectionId="responders"
-              sectionLabel={dashboardSectionLabel("responders")}
-              width={dashboardPanel("responders").width}
-              tall={dashboardPanel("responders").tall}
-              on:move={(event) => onDashboardMove("responders", event)}
-              on:width={(event) => onDashboardWidth("responders", event)}
-              on:height={(event) => onDashboardHeight("responders", event)}
-            />
-          {/if}
-          <section class="panel wide-panel" aria-labelledby="responders-title">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">{$t`RESPONSES`}</p>
-                <h2 id="responders-title">{$t`Who answers`}</h2>
-                {#if responderAttributionMode == "category"}
-                  <p>
-                    {$t`Employees are identified by their selected name tags on the shared mailbox.`}
-                  </p>
-                {:else}
-                  <p>
-                    {$t`Mail profiles with incoming requests, verified replies and visible work rhythm.`}
-                  </p>
-                {/if}
-                <p class="report-note">
-                  {$t`Share of confirmed replies within the selected period.`}
-                </p>
-              </div>
-              <span class="panel-icon"><UsersIcon size="19px" /></span>
-            </div>
-            <div class="table-wrap">
-              <table class="responsive-report-table responder-table">
-                <caption class="visually-hidden"
-                  >{responderAttributionMode == "category"
-                    ? $t`Reply share by employee`
-                    : $t`Reply share by mail profile`}</caption
-                >
-                <thead>
-                  <tr>
-                    <th
-                      scope="col"
-                      aria-sort={reportSortAriaValue(responderSort, "name")}
+            <div
+              class={dashboardPanelClass("mail-breakdown", dashboardLayout)}
+              style={dashboardPanelStyle("mail-breakdown", dashboardLayout)}
+              role="listitem"
+              draggable={dashboardLayoutMode}
+              on:dragstart={(event) =>
+                onDashboardDragStart("mail-breakdown", event)}
+              on:dragover|preventDefault
+              on:drop={(event) => onDashboardDrop("mail-breakdown", event)}
+              on:dragend={onDashboardDragEnd}
+            >
+              {#if dashboardLayoutMode}
+                <ReportPanelControls
+                  sectionId="mail-breakdown"
+                  sectionLabel={dashboardSectionLabel("mail-breakdown")}
+                  width={dashboardPanel("mail-breakdown").width}
+                  tall={dashboardPanel("mail-breakdown").tall}
+                  on:move={(event) => onDashboardMove("mail-breakdown", event)}
+                  on:width={(event) =>
+                    onDashboardWidth("mail-breakdown", event)}
+                  on:height={(event) =>
+                    onDashboardHeight("mail-breakdown", event)}
+                />
+              {/if}
+              <section class="panel" aria-labelledby="mail-breakdown-title">
+                <div class="panel-header">
+                  <div>
+                    <p class="panel-kicker">{$t`MAILBOXES`}</p>
+                    <h2 id="mail-breakdown-title">{$t`Mail breakdown`}</h2>
+                    <p>{$t`Accounts and folders with the most activity.`}</p>
+                  </div>
+                  <span class="panel-icon"><MailIcon size="19px" /></span>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <caption class="visually-hidden"
+                      >{$t`Mail activity by account`}</caption
                     >
-                      <ReportSortButton
-                        label={responderAttributionMode == "category"
-                          ? $t`Employee`
-                          : $t`Profile`}
-                        direction={reportSortDirection(responderSort, "name")}
-                        on:sort={() =>
-                          (responderSort = toggleReportSort(
-                            responderSort,
-                            "name",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(responderSort, "requests")}
-                    >
-                      <ReportSortButton
-                        label={$t`Requests`}
-                        align="right"
-                        direction={reportSortDirection(
-                          responderSort,
-                          "requests",
-                        )}
-                        on:sort={() =>
-                          (responderSort = toggleReportSort(
-                            responderSort,
-                            "requests",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(responderSort, "answered")}
-                    >
-                      <ReportSortButton
-                        label={$t`Answered`}
-                        align="right"
-                        direction={reportSortDirection(
-                          responderSort,
-                          "answered",
-                        )}
-                        on:sort={() =>
-                          (responderSort = toggleReportSort(
-                            responderSort,
-                            "answered",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(responderSort, "rate")}
-                    >
-                      <ReportSortButton
-                        label={$t`Reply share`}
-                        align="right"
-                        direction={reportSortDirection(responderSort, "rate")}
-                        on:sort={() =>
-                          (responderSort = toggleReportSort(
-                            responderSort,
-                            "rate",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(responderSort, "average")}
-                    >
-                      <ReportSortButton
-                        label={$t`Average`}
-                        align="right"
-                        direction={reportSortDirection(
-                          responderSort,
-                          "average",
-                        )}
-                        on:sort={() =>
-                          (responderSort = toggleReportSort(
-                            responderSort,
-                            "average",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(responderSort, "minimum")}
-                    >
-                      <ReportSortButton
-                        label={$t`Minimum`}
-                        align="right"
-                        direction={reportSortDirection(
-                          responderSort,
-                          "minimum",
-                        )}
-                        on:sort={() =>
-                          (responderSort = toggleReportSort(
-                            responderSort,
-                            "minimum",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(responderSort, "maximum")}
-                    >
-                      <ReportSortButton
-                        label={$t`Maximum`}
-                        align="right"
-                        direction={reportSortDirection(
-                          responderSort,
-                          "maximum",
-                        )}
-                        on:sort={() =>
-                          (responderSort = toggleReportSort(
-                            responderSort,
-                            "maximum",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(
-                        responderSort,
-                        "withinTarget",
-                      )}
-                    >
-                      <ReportSortButton
-                        label={$t`Within target`}
-                        align="right"
-                        direction={reportSortDirection(
-                          responderSort,
-                          "withinTarget",
-                        )}
-                        on:sort={() =>
-                          (responderSort = toggleReportSort(
-                            responderSort,
-                            "withinTarget",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(
-                        responderSort,
-                        "overTarget",
-                      )}
-                    >
-                      <ReportSortButton
-                        label={$t`Over target`}
-                        align="right"
-                        direction={reportSortDirection(
-                          responderSort,
-                          "overTarget",
-                        )}
-                        on:sort={() =>
-                          (responderSort = toggleReportSort(
-                            responderSort,
-                            "overTarget",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(responderSort, "sent")}
-                    >
-                      <ReportSortButton
-                        label={responderAttributionMode == "category"
-                          ? $t`Verified replies`
-                          : $t`Sent`}
-                        align="right"
-                        direction={reportSortDirection(responderSort, "sent")}
-                        on:sort={() =>
-                          (responderSort = toggleReportSort(
-                            responderSort,
-                            "sent",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(responderSort, "peak")}
-                    >
-                      <ReportSortButton
-                        label={$t`Peak`}
-                        align="right"
-                        direction={reportSortDirection(responderSort, "peak")}
-                        on:sort={() =>
-                          (responderSort = toggleReportSort(
-                            responderSort,
-                            "peak",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(
-                        responderSort,
-                        "lastActivity",
-                      )}
-                    >
-                      <ReportSortButton
-                        label={$t`Last activity`}
-                        align="right"
-                        direction={reportSortDirection(
-                          responderSort,
-                          "lastActivity",
-                        )}
-                        on:sort={() =>
-                          (responderSort = toggleReportSort(
-                            responderSort,
-                            "lastActivity",
-                          ))}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each sortedResponders as responder}
-                    <tr>
-                      <th
-                        scope="row"
-                        data-label={responderAttributionMode == "category"
-                          ? $t`Employee`
-                          : $t`Profile`}
-                      >
-                        <span class="person-name">{responder.accountName}</span>
-                        {#if responder.email}<span class="person-email"
-                            >{responder.email}</span
-                          >{/if}
-                      </th>
-                      <td class="numeric" data-label={$t`Requests`}>{formatNumber(responder.requests)}</td
-                      >
-                      <td class="numeric emphasized" data-label={$t`Answered`}
-                        >{formatNumber(responder.answered)}</td
-                      >
-                      <td class="numeric" data-label={$t`Reply share`}
-                        ><span
-                          class="rate-pill"
-                          class:good={responderResponseShare(responder.answered) >=
-                            0.75}
-                          >{formatPercent(
-                            responderResponseShare(responder.answered),
-                          )}</span
-                        ></td
-                      >
-                      <td class="numeric response-duration" data-label={$t`Average`}
-                        >{formatDuration(
-                          responder.responseTime.averageSeconds,
-                        )}</td
-                      >
-                      <td class="numeric response-duration" data-label={$t`Minimum`}
-                        >{formatDuration(
-                          responder.responseTime.minimumSeconds,
-                        )}</td
-                      >
-                      <td class="numeric response-duration" data-label={$t`Maximum`}
-                        >{formatDuration(
-                          responder.responseTime.maximumSeconds,
-                        )}</td
-                      >
-                      <td class="numeric emphasized" data-label={$t`Within target`}
-                        ><span class="table-value"
-                          >{formatNumber(responder.responseTime.withinTarget)}
-                          <span class="table-rate"
-                            >({formatPercent(
-                              responseRate(
-                                responder.responseTime.withinTarget,
-                                responder.responseTime.answered,
-                              ),
-                            )})</span
-                          ></span
-                        ></td
-                      >
-                      <td class="numeric overdue-value" data-label={$t`Over target`}
-                        >{formatNumber(responder.responseTime.overTarget)}</td
-                      >
-                      <td class="numeric" data-label={responderAttributionMode == "category"
-                        ? $t`Verified replies`
-                        : $t`Sent`}>{formatNumber(responder.sent)}</td>
-                      <td class="numeric peak-value" data-label={$t`Peak`}
-                        >{formatResponderPeak(
-                          responder.peakWeekday,
-                          responder.peakHour,
-                        )}</td
-                      >
-                      <td class="numeric muted" data-label={$t`Last activity`}
-                        >{formatDate(responder.lastActivity)}</td
-                      >
-                    </tr>
-                  {:else}
-                    <tr
-                      ><td colspan="12" class="empty-cell"
-                        >{responderAttributionMode == "category"
-                          ? $t`No employee category data for this period.`
-                          : $t`No mail profile data for this period.`}</td
-                      ></tr
-                    >
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-
-        <div
-          class={dashboardPanelClass("topics", dashboardLayout)}
-          style={dashboardPanelStyle("topics", dashboardLayout)}
-          role="listitem"
-          draggable={dashboardLayoutMode}
-          on:dragstart={(event) => onDashboardDragStart("topics", event)}
-          on:dragover|preventDefault
-          on:drop={(event) => onDashboardDrop("topics", event)}
-          on:dragend={onDashboardDragEnd}
-        >
-          {#if dashboardLayoutMode}
-            <ReportPanelControls
-              sectionId="topics"
-              sectionLabel={dashboardSectionLabel("topics")}
-              width={dashboardPanel("topics").width}
-              tall={dashboardPanel("topics").tall}
-              on:move={(event) => onDashboardMove("topics", event)}
-              on:width={(event) => onDashboardWidth("topics", event)}
-              on:height={(event) => onDashboardHeight("topics", event)}
-            />
-          {/if}
-          <section class="panel" aria-labelledby="topics-title">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">{$t`DEMAND`}</p>
-                <h2 id="topics-title">{$t`Frequent requests`}</h2>
-                <p>
-                  {$t`Repeated incoming subjects, grouped without Re:/Fwd: prefixes.`}
-                </p>
-              </div>
-              <span class="panel-icon"><SearchIcon size="19px" /></span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <caption class="visually-hidden"
-                  >{$t`Frequent request topics`}</caption
-                >
-                <thead>
-                  <tr>
-                    <th
-                      scope="col"
-                      aria-sort={reportSortAriaValue(topicSort, "topic")}
-                    >
-                      <ReportSortButton
-                        label={$t`Topic`}
-                        direction={reportSortDirection(topicSort, "topic")}
-                        on:sort={() =>
-                          (topicSort = toggleReportSort(topicSort, "topic"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(topicSort, "requests")}
-                    >
-                      <ReportSortButton
-                        label={$t`Count`}
-                        align="right"
-                        direction={reportSortDirection(topicSort, "requests")}
-                        on:sort={() =>
-                          (topicSort = toggleReportSort(topicSort, "requests"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(topicSort, "answered")}
-                    >
-                      <ReportSortButton
-                        label={$t`Answered`}
-                        align="right"
-                        direction={reportSortDirection(topicSort, "answered")}
-                        on:sort={() =>
-                          (topicSort = toggleReportSort(topicSort, "answered"))}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each sortedTopics as topic}
-                    <tr>
-                      <th scope="row" class="topic-cell"
-                        >{topic.topic === "(без темы)"
-                          ? $t`(no subject)`
-                          : topic.topic}</th
-                      >
-                      <td class="numeric">{formatNumber(topic.requests)}</td>
-                      <td class="numeric emphasized"
-                        >{formatNumber(topic.answered)}
-                        <span class="table-rate"
-                          >({formatPercent(
-                            responseRate(topic.answered, topic.requests),
-                          )})</span
-                        ></td
-                      >
-                    </tr>
-                  {:else}
-                    <tr
-                      ><td colspan="3" class="empty-cell"
-                        >{$t`No repeated requests for this period.`}</td
-                      ></tr
-                    >
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-
-        <div
-          class={dashboardPanelClass("categories", dashboardLayout)}
-          style={dashboardPanelStyle("categories", dashboardLayout)}
-          role="listitem"
-          draggable={dashboardLayoutMode}
-          on:dragstart={(event) => onDashboardDragStart("categories", event)}
-          on:dragover|preventDefault
-          on:drop={(event) => onDashboardDrop("categories", event)}
-          on:dragend={onDashboardDragEnd}
-        >
-          {#if dashboardLayoutMode}
-            <ReportPanelControls
-              sectionId="categories"
-              sectionLabel={dashboardSectionLabel("categories")}
-              width={dashboardPanel("categories").width}
-              tall={dashboardPanel("categories").tall}
-              on:move={(event) => onDashboardMove("categories", event)}
-              on:width={(event) => onDashboardWidth("categories", event)}
-              on:height={(event) => onDashboardHeight("categories", event)}
-            />
-          {/if}
-          <section class="panel" aria-labelledby="categories-title">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">{$t`CATEGORIES`}</p>
-                <h2 id="categories-title">{$t`Categories and tags`}</h2>
-                <p>{$t`Each row counts unique messages carrying that tag.`}</p>
-              </div>
-              <span class="panel-icon"><TagsIcon size="19px" /></span>
-            </div>
-            <div class="table-wrap">
-              <table class="responsive-report-table category-table">
-                <caption class="visually-hidden"
-                  >{$t`Mail categories and tags`}</caption
-                >
-                <thead>
-                  <tr>
-                    <th
-                      scope="col"
-                      aria-sort={reportSortAriaValue(categorySort, "name")}
-                    >
-                      <ReportSortButton
-                        label={$t`Category`}
-                        direction={reportSortDirection(categorySort, "name")}
-                        on:sort={() =>
-                          (categorySort = toggleReportSort(categorySort, "name"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(categorySort, "total")}
-                    >
-                      <ReportSortButton
-                        label={$t`Messages with tag`}
-                        align="right"
-                        direction={reportSortDirection(categorySort, "total")}
-                        on:sort={() =>
-                          (categorySort = toggleReportSort(categorySort, "total"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(categorySort, "incoming")}
-                    >
-                      <ReportSortButton
-                        label={$t`Incoming requests`}
-                        align="right"
-                        direction={reportSortDirection(
-                          categorySort,
-                          "incoming",
-                        )}
-                        on:sort={() =>
-                          (categorySort = toggleReportSort(
-                            categorySort,
-                            "incoming",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(categorySort, "outgoing")}
-                    >
-                      <ReportSortButton
-                        label={$t`Outgoing`}
-                        align="right"
-                        direction={reportSortDirection(
-                          categorySort,
-                          "outgoing",
-                        )}
-                        on:sort={() =>
-                          (categorySort = toggleReportSort(
-                            categorySort,
-                            "outgoing",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(categorySort, "answered")}
-                    >
-                      <ReportSortButton
-                        label={$t`Verified replies`}
-                        align="right"
-                        direction={reportSortDirection(
-                          categorySort,
-                          "answered",
-                        )}
-                        on:sort={() =>
-                          (categorySort = toggleReportSort(
-                            categorySort,
-                            "answered",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(categorySort, "average")}
-                    >
-                      <ReportSortButton
-                        label={$t`Average`}
-                        align="right"
-                        direction={reportSortDirection(
-                          categorySort,
-                          "average",
-                        )}
-                        on:sort={() =>
-                          (categorySort = toggleReportSort(
-                            categorySort,
-                            "average",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(categorySort, "minimum")}
-                    >
-                      <ReportSortButton
-                        label={$t`Minimum`}
-                        align="right"
-                        direction={reportSortDirection(
-                          categorySort,
-                          "minimum",
-                        )}
-                        on:sort={() =>
-                          (categorySort = toggleReportSort(
-                            categorySort,
-                            "minimum",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(categorySort, "maximum")}
-                    >
-                      <ReportSortButton
-                        label={$t`Maximum`}
-                        align="right"
-                        direction={reportSortDirection(
-                          categorySort,
-                          "maximum",
-                        )}
-                        on:sort={() =>
-                          (categorySort = toggleReportSort(
-                            categorySort,
-                            "maximum",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(
-                        categorySort,
-                        "withinTarget",
-                      )}
-                    >
-                      <ReportSortButton
-                        label={$t`Within target`}
-                        align="right"
-                        direction={reportSortDirection(
-                          categorySort,
-                          "withinTarget",
-                        )}
-                        on:sort={() =>
-                          (categorySort = toggleReportSort(
-                            categorySort,
-                            "withinTarget",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(
-                        categorySort,
-                        "overTarget",
-                      )}
-                    >
-                      <ReportSortButton
-                        label={$t`Over target`}
-                        align="right"
-                        direction={reportSortDirection(
-                          categorySort,
-                          "overTarget",
-                        )}
-                        on:sort={() =>
-                          (categorySort = toggleReportSort(
-                            categorySort,
-                            "overTarget",
-                          ))}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each sortedCategories as category}
-                    <tr>
-                      <th scope="row" data-label={$t`Category`}>{category.name}</th>
-                      <td class="numeric" data-label={$t`Messages with tag`}>{formatNumber(category.total)}</td>
-                      <td class="numeric" data-label={$t`Incoming requests`}>{formatNumber(category.incoming)}</td>
-                      <td class="numeric" data-label={$t`Outgoing`}>{formatNumber(category.outgoing)}</td>
-                      <td class="numeric emphasized" data-label={$t`Verified replies`}
-                        >{formatNumber(category.answered)}</td
-                      >
-                      <td class="numeric response-duration" data-label={$t`Average`}
-                        >{formatDuration(
-                          category.responseTime.averageSeconds,
-                        )}</td
-                      >
-                      <td class="numeric response-duration" data-label={$t`Minimum`}
-                        >{formatDuration(
-                          category.responseTime.minimumSeconds,
-                        )}</td
-                      >
-                      <td class="numeric response-duration" data-label={$t`Maximum`}
-                        >{formatDuration(
-                          category.responseTime.maximumSeconds,
-                        )}</td
-                      >
-                      <td class="numeric emphasized" data-label={$t`Within target`}
-                        ><span class="table-value"
-                          >{formatNumber(category.responseTime.withinTarget)}
-                          <span class="table-rate"
-                            >({formatPercent(
-                              responseRate(
-                                category.responseTime.withinTarget,
-                                category.responseTime.answered,
-                              ),
-                            )})</span
-                          ></span
-                        ></td
-                      >
-                      <td class="numeric overdue-value" data-label={$t`Over target`}
-                        >{formatNumber(category.responseTime.overTarget)}</td
-                      >
-                    </tr>
-                  {:else}
-                    <tr
-                      ><td colspan="10" class="empty-cell"
-                        >{$t`No categories are used in this period.`}</td
-                      ></tr
-                    >
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-            <p class="table-note">
-              {$t`One message can have multiple tags, so category rows are not additive.`}
-            </p>
-          </section>
-        </div>
-
-        <div
-          class={dashboardPanelClass("mail-breakdown", dashboardLayout)}
-          style={dashboardPanelStyle("mail-breakdown", dashboardLayout)}
-          role="listitem"
-          draggable={dashboardLayoutMode}
-          on:dragstart={(event) =>
-            onDashboardDragStart("mail-breakdown", event)}
-          on:dragover|preventDefault
-          on:drop={(event) => onDashboardDrop("mail-breakdown", event)}
-          on:dragend={onDashboardDragEnd}
-        >
-          {#if dashboardLayoutMode}
-            <ReportPanelControls
-              sectionId="mail-breakdown"
-              sectionLabel={dashboardSectionLabel("mail-breakdown")}
-              width={dashboardPanel("mail-breakdown").width}
-              tall={dashboardPanel("mail-breakdown").tall}
-              on:move={(event) => onDashboardMove("mail-breakdown", event)}
-              on:width={(event) => onDashboardWidth("mail-breakdown", event)}
-              on:height={(event) => onDashboardHeight("mail-breakdown", event)}
-            />
-          {/if}
-          <section class="panel" aria-labelledby="mail-breakdown-title">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">{$t`MAILBOXES`}</p>
-                <h2 id="mail-breakdown-title">{$t`Mail breakdown`}</h2>
-                <p>{$t`Accounts and folders with the most activity.`}</p>
-              </div>
-              <span class="panel-icon"><MailIcon size="19px" /></span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <caption class="visually-hidden"
-                  >{$t`Mail activity by account`}</caption
-                >
-                <thead>
-                  <tr>
-                    <th
-                      scope="col"
-                      aria-sort={reportSortAriaValue(accountSort, "name")}
-                    >
-                      <ReportSortButton
-                        label={$t`Account`}
-                        direction={reportSortDirection(accountSort, "name")}
-                        on:sort={() =>
-                          (accountSort = toggleReportSort(accountSort, "name"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(accountSort, "total")}
-                    >
-                      <ReportSortButton
-                        label={$t`Messages`}
-                        align="right"
-                        direction={reportSortDirection(accountSort, "total")}
-                        on:sort={() =>
-                          (accountSort = toggleReportSort(accountSort, "total"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(accountSort, "incoming")}
-                    >
-                      <ReportSortButton
-                        label={$t`In`}
-                        align="right"
-                        direction={reportSortDirection(accountSort, "incoming")}
-                        on:sort={() =>
-                          (accountSort = toggleReportSort(
+                    <thead>
+                      <tr>
+                        <th
+                          scope="col"
+                          aria-sort={reportSortAriaValue(accountSort, "name")}
+                        >
+                          <ReportSortButton
+                            label={$t`Account`}
+                            direction={reportSortDirection(accountSort, "name")}
+                            on:sort={() =>
+                              (accountSort = toggleReportSort(
+                                accountSort,
+                                "name",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(accountSort, "total")}
+                        >
+                          <ReportSortButton
+                            label={$t`Messages`}
+                            align="right"
+                            direction={reportSortDirection(
+                              accountSort,
+                              "total",
+                            )}
+                            on:sort={() =>
+                              (accountSort = toggleReportSort(
+                                accountSort,
+                                "total",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
                             accountSort,
                             "incoming",
-                          ))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(accountSort, "outgoing")}
-                    >
-                      <ReportSortButton
-                        label={$t`Out`}
-                        align="right"
-                        direction={reportSortDirection(accountSort, "outgoing")}
-                        on:sort={() =>
-                          (accountSort = toggleReportSort(
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`In`}
+                            align="right"
+                            direction={reportSortDirection(
+                              accountSort,
+                              "incoming",
+                            )}
+                            on:sort={() =>
+                              (accountSort = toggleReportSort(
+                                accountSort,
+                                "incoming",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
                             accountSort,
                             "outgoing",
-                          ))}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each sortedAccounts as account}
-                    <tr>
-                      <th scope="row">{account.accountName}</th>
-                      <td class="numeric">{formatNumber(account.total)}</td>
-                      <td class="numeric">{formatNumber(account.incoming)}</td>
-                      <td class="numeric">{formatNumber(account.outgoing)}</td>
-                    </tr>
-                  {:else}
-                    <tr
-                      ><td colspan="4" class="empty-cell"
-                        >{$t`No mail data for this period.`}</td
-                      ></tr
-                    >
-                  {/each}
-                </tbody>
-              </table>
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Out`}
+                            align="right"
+                            direction={reportSortDirection(
+                              accountSort,
+                              "outgoing",
+                            )}
+                            on:sort={() =>
+                              (accountSort = toggleReportSort(
+                                accountSort,
+                                "outgoing",
+                              ))}
+                          />
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each sortedAccounts as account}
+                        <tr>
+                          <th scope="row">{account.accountName}</th>
+                          <td class="numeric">{formatNumber(account.total)}</td>
+                          <td class="numeric"
+                            >{formatNumber(account.incoming)}</td
+                          >
+                          <td class="numeric"
+                            >{formatNumber(account.outgoing)}</td
+                          >
+                        </tr>
+                      {:else}
+                        <tr
+                          ><td colspan="4" class="empty-cell"
+                            >{$t`No mail data for this period.`}</td
+                          ></tr
+                        >
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
             </div>
-          </section>
-        </div>
 
-        <div
-          class={dashboardPanelClass("calendar", dashboardLayout)}
-          style={dashboardPanelStyle("calendar", dashboardLayout)}
-          role="listitem"
-          draggable={dashboardLayoutMode}
-          on:dragstart={(event) => onDashboardDragStart("calendar", event)}
-          on:dragover|preventDefault
-          on:drop={(event) => onDashboardDrop("calendar", event)}
-          on:dragend={onDashboardDragEnd}
-        >
-          {#if dashboardLayoutMode}
-            <ReportPanelControls
-              sectionId="calendar"
-              sectionLabel={dashboardSectionLabel("calendar")}
-              width={dashboardPanel("calendar").width}
-              tall={dashboardPanel("calendar").tall}
-              on:move={(event) => onDashboardMove("calendar", event)}
-              on:width={(event) => onDashboardWidth("calendar", event)}
-              on:height={(event) => onDashboardHeight("calendar", event)}
-            />
-          {/if}
-          <section class="panel" aria-labelledby="calendar-title">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">{$t`TIME`}</p>
-                <h2 id="calendar-title">{$t`Calendar workload`}</h2>
-                <p>{$t`Time spent in events, by calendar.`}</p>
-              </div>
-              <span class="panel-icon"><CalendarIcon size="19px" /></span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <caption class="visually-hidden"
-                  >{$t`Calendar workload by calendar`}</caption
-                >
-                <thead>
-                  <tr>
-                    <th
-                      scope="col"
-                      aria-sort={reportSortAriaValue(calendarSort, "name")}
+            <div
+              class={dashboardPanelClass("calendar", dashboardLayout)}
+              style={dashboardPanelStyle("calendar", dashboardLayout)}
+              role="listitem"
+              draggable={dashboardLayoutMode}
+              on:dragstart={(event) => onDashboardDragStart("calendar", event)}
+              on:dragover|preventDefault
+              on:drop={(event) => onDashboardDrop("calendar", event)}
+              on:dragend={onDashboardDragEnd}
+            >
+              {#if dashboardLayoutMode}
+                <ReportPanelControls
+                  sectionId="calendar"
+                  sectionLabel={dashboardSectionLabel("calendar")}
+                  width={dashboardPanel("calendar").width}
+                  tall={dashboardPanel("calendar").tall}
+                  on:move={(event) => onDashboardMove("calendar", event)}
+                  on:width={(event) => onDashboardWidth("calendar", event)}
+                  on:height={(event) => onDashboardHeight("calendar", event)}
+                />
+              {/if}
+              <section class="panel" aria-labelledby="calendar-title">
+                <div class="panel-header">
+                  <div>
+                    <p class="panel-kicker">{$t`TIME`}</p>
+                    <h2 id="calendar-title">{$t`Calendar workload`}</h2>
+                    <p>{$t`Time spent in events, by calendar.`}</p>
+                  </div>
+                  <span class="panel-icon"><CalendarIcon size="19px" /></span>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <caption class="visually-hidden"
+                      >{$t`Calendar workload by calendar`}</caption
                     >
-                      <ReportSortButton
-                        label={$t`Calendar`}
-                        direction={reportSortDirection(calendarSort, "name")}
-                        on:sort={() =>
-                          (calendarSort = toggleReportSort(calendarSort, "name"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(calendarSort, "events")}
-                    >
-                      <ReportSortButton
-                        label={$t`Events`}
-                        align="right"
-                        direction={reportSortDirection(calendarSort, "events")}
-                        on:sort={() =>
-                          (calendarSort = toggleReportSort(calendarSort, "events"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(calendarSort, "hours")}
-                    >
-                      <ReportSortButton
-                        label={$t`Hours`}
-                        align="right"
-                        direction={reportSortDirection(calendarSort, "hours")}
-                        on:sort={() =>
-                          (calendarSort = toggleReportSort(calendarSort, "hours"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(
-                        calendarSort,
-                        "participants",
-                      )}
-                    >
-                      <ReportSortButton
-                        label={$t`People`}
-                        align="right"
-                        direction={reportSortDirection(
-                          calendarSort,
-                          "participants",
-                        )}
-                        on:sort={() =>
-                          (calendarSort = toggleReportSort(
+                    <thead>
+                      <tr>
+                        <th
+                          scope="col"
+                          aria-sort={reportSortAriaValue(calendarSort, "name")}
+                        >
+                          <ReportSortButton
+                            label={$t`Calendar`}
+                            direction={reportSortDirection(
+                              calendarSort,
+                              "name",
+                            )}
+                            on:sort={() =>
+                              (calendarSort = toggleReportSort(
+                                calendarSort,
+                                "name",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
+                            calendarSort,
+                            "events",
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Events`}
+                            align="right"
+                            direction={reportSortDirection(
+                              calendarSort,
+                              "events",
+                            )}
+                            on:sort={() =>
+                              (calendarSort = toggleReportSort(
+                                calendarSort,
+                                "events",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(calendarSort, "hours")}
+                        >
+                          <ReportSortButton
+                            label={$t`Hours`}
+                            align="right"
+                            direction={reportSortDirection(
+                              calendarSort,
+                              "hours",
+                            )}
+                            on:sort={() =>
+                              (calendarSort = toggleReportSort(
+                                calendarSort,
+                                "hours",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
                             calendarSort,
                             "participants",
-                          ))}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each sortedCalendars as calendar}
-                    <tr>
-                      <th scope="row">{calendar.calendarName}</th>
-                      <td class="numeric">{formatNumber(calendar.events)}</td>
-                      <td class="numeric">{formatNumber(calendar.hours, 1)}</td>
-                      <td class="numeric"
-                        >{formatNumber(calendar.participants)}</td
-                      >
-                    </tr>
-                  {:else}
-                    <tr
-                      ><td colspan="4" class="empty-cell"
-                        >{$t`No calendar data for this period.`}</td
-                      ></tr
-                    >
-                  {/each}
-                </tbody>
-              </table>
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`People`}
+                            align="right"
+                            direction={reportSortDirection(
+                              calendarSort,
+                              "participants",
+                            )}
+                            on:sort={() =>
+                              (calendarSort = toggleReportSort(
+                                calendarSort,
+                                "participants",
+                              ))}
+                          />
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each sortedCalendars as calendar}
+                        <tr>
+                          <th scope="row">{calendar.calendarName}</th>
+                          <td class="numeric"
+                            >{formatNumber(calendar.events)}</td
+                          >
+                          <td class="numeric"
+                            >{formatNumber(calendar.hours, 1)}</td
+                          >
+                          <td class="numeric"
+                            >{formatNumber(calendar.participants)}</td
+                          >
+                        </tr>
+                      {:else}
+                        <tr
+                          ><td colspan="4" class="empty-cell"
+                            >{$t`No calendar data for this period.`}</td
+                          ></tr
+                        >
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
             </div>
-          </section>
-        </div>
 
-        <div
-          class={dashboardPanelClass("chat", dashboardLayout)}
-          style={dashboardPanelStyle("chat", dashboardLayout)}
-          role="listitem"
-          draggable={dashboardLayoutMode}
-          on:dragstart={(event) => onDashboardDragStart("chat", event)}
-          on:dragover|preventDefault
-          on:drop={(event) => onDashboardDrop("chat", event)}
-          on:dragend={onDashboardDragEnd}
-        >
-          {#if dashboardLayoutMode}
-            <ReportPanelControls
-              sectionId="chat"
-              sectionLabel={dashboardSectionLabel("chat")}
-              width={dashboardPanel("chat").width}
-              tall={dashboardPanel("chat").tall}
-              on:move={(event) => onDashboardMove("chat", event)}
-              on:width={(event) => onDashboardWidth("chat", event)}
-              on:height={(event) => onDashboardHeight("chat", event)}
-            />
-          {/if}
-          <section class="panel" aria-labelledby="chat-title">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">{$t`CONVERSATIONS`}</p>
-                <h2 id="chat-title">{$t`Chat rooms`}</h2>
-                <p>{$t`Rooms with the most messages in the period.`}</p>
-              </div>
-              <span class="panel-icon"><ChatIcon size="19px" /></span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <caption class="visually-hidden"
-                  >{$t`Chat activity by room`}</caption
-                >
-                <thead>
-                  <tr>
-                    <th
-                      scope="col"
-                      aria-sort={reportSortAriaValue(chatSort, "room")}
+            <div
+              class={dashboardPanelClass("chat", dashboardLayout)}
+              style={dashboardPanelStyle("chat", dashboardLayout)}
+              role="listitem"
+              draggable={dashboardLayoutMode}
+              on:dragstart={(event) => onDashboardDragStart("chat", event)}
+              on:dragover|preventDefault
+              on:drop={(event) => onDashboardDrop("chat", event)}
+              on:dragend={onDashboardDragEnd}
+            >
+              {#if dashboardLayoutMode}
+                <ReportPanelControls
+                  sectionId="chat"
+                  sectionLabel={dashboardSectionLabel("chat")}
+                  width={dashboardPanel("chat").width}
+                  tall={dashboardPanel("chat").tall}
+                  on:move={(event) => onDashboardMove("chat", event)}
+                  on:width={(event) => onDashboardWidth("chat", event)}
+                  on:height={(event) => onDashboardHeight("chat", event)}
+                />
+              {/if}
+              <section class="panel" aria-labelledby="chat-title">
+                <div class="panel-header">
+                  <div>
+                    <p class="panel-kicker">{$t`CONVERSATIONS`}</p>
+                    <h2 id="chat-title">{$t`Chat rooms`}</h2>
+                    <p>{$t`Rooms with the most messages in the period.`}</p>
+                  </div>
+                  <span class="panel-icon"><ChatIcon size="19px" /></span>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <caption class="visually-hidden"
+                      >{$t`Chat activity by room`}</caption
                     >
-                      <ReportSortButton
-                        label={$t`Room`}
-                        direction={reportSortDirection(chatSort, "room")}
-                        on:sort={() =>
-                          (chatSort = toggleReportSort(chatSort, "room"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(chatSort, "messages")}
-                    >
-                      <ReportSortButton
-                        label={$t`Messages`}
-                        align="right"
-                        direction={reportSortDirection(chatSort, "messages")}
-                        on:sort={() =>
-                          (chatSort = toggleReportSort(chatSort, "messages"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(chatSort, "sent")}
-                    >
-                      <ReportSortButton
-                        label={$t`Sent`}
-                        align="right"
-                        direction={reportSortDirection(chatSort, "sent")}
-                        on:sort={() =>
-                          (chatSort = toggleReportSort(chatSort, "sent"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(
-                        chatSort,
-                        "lastActivity",
-                      )}
-                    >
-                      <ReportSortButton
-                        label={$t`Last activity`}
-                        align="right"
-                        direction={reportSortDirection(
-                          chatSort,
-                          "lastActivity",
-                        )}
-                        on:sort={() =>
-                          (chatSort = toggleReportSort(
+                    <thead>
+                      <tr>
+                        <th
+                          scope="col"
+                          aria-sort={reportSortAriaValue(chatSort, "room")}
+                        >
+                          <ReportSortButton
+                            label={$t`Room`}
+                            direction={reportSortDirection(chatSort, "room")}
+                            on:sort={() =>
+                              (chatSort = toggleReportSort(chatSort, "room"))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(chatSort, "messages")}
+                        >
+                          <ReportSortButton
+                            label={$t`Messages`}
+                            align="right"
+                            direction={reportSortDirection(
+                              chatSort,
+                              "messages",
+                            )}
+                            on:sort={() =>
+                              (chatSort = toggleReportSort(
+                                chatSort,
+                                "messages",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(chatSort, "sent")}
+                        >
+                          <ReportSortButton
+                            label={$t`Sent`}
+                            align="right"
+                            direction={reportSortDirection(chatSort, "sent")}
+                            on:sort={() =>
+                              (chatSort = toggleReportSort(chatSort, "sent"))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(
                             chatSort,
                             "lastActivity",
-                          ))}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each sortedChatRooms as room}
-                    <tr>
-                      <th scope="row"
-                        ><span>{room.roomName}</span><span class="person-email"
-                          >{room.accountName}</span
-                        ></th
-                      >
-                      <td class="numeric">{formatNumber(room.total)}</td>
-                      <td class="numeric">{formatNumber(room.outgoing)}</td>
-                      <td class="numeric muted"
-                        >{formatDate(room.lastActivity)}</td
-                      >
-                    </tr>
-                  {:else}
-                    <tr
-                      ><td colspan="4" class="empty-cell"
-                        >{$t`No chat data for this period.`}</td
-                      ></tr
-                    >
-                  {/each}
-                </tbody>
-              </table>
+                          )}
+                        >
+                          <ReportSortButton
+                            label={$t`Last activity`}
+                            align="right"
+                            direction={reportSortDirection(
+                              chatSort,
+                              "lastActivity",
+                            )}
+                            on:sort={() =>
+                              (chatSort = toggleReportSort(
+                                chatSort,
+                                "lastActivity",
+                              ))}
+                          />
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each sortedChatRooms as room}
+                        <tr>
+                          <th scope="row"
+                            ><span>{room.roomName}</span><span
+                              class="person-email">{room.accountName}</span
+                            ></th
+                          >
+                          <td class="numeric">{formatNumber(room.total)}</td>
+                          <td class="numeric">{formatNumber(room.outgoing)}</td>
+                          <td class="numeric muted"
+                            >{formatDate(room.lastActivity)}</td
+                          >
+                        </tr>
+                      {:else}
+                        <tr
+                          ><td colspan="4" class="empty-cell"
+                            >{$t`No chat data for this period.`}</td
+                          ></tr
+                        >
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
             </div>
-          </section>
+
+            <div
+              class={dashboardPanelClass("files", dashboardLayout)}
+              style={dashboardPanelStyle("files", dashboardLayout)}
+              role="listitem"
+              draggable={dashboardLayoutMode}
+              on:dragstart={(event) => onDashboardDragStart("files", event)}
+              on:dragover|preventDefault
+              on:drop={(event) => onDashboardDrop("files", event)}
+              on:dragend={onDashboardDragEnd}
+            >
+              {#if dashboardLayoutMode}
+                <ReportPanelControls
+                  sectionId="files"
+                  sectionLabel={dashboardSectionLabel("files")}
+                  width={dashboardPanel("files").width}
+                  tall={dashboardPanel("files").tall}
+                  on:move={(event) => onDashboardMove("files", event)}
+                  on:width={(event) => onDashboardWidth("files", event)}
+                  on:height={(event) => onDashboardHeight("files", event)}
+                />
+              {/if}
+              <section class="panel" aria-labelledby="files-title">
+                <div class="panel-header">
+                  <div>
+                    <p class="panel-kicker">{$t`DOCUMENTS`}</p>
+                    <h2 id="files-title">{$t`Files changed`}</h2>
+                    <p>{$t`Directories with the most modified files.`}</p>
+                  </div>
+                  <span class="panel-icon"><FilesIcon size="19px" /></span>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <caption class="visually-hidden"
+                      >{$t`File changes by directory`}</caption
+                    >
+                    <thead>
+                      <tr>
+                        <th
+                          scope="col"
+                          aria-sort={reportSortAriaValue(fileSort, "directory")}
+                        >
+                          <ReportSortButton
+                            label={$t`Directory`}
+                            direction={reportSortDirection(
+                              fileSort,
+                              "directory",
+                            )}
+                            on:sort={() =>
+                              (fileSort = toggleReportSort(
+                                fileSort,
+                                "directory",
+                              ))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(fileSort, "files")}
+                        >
+                          <ReportSortButton
+                            label={$t`Files`}
+                            align="right"
+                            direction={reportSortDirection(fileSort, "files")}
+                            on:sort={() =>
+                              (fileSort = toggleReportSort(fileSort, "files"))}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          class="numeric"
+                          aria-sort={reportSortAriaValue(fileSort, "size")}
+                        >
+                          <ReportSortButton
+                            label={$t`Size`}
+                            align="right"
+                            direction={reportSortDirection(fileSort, "size")}
+                            on:sort={() =>
+                              (fileSort = toggleReportSort(fileSort, "size"))}
+                          />
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each sortedFileDirectories as directory}
+                        <tr>
+                          <th scope="row"
+                            ><span>{directory.directoryName}</span><span
+                              class="person-email">{directory.accountName}</span
+                            ></th
+                          >
+                          <td class="numeric"
+                            >{formatNumber(directory.files)}</td
+                          >
+                          <td class="numeric">{formatBytes(directory.bytes)}</td
+                          >
+                        </tr>
+                      {:else}
+                        <tr
+                          ><td colspan="3" class="empty-cell"
+                            >{$t`No file data for this period.`}</td
+                          ></tr
+                        >
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </div>
         </div>
 
-        <div
-          class={dashboardPanelClass("files", dashboardLayout)}
-          style={dashboardPanelStyle("files", dashboardLayout)}
-          role="listitem"
-          draggable={dashboardLayoutMode}
-          on:dragstart={(event) => onDashboardDragStart("files", event)}
-          on:dragover|preventDefault
-          on:drop={(event) => onDashboardDrop("files", event)}
-          on:dragend={onDashboardDragEnd}
-        >
-          {#if dashboardLayoutMode}
-            <ReportPanelControls
-              sectionId="files"
-              sectionLabel={dashboardSectionLabel("files")}
-              width={dashboardPanel("files").width}
-              tall={dashboardPanel("files").tall}
-              on:move={(event) => onDashboardMove("files", event)}
-              on:width={(event) => onDashboardWidth("files", event)}
-              on:height={(event) => onDashboardHeight("files", event)}
-            />
-          {/if}
-          <section class="panel" aria-labelledby="files-title">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">{$t`DOCUMENTS`}</p>
-                <h2 id="files-title">{$t`Files changed`}</h2>
-                <p>{$t`Directories with the most modified files.`}</p>
-              </div>
-              <span class="panel-icon"><FilesIcon size="19px" /></span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <caption class="visually-hidden"
-                  >{$t`File changes by directory`}</caption
-                >
-                <thead>
-                  <tr>
-                    <th
-                      scope="col"
-                      aria-sort={reportSortAriaValue(fileSort, "directory")}
-                    >
-                      <ReportSortButton
-                        label={$t`Directory`}
-                        direction={reportSortDirection(fileSort, "directory")}
-                        on:sort={() =>
-                          (fileSort = toggleReportSort(fileSort, "directory"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(fileSort, "files")}
-                    >
-                      <ReportSortButton
-                        label={$t`Files`}
-                        align="right"
-                        direction={reportSortDirection(fileSort, "files")}
-                        on:sort={() =>
-                          (fileSort = toggleReportSort(fileSort, "files"))}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      class="numeric"
-                      aria-sort={reportSortAriaValue(fileSort, "size")}
-                    >
-                      <ReportSortButton
-                        label={$t`Size`}
-                        align="right"
-                        direction={reportSortDirection(fileSort, "size")}
-                        on:sort={() =>
-                          (fileSort = toggleReportSort(fileSort, "size"))}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each sortedFileDirectories as directory}
-                    <tr>
-                      <th scope="row"
-                        ><span>{directory.directoryName}</span><span
-                          class="person-email">{directory.accountName}</span
-                        ></th
-                      >
-                      <td class="numeric">{formatNumber(directory.files)}</td>
-                      <td class="numeric">{formatBytes(directory.bytes)}</td>
-                    </tr>
-                  {:else}
-                    <tr
-                      ><td colspan="3" class="empty-cell"
-                        >{$t`No file data for this period.`}</td
-                      ></tr
-                    >
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
+        <p class="report-footnote">
+          {$t`Interpretation note:`}
+          {$t`activity is a measurable proxy from synchronized local data, not a time tracker. A reply is counted when the mailbox marks the message as answered or a sent message links to the request or its thread. Response time is measured when a sent-message timestamp or the mailbox's stored answer timestamp is available. A missing history or unsynchronized account will make the report incomplete.`}
+          {$t`Response time is measured from receipt to the first verified reply; replies sent after the report end are included when the request arrived inside the selected period.`}
+          {$t`Replies without a category and with no working interval are marked as outside working hours and excluded from SLA metrics; categorized requests taken outside the schedule are measured by real elapsed time.`}
+          {$t`The mail archive stores the current category, not when it was assigned; categorized after-hours requests are therefore measured from receipt time.`}
+        </p>
       </div>
     </div>
-
-    <p class="report-footnote">
-      {$t`Interpretation note:`}
-      {$t`activity is a measurable proxy from synchronized local data, not a time tracker. A reply is counted only when a sent message links to the request or its thread. A missing history or unsynchronized account will make the report incomplete.`}
-      {$t`Response time is measured from receipt to the first verified reply; replies sent after the report end are included when the request arrived inside the selected period.`}
-      {$t`Replies with no working interval are marked as outside working hours and excluded from SLA metrics.`}
-    </p>
+  {:else}
+    <section class="report-ready-panel" aria-labelledby="report-ready-title">
+      <div class="report-ready-heading">
+        <div class="state-icon"><ChartIcon size="24px" /></div>
+        <div>
+          <p class="panel-kicker">{$t`REPORT READY`}</p>
+          <h2 id="report-ready-title">{$t`Detailed report is ready`}</h2>
+          <p>
+            {$t`Open the report inside Jackdaw to review all charts, tables and response details.`}
+          </p>
         </div>
       </div>
-    {:else}
-      <section class="report-ready-panel" aria-labelledby="report-ready-title">
-        <div class="report-ready-heading">
-          <div class="state-icon"><ChartIcon size="24px" /></div>
-          <div>
-            <p class="panel-kicker">{$t`REPORT READY`}</p>
-            <h2 id="report-ready-title">{$t`Detailed report is ready`}</h2>
-            <p>
-              {$t`Open the report inside Jackdaw to review all charts, tables and response details.`}
-            </p>
-          </div>
+      <div class="report-ready-meta">
+        <span class="period-label">{formatRange(report.range)}</span>
+        {#if report.mailAccountFilter}
+          <span class="meta-divider">·</span>
+          <span class="scope-label"
+            >{$t`Mailbox`}: {report.mailAccountFilter.accountName}{report
+              .mailAccountFilter.email
+              ? ` — ${report.mailAccountFilter.email}`
+              : ""}</span
+          >
+        {/if}
+        {#if report.mailFolderFilter}
+          <span class="meta-divider">·</span>
+          <span class="scope-label"
+            >{$t`Folder`}: {report.mailFolderFilter.name}</span
+          >
+        {/if}
+      </div>
+      <div class="report-ready-stats">
+        <div>
+          <span>{$t`Mail`}</span>
+          <strong>{formatNumber(report.summary.mailMessages)}</strong>
         </div>
-        <div class="report-ready-meta">
-          <span class="period-label">{formatRange(report.range)}</span>
-          {#if report.mailAccountFilter}
-            <span class="meta-divider">·</span>
-            <span class="scope-label"
-              >{$t`Mailbox`}: {report.mailAccountFilter.accountName}{report
-                .mailAccountFilter.email
-                ? ` — ${report.mailAccountFilter.email}`
-                : ""}</span
-            >
-          {/if}
-          {#if report.mailFolderFilter}
-            <span class="meta-divider">·</span>
-            <span class="scope-label"
-              >{$t`Folder`}: {report.mailFolderFilter.name}</span
-            >
-          {/if}
+        <div>
+          <span>{$t`Requests answered`}</span>
+          <strong>{formatNumber(report.summary.mailAnswered)}</strong>
         </div>
-        <div class="report-ready-stats">
-          <div>
-            <span>{$t`Mail`}</span>
-            <strong>{formatNumber(report.summary.mailMessages)}</strong>
-          </div>
-          <div>
-            <span>{$t`Requests answered`}</span>
-            <strong>{formatNumber(report.summary.mailAnswered)}</strong>
-          </div>
-          <div>
-            <span>{$t`Measured replies`}</span>
-            <strong>{formatNumber(visibleResponseTimeStats.answered)}</strong>
-          </div>
-          <div>
-            <span>{$t`Within target`}</span>
-            <strong
-              >{formatPercent(
-                responseRate(
-                  visibleResponseTimeStats.withinTarget,
-                  visibleResponseTimeStats.answered,
-                ),
-              )}</strong
-            >
-          </div>
+        <div>
+          <span>{$t`Measured replies`}</span>
+          <strong>{formatNumber(visibleResponseTimeStats.answered)}</strong>
         </div>
-        <button type="button" class="primary-button" on:click={openReportViewer}>
-          <ChartIcon size="16px" />
-          <span>{$t`Open detailed report`}</span>
-        </button>
-      </section>
-    {/if}
+        <div>
+          <span>{$t`Within target`}</span>
+          <strong
+            >{formatPercent(
+              responseRate(
+                visibleResponseTimeStats.withinTarget,
+                visibleResponseTimeStats.answered,
+              ),
+            )}</strong
+          >
+        </div>
+      </div>
+      <button type="button" class="primary-button" on:click={openReportViewer}>
+        <ChartIcon size="16px" />
+        <span>{$t`Open detailed report`}</span>
+      </button>
+    </section>
   {/if}
 </main>
 
@@ -5579,7 +6370,7 @@
 
   .response-metrics {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 8px;
     margin-bottom: 18px;
   }
@@ -5633,6 +6424,11 @@
     color: var(--danger-fg, #b84e3b);
   }
 
+  .response-metric-after-hours strong,
+  .response-metric-after-hours > small {
+    color: var(--reports-accent);
+  }
+
   .response-time-note {
     margin: 7px 0 0;
     color: color-mix(in srgb, var(--reports-accent) 82%, var(--main-fg));
@@ -5648,6 +6444,382 @@
 
   .response-detail-block {
     min-width: 0;
+  }
+
+  .after-hours-response-block {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+
+  .after-hours-response-block .table-wrap {
+    max-height: min(52vh, 640px);
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .after-hours-response-block .table-wrap thead {
+    position: sticky;
+    z-index: 1;
+    top: 0;
+    background: var(--headerbar-bg);
+  }
+
+  .after-hours-response-table {
+    table-layout: fixed;
+  }
+
+  .after-hours-response-table th:nth-child(1),
+  .after-hours-response-table td:nth-child(1) {
+    width: 16%;
+  }
+
+  .after-hours-response-table th:nth-child(2),
+  .after-hours-response-table td:nth-child(2) {
+    width: 18%;
+  }
+
+  .after-hours-response-table th:nth-child(3),
+  .after-hours-response-table td:nth-child(3) {
+    width: 14%;
+  }
+
+  .after-hours-response-table th:nth-child(4),
+  .after-hours-response-table td:nth-child(4) {
+    width: 36%;
+  }
+
+  .after-hours-response-table th:nth-child(5),
+  .after-hours-response-table td:nth-child(5) {
+    width: 16%;
+  }
+
+  .category-rhythm-panel {
+    max-width: 1440px;
+  }
+
+  .rhythm-leader-callout {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 7px;
+    max-width: min(360px, 100%);
+    padding: 8px 10px;
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--reports-accent) 10%, transparent);
+    color: color-mix(in srgb, var(--main-fg) 62%, transparent);
+    font-size: 12px;
+  }
+
+  .rhythm-leader-callout :global(svg) {
+    flex-shrink: 0;
+    color: var(--reports-accent);
+  }
+
+  .rhythm-leader-callout > span {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 5px;
+  }
+
+  .rhythm-leader-callout strong:first-of-type {
+    overflow: hidden;
+    color: var(--main-fg);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rhythm-leader-callout strong:last-of-type {
+    color: var(--reports-accent);
+  }
+
+  .category-rhythm-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 18px;
+  }
+
+  .rhythm-ranking,
+  .category-rhythm-focus,
+  .rhythm-overview {
+    min-width: 0;
+  }
+
+  .rhythm-bar-chart {
+    display: grid;
+    gap: 6px;
+  }
+
+  .rhythm-rank-row {
+    display: grid;
+    grid-template-columns:
+      22px minmax(110px, 0.8fr) minmax(80px, 1fr)
+      34px 48px;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 7px 8px;
+    background: transparent;
+    color: var(--main-fg);
+    text-align: left;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      transform 150ms ease;
+  }
+
+  .rhythm-rank-row:hover {
+    border-color: var(--border);
+    background: var(--hover-bg);
+  }
+
+  .rhythm-rank-row:active {
+    transform: scale(0.995);
+  }
+
+  .rhythm-rank-row:focus-visible {
+    outline: 2px solid var(--reports-accent);
+    outline-offset: 2px;
+  }
+
+  .rhythm-rank-row.active {
+    border-color: color-mix(in srgb, var(--reports-accent) 55%, var(--border));
+    background: color-mix(in srgb, var(--reports-accent) 9%, transparent);
+  }
+
+  .rhythm-rank-index {
+    color: color-mix(in srgb, var(--main-fg) 48%, transparent);
+    font-size: 11px;
+    font-weight: 750;
+    text-align: center;
+  }
+
+  .rhythm-rank-name {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rhythm-rank-track {
+    display: block;
+    height: 9px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--main-fg) 9%, transparent);
+  }
+
+  .rhythm-rank-track > span {
+    display: block;
+    height: 100%;
+    min-width: 0;
+    border-radius: inherit;
+    background: var(--reports-accent);
+  }
+
+  .rhythm-rank-count {
+    color: var(--reports-accent);
+    font-size: 12px;
+    text-align: right;
+  }
+
+  .rhythm-rank-row small {
+    color: color-mix(in srgb, var(--main-fg) 54%, transparent);
+    font-size: 10px;
+    text-align: right;
+  }
+
+  .rhythm-focus-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .rhythm-category-select {
+    flex: 0 1 260px;
+    min-width: 150px;
+  }
+
+  .rhythm-category-select select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .rhythm-focus-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+    margin-bottom: 12px;
+  }
+
+  .rhythm-focus-stats > div {
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--main-bg) 88%, var(--reports-accent));
+  }
+
+  .rhythm-focus-stats span,
+  .rhythm-focus-stats strong,
+  .rhythm-focus-stats small {
+    display: block;
+  }
+
+  .rhythm-focus-stats span {
+    overflow: hidden;
+    color: color-mix(in srgb, var(--main-fg) 54%, transparent);
+    font-size: 10px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rhythm-focus-stats strong {
+    margin: 7px 0 3px;
+    overflow: hidden;
+    color: var(--main-fg);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rhythm-focus-stats small {
+    min-height: 27px;
+    color: color-mix(in srgb, var(--main-fg) 48%, transparent);
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .category-rhythm-heatmap-scroll {
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .category-rhythm-heatmap {
+    display: grid;
+    grid-template-columns: 54px repeat(24, minmax(16px, 1fr));
+    grid-auto-rows: 22px;
+    gap: 3px;
+    min-width: 650px;
+  }
+
+  .category-rhythm-heatmap .heat-cell {
+    cursor: help;
+  }
+
+  .rhythm-overview {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+
+  .rhythm-overview-table th:nth-child(1),
+  .rhythm-overview-table td:nth-child(1) {
+    width: 20%;
+  }
+
+  .rhythm-overview-table th:nth-child(2),
+  .rhythm-overview-table td:nth-child(2) {
+    width: 8%;
+  }
+
+  .rhythm-overview-table th:nth-child(3),
+  .rhythm-overview-table td:nth-child(3) {
+    width: 9%;
+  }
+
+  .rhythm-overview-table th:nth-child(4),
+  .rhythm-overview-table td:nth-child(4) {
+    width: 11%;
+  }
+
+  .rhythm-overview-table th:nth-child(5),
+  .rhythm-overview-table td:nth-child(5),
+  .rhythm-overview-table th:nth-child(6),
+  .rhythm-overview-table td:nth-child(6) {
+    width: 9%;
+  }
+
+  .rhythm-overview-table th:nth-child(7),
+  .rhythm-overview-table td:nth-child(7) {
+    width: 12%;
+  }
+
+  .rhythm-overview-table th:nth-child(8),
+  .rhythm-overview-table td:nth-child(8),
+  .rhythm-overview-table th:nth-child(9),
+  .rhythm-overview-table td:nth-child(9) {
+    width: 11%;
+  }
+
+  .rhythm-overview-table thead th {
+    font-size: clamp(8px, 0.72cqw, 10px);
+    letter-spacing: 0.03em;
+    line-height: 1.15;
+    overflow-wrap: break-word;
+    text-wrap: balance;
+  }
+
+  .rhythm-overview-table thead .numeric {
+    white-space: normal;
+  }
+
+  .rhythm-disclaimer {
+    color: color-mix(in srgb, var(--reports-accent) 72%, var(--main-fg));
+  }
+
+  @container dashboard-item (max-width: 900px) {
+    .category-rhythm-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @container dashboard-item (max-width: 720px) {
+    .rhythm-focus-stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .rhythm-focus-heading {
+      flex-direction: column;
+    }
+
+    .rhythm-category-select {
+      width: 100%;
+    }
+  }
+
+  @container dashboard-item (max-width: 520px) {
+    .rhythm-focus-stats {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .rhythm-rank-row {
+      grid-template-rows: auto 9px;
+    }
+
+    .rhythm-rank-track {
+      grid-column: 2;
+      grid-row: 2;
+    }
+
+    .rhythm-rank-count {
+      grid-column: 3;
+      grid-row: 1;
+    }
+
+    .rhythm-rank-row small {
+      grid-column: 3;
+      grid-row: 2;
+    }
   }
 
   .subpanel-heading {
@@ -5703,6 +6875,43 @@
   .status-pill.outside-hours {
     background: color-mix(in srgb, var(--main-fg) 9%, transparent);
     color: color-mix(in srgb, var(--main-fg) 58%, transparent);
+  }
+
+  .response-status-stack {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .outside-hours-marker,
+  .outside-hours-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: color-mix(in srgb, var(--reports-accent) 82%, var(--main-fg));
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .outside-hours-marker {
+    padding: 3px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--reports-accent) 13%, transparent);
+  }
+
+  .outside-hours-legend {
+    margin-left: 8px;
+    font-weight: 600;
+  }
+
+  .outside-hours-legend i {
+    width: 8px;
+    height: 8px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--reports-accent) 25%, transparent);
+    box-shadow: inset 3px 0 0 var(--reports-accent);
   }
 
   .layout-help {
@@ -5926,7 +7135,11 @@
   }
 
   .outside-hours-row td {
-    color: color-mix(in srgb, var(--main-fg) 64%, transparent);
+    background: color-mix(in srgb, var(--reports-accent) 7%, transparent);
+  }
+
+  .outside-hours-row td:first-child {
+    box-shadow: inset 3px 0 0 var(--reports-accent);
   }
 
   .response-open-error {
@@ -6349,12 +7562,21 @@
   }
 
   .dashboard-item:not(.layout-full) .responsive-report-table tbody .person-name,
-  .dashboard-item:not(.layout-full) .responsive-report-table tbody .person-email,
-  .dashboard-item:not(.layout-full) .responsive-report-table tbody .table-value {
+  .dashboard-item:not(.layout-full)
+    .responsive-report-table
+    tbody
+    .person-email,
+  .dashboard-item:not(.layout-full)
+    .responsive-report-table
+    tbody
+    .table-value {
     grid-column: 2;
   }
 
-  .dashboard-item:not(.layout-full) .responsive-report-table tbody .person-email {
+  .dashboard-item:not(.layout-full)
+    .responsive-report-table
+    tbody
+    .person-email {
     margin-top: 0;
     white-space: normal;
     overflow-wrap: break-word;
@@ -6376,7 +7598,11 @@
     white-space: normal;
   }
 
-  .dashboard-item:not(.layout-full) .responsive-report-table tbody .email-link span {
+  .dashboard-item:not(.layout-full)
+    .responsive-report-table
+    tbody
+    .email-link
+    span {
     min-width: 0;
     overflow: visible;
     text-overflow: clip;
@@ -6384,25 +7610,36 @@
     overflow-wrap: break-word;
   }
 
-  .dashboard-item:not(.layout-full) .responsive-report-table tbody .status-pill {
+  .dashboard-item:not(.layout-full)
+    .responsive-report-table
+    tbody
+    .status-pill {
     justify-self: start;
     min-width: 0;
     max-width: 100%;
     white-space: normal;
   }
 
-  .dashboard-item:not(.layout-full) .responsive-report-table tbody td.empty-cell {
+  .dashboard-item:not(.layout-full)
+    .responsive-report-table
+    tbody
+    td.empty-cell {
     display: block;
     grid-column: 1 / -1;
     padding: 16px 8px;
     text-align: center;
   }
 
-  .dashboard-item:not(.layout-full) .responsive-report-table tbody td.empty-cell::before {
+  .dashboard-item:not(.layout-full)
+    .responsive-report-table
+    tbody
+    td.empty-cell::before {
     display: none;
   }
 
-  .dashboard-item:not(.layout-full) .responsive-report-table :global(.table-sort-button) {
+  .dashboard-item:not(.layout-full)
+    .responsive-report-table
+    :global(.table-sort-button) {
     font-size: clamp(8px, 0.72cqw, 10px);
     white-space: normal;
     word-break: keep-all;
@@ -6470,7 +7707,6 @@
     .response-metrics {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
-
   }
 
   @container reports-page (max-width: 1180px) {
@@ -6567,12 +7803,16 @@
       width: 100%;
     }
 
-    .dashboard-item:not(.layout-full) .response-detail-block tbody .status-pill {
+    .dashboard-item:not(.layout-full)
+      .response-detail-block
+      tbody
+      .status-pill {
       justify-self: start;
     }
 
     .dashboard-item:not(.layout-full)
-      .response-detail-block tbody
+      .response-detail-block
+      tbody
       td.empty-cell {
       display: block;
       padding: 16px 8px;
@@ -6580,7 +7820,8 @@
     }
 
     .dashboard-item:not(.layout-full)
-      .response-detail-block tbody
+      .response-detail-block
+      tbody
       td.empty-cell::before {
       display: none;
     }
@@ -6713,5 +7954,4 @@
       margin-left: 0;
     }
   }
-
 </style>

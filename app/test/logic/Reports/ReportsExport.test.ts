@@ -131,6 +131,22 @@ function fixture(): ReportData {
           contactEmail: "requester@example.com",
           requestAt: new Date("2026-09-12T12:00:00Z"),
           responseAt: new Date("2026-09-12T12:05:00Z"),
+          responderAccountName: "Personal profile",
+          durationSeconds: 300,
+          withinTarget: true,
+          responseTimeStatus: "measured",
+          categoryNames: ["Никита Левченко"],
+        },
+        {
+          emailId: 13,
+          folderId: 201,
+          accountId: 1,
+          accountName: "Main profile",
+          subject: "Без категории",
+          contactName: "Requester",
+          contactEmail: "requester@example.com",
+          requestAt: new Date("2026-09-12T12:10:00Z"),
+          responseAt: new Date("2026-09-12T12:15:00Z"),
           durationSeconds: null,
           withinTarget: null,
           responseTimeStatus: "outside-working-hours",
@@ -158,7 +174,26 @@ function fixture(): ReportData {
           lastActivity: date,
         },
       ],
-      categories: [],
+      categories: [
+        {
+          name: "Никита Левченко",
+          total: 2,
+          incoming: 2,
+          outgoing: 0,
+          answered: 2,
+          lastActivity: date,
+          peakWeekday: 2,
+          peakHour: 12,
+          responseTime: {
+            answered: 1,
+            averageSeconds: 3_600,
+            minimumSeconds: 3_600,
+            maximumSeconds: 3_600,
+            withinTarget: 0,
+            overTarget: 1,
+          },
+        },
+      ],
       daily: [],
       activity: [],
     },
@@ -199,7 +234,18 @@ test("escapes report values in standalone HTML", () => {
   expect(html).toContain("Запросы по категориям");
   expect(html).toContain("Ответы по дням и SLA");
   expect(html).toContain("Ответы вне рабочего времени");
+  expect(html).toContain("Ответы вне рабочего времени с категорией сотрудника");
+  expect(html).toContain("Кто отвечал вне графика");
+  expect(html).toContain("Кто отвечает чаще вне графика");
+  expect(html).toContain("Тихие рабочие слоты");
+  expect(html).toContain(
+    "Первые подтверждённые ответы, отправленные вне выбранного графика.",
+  );
   expect(html).toContain("Не оценивается");
+  expect(html).toContain("В срок · Вне рабочего времени");
+  expect(html).toContain('<tr class="outside-hours-row">');
+  expect(html).toContain("Main profile");
+  expect(html).not.toContain("Personal profile");
   expect(html).toContain("Вне рабочего времени");
   expect(html).not.toContain("CSV");
   expect(html).toContain(
@@ -229,6 +275,17 @@ test("includes selected mailbox scope in exports", () => {
 
   expect(html).toContain("integrators — integrators@example.com");
   expect(html).toContain("папка: Входящие");
+});
+
+test("keeps the category responder metric semantically labeled", () => {
+  const html = createReportHTML(fixture(), {
+    responderColumnLabel: "Сотрудник",
+    responderMetricLabel: "Подтверждённые ответы",
+    employeeCategoryNames: ["Никита Левченко"],
+  });
+
+  expect(html).toContain("Подтверждённые ответы");
+  expect(html).not.toContain('<th scope="col">Отправлено</th>');
 });
 
 test("includes the complete response detail list in the HTML report", () => {

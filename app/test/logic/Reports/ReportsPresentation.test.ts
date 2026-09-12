@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import {
   REPORT_DASHBOARD_DEFAULT_LAYOUT,
+  buildCategoryRhythmRows,
   buildCategoryResponderRows,
   defaultResponderCategoryNames,
   filterReportResponsesByCategories,
@@ -11,9 +12,11 @@ import {
   normalizeResponderAttributionConfig,
   reportDashboardWidthColumns,
   responderResponseShare,
+  sortCategoryRhythmRows,
 } from "../../../logic/Reports/ReportsPresentation";
 import { emptyResponseTimeStats } from "../../../logic/Reports/ReportsData";
 import type { MailResponseRow } from "../../../logic/Reports/ReportsData";
+import { DEFAULT_WORKING_HOURS_SCHEDULE } from "../../../logic/Reports/WorkingHours";
 
 test("normalizes and reorders dashboard panels without losing panels", () => {
   const layout = normalizeReportDashboardLayout([
@@ -43,6 +46,68 @@ test("maps dashboard width choices to stable six-column spans", () => {
 test("calculates responder share from all answered requests", () => {
   expect(responderResponseShare(65, 415)).toBe(65 / 415);
   expect(responderResponseShare(1, 0)).toBe(0);
+});
+
+test("builds employee rhythm and ranks after-hours replies", () => {
+  const responseRow = (
+    emailId: number,
+    categoryNames: string[],
+    responseAt: Date,
+  ): MailResponseRow => ({
+    emailId,
+    folderId: 1,
+    accountId: 1,
+    accountName: "Общий ящик",
+    subject: "Тест",
+    contactName: "Контакт",
+    contactEmail: "contact@example.com",
+    requestAt: new Date(responseAt.getTime() - 60_000),
+    responseAt,
+    durationSeconds: 60,
+    withinTarget: true,
+    responseTimeStatus: "measured",
+    categoryNames,
+  });
+  const categories = [
+    { name: "Никита Левченко", incoming: 4 },
+    { name: "Елена Силантьева", incoming: 2 },
+  ];
+  const rows = buildCategoryRhythmRows(
+    [
+      responseRow(1, ["Никита Левченко"], new Date(2026, 8, 7, 10, 0)),
+      responseRow(2, ["Никита Левченко"], new Date(2026, 8, 7, 20, 0)),
+      responseRow(3, ["Никита Левченко"], new Date(2026, 8, 8, 10, 0)),
+      responseRow(4, ["Елена Силантьева"], new Date(2026, 8, 11, 12, 0)),
+    ],
+    categories,
+    DEFAULT_WORKING_HOURS_SCHEDULE,
+    categories.map((category) => category.name),
+  );
+
+  expect(rows[0]).toMatchObject({
+    name: "Никита Левченко",
+    requests: 4,
+    answered: 3,
+    unanswered: 1,
+    afterHours: 1,
+    afterHoursRate: 1 / 3,
+    activeDays: 2,
+    activeWeekdays: 2,
+    quietWeekdays: 3,
+    peakWeekday: 0,
+    peakHour: 10,
+    peakCount: 1,
+    quietWeekday: 2,
+    quietHour: 9,
+    quietWorkingSlots: 43,
+    quietSlotWeekday: 0,
+    quietSlotHour: 9,
+    quietSlotCount: 0,
+  });
+  expect(sortCategoryRhythmRows(rows).map((row) => row.name)).toEqual([
+    "Никита Левченко",
+    "Елена Силантьева",
+  ]);
 });
 
 test("maps selected employee name tags to responder rows", () => {

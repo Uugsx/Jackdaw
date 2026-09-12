@@ -5,18 +5,30 @@ import type {
   ReportTimelinePoint,
   TimelineGranularity,
 } from "../../logic/Reports/ReportsData";
-import { formatWorkingTime } from "../../logic/Reports/WorkingHours";
-import { responderResponseShare } from "../../logic/Reports/ReportsPresentation";
+import {
+  formatWorkingTime,
+  isWithinWorkingHours,
+} from "../../logic/Reports/WorkingHours";
+import {
+  buildCategoryRhythmRows,
+  defaultResponderCategoryNames,
+  responderResponseShare,
+  sortCategoryRhythmRows,
+  type CategoryRhythmRow,
+} from "../../logic/Reports/ReportsPresentation";
 import { appGlobal } from "../../logic/app";
 import { sanitize } from "../../../lib/util/sanitizeDatatypes";
 
 const EXPORT_LOCALE = "ru-RU";
 const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const RHYTHM_HOURS = 24;
 const MAX_DOWNLOAD_FILENAME_ATTEMPTS = 100;
 
 export interface ReportExportOptions {
   categoryFilterLabel?: string;
   responderColumnLabel?: string;
+  responderMetricLabel?: string;
+  employeeCategoryNames?: string[];
 }
 
 function isFileExistsError(ex: unknown): boolean {
@@ -123,6 +135,66 @@ export function createReportHTML(
   const outsideWorkingHoursResponseCount = report.mail.responseTimes.filter(
     (response) => response.responseTimeStatus == "outside-working-hours",
   ).length;
+  const outsideWorkingHoursResponseTimes = report.mail.responseTimes
+    .filter(
+      (response) =>
+        !isWithinWorkingHours(response.responseAt, report.workingHours),
+    )
+    .sort(
+      (a, b) =>
+        b.responseAt.getTime() - a.responseAt.getTime() ||
+        b.emailId - a.emailId,
+    );
+  const employeeCategoryNames = normalizeEmployeeCategoryNames(
+    options.employeeCategoryNames ??
+      defaultResponderCategoryNames(report.mail.categories),
+  );
+  const categorizedOutsideWorkingHoursResponseCount =
+    outsideWorkingHoursResponseTimes.filter((response) =>
+      response.categoryNames.some((name) =>
+        employeeCategoryNames.includes(name.trim()),
+      ),
+    ).length;
+  const rhythmCategoryNames =
+    options.employeeCategoryNames !== undefined
+      ? employeeCategoryNames
+      : employeeCategoryNames.length
+        ? employeeCategoryNames
+        : report.mail.categories.map((category) => category.name);
+  const categoryRhythmRows = sortCategoryRhythmRows(
+    buildCategoryRhythmRows(
+      report.mail.responseTimes,
+      report.mail.categories,
+      report.workingHours,
+      rhythmCategoryNames,
+    ),
+  );
+  const afterHoursCategoryRows = categoryRhythmRows.filter(
+    (row) => row.afterHours > 0,
+  );
+  const afterHoursCategoryMax = Math.max(
+    1,
+    ...afterHoursCategoryRows.map((row) => row.afterHours),
+  );
+  const rhythmFocusRow =
+    afterHoursCategoryRows[0] ?? categoryRhythmRows[0] ?? null;
+  const categoryRhythmRanking = afterHoursCategoryRows.length
+    ? afterHoursCategoryRows
+        .slice(0, 12)
+        .map((row) =>
+          barChartRow(
+            row.name,
+            row.afterHours,
+            afterHoursCategoryMax,
+            `${formatNumber(row.answered)} ответов · ${formatPercent(row.afterHoursRate)} вне графика`,
+            "accent",
+          ),
+        )
+        .join("")
+    : emptyChart("Нет ответов категорий вне рабочего времени.");
+  const categoryRhythmFocusHeatmap = rhythmFocusRow
+    ? categoryRhythmHeatmap(rhythmFocusRow)
+    : emptyChart("Нет данных по ритму категорий.");
   const summaryRows = [
     ["Наблюдаемая активность", formatNumber(report.summary.activityCount)],
     ["Сообщения почты", formatNumber(report.summary.mailMessages)],
@@ -147,8 +219,16 @@ export function createReportHTML(
       formatNumber(report.summary.responseTime.overTarget),
     ],
     [
-      "Ответы вне рабочего времени",
+      "Ответы вне рабочего времени без категории",
       formatNumber(outsideWorkingHoursResponseCount),
+    ],
+    [
+      "Ответы вне рабочего времени",
+      formatNumber(outsideWorkingHoursResponseTimes.length),
+    ],
+    [
+      "Ответы вне рабочего времени с категорией сотрудника",
+      formatNumber(categorizedOutsideWorkingHoursResponseCount),
     ],
     ["Сообщения чатов", formatNumber(report.summary.chatMessages)],
     ["Часы в календаре", formatNumber(report.summary.calendarHours, 1)],
@@ -217,6 +297,19 @@ export function createReportHTML(
         )
         .join("")
     : emptyChart("Нет подтверждённых ответов по дням.");
+  const responseDetailRows = report.mail.responseTimes.map((response) => [
+    formatDateTime(response.requestAt),
+    formatDateTime(response.responseAt),
+    formatResponseDuration(response),
+    response.accountName,
+    response.subject,
+    formatResponseStatusWithSchedule(response, report.workingHours),
+  ]);
+  const responseDetailRowClasses = report.mail.responseTimes.map((response) =>
+    !isWithinWorkingHours(response.responseAt, report.workingHours)
+      ? "outside-hours-row"
+      : "",
+  );
 
   return `<!doctype html>
 <html lang="ru">
@@ -280,8 +373,10 @@ export function createReportHTML(
     tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
     .numeric { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .muted { color: #6A655D; }
+    tr.outside-hours-row td { background: #F8F1E7; }
+    tr.outside-hours-row td:first-child { box-shadow: inset 3px 0 0 #B97616; }
     .rate { color: #4C8B7E; font-weight: 700; }
-    .response-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 0 0 18px; }
+    .response-summary { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 0 0 18px; }
     .response-summary .summary-card { min-height: 86px; }
     .response-summary .summary-card strong { margin-top: 11px; font-size: 21px; }
     .response-good { color: #4C8B7E; }
@@ -309,13 +404,14 @@ export function createReportHTML(
     <div class="section-head"><div><p class="section-kicker">РИТМ РАБОТЫ</p><h2>Когда происходит активность</h2><p>Исходящие сообщения, встречи и изменения файлов по дням недели и часам.</p></div></div>
     <div class="chart-scroll"><div class="heatmap"><div class="heat-hours"><span></span>${Array.from({ length: 24 }, (_, hour) => `<span>${hour % 4 == 0 ? `${String(hour).padStart(2, "0")}:00` : ""}</span>`).join("")}</div>${heatmap}</div></div>
   </section>
-  <section><div class="section-head"><div><p class="section-kicker">ВРЕМЯ ОТВЕТА</p><h2>Скорость первого ответа</h2><p>От получения запроса до первого подтверждённого ответа. Норматив: ${escapeHTML(`${formatNumber(report.summary.responseTargetMinutes)} рабочих мин.`)}</p><p class="schedule-note">Рабочий календарь: ${escapeHTML(formatWorkingHoursSummary(report.workingHours))}. Ночное время, выходные и часы вне графика не увеличивают время ответа.</p></div></div>
+  <section><div class="section-head"><div><p class="section-kicker">ВРЕМЯ ОТВЕТА</p><h2>Скорость первого ответа</h2><p>От получения запроса до первого подтверждённого ответа. Норматив: ${escapeHTML(`${formatNumber(report.summary.responseTargetMinutes)} рабочих мин.`)}</p><p class="schedule-note">Рабочий календарь: ${escapeHTML(formatWorkingHoursSummary(report.workingHours))}. Для запросов без категории ночное время, выходные и часы вне графика не увеличивают время ответа; если специалист назначил категорию вне графика, считается реальное время.</p></div></div>
     <div class="response-summary">
       <div class="summary-card"><span>Среднее время ответа</span><strong>${escapeHTML(formatDuration(report.summary.responseTime.averageSeconds))}</strong></div>
       <div class="summary-card"><span>Минимальное время ответа</span><strong>${escapeHTML(formatDuration(report.summary.responseTime.minimumSeconds))}</strong></div>
       <div class="summary-card"><span>Максимальное время ответа</span><strong class="response-alert">${escapeHTML(formatDuration(report.summary.responseTime.maximumSeconds))}</strong></div>
       <div class="summary-card"><span>В срок</span><strong class="response-good">${escapeHTML(formatPercent(responseRate(report.summary.responseTime.withinTarget, report.summary.responseTime.answered)))}</strong></div>
       <div class="summary-card"><span>Просрочки</span><strong class="response-alert">${escapeHTML(formatNumber(report.summary.responseTime.overTarget))}</strong></div>
+      <div class="summary-card"><span>Ответы вне рабочего времени</span><strong class="response-alert">${escapeHTML(formatNumber(outsideWorkingHoursResponseTimes.length))}</strong></div>
     </div>
     <div class="chart-block response-day-chart"><h3>Ответы по дням и SLA</h3><div class="bar-chart" role="img" aria-label="Ответы по дням и SLA">${responseDayChart}</div></div>
     <div class="section-head"><div><p class="section-kicker">ДНИ С ПРОСРОЧКАМИ</p><h2>Когда были задержки</h2><p>Дни отсортированы по количеству ответов позже норматива.</p></div></div>
@@ -358,17 +454,22 @@ export function createReportHTML(
         "Тема",
         "Статус SLA",
       ],
-      report.mail.responseTimes.map((response) => [
-        formatDateTime(response.requestAt),
-        formatDateTime(response.responseAt),
-        formatResponseDuration(response),
-        response.accountName,
-        response.subject,
-        formatResponseStatus(response),
-      ]),
+      responseDetailRows,
       [0, 1, 2],
+      responseDetailRowClasses,
     )}</div>
   </section>
+  <section><div class="section-head"><div><p class="section-kicker">ВНЕ РАБОЧЕГО ВРЕМЕНИ</p><h2>Кто отвечал вне графика</h2><p>Первые подтверждённые ответы, отправленные вне выбранного графика. При наличии категории показывается сотрудник, иначе — почтовый профиль.</p></div></div><div class="table-scroll">${table(
+    ["Ответ", "Сотрудник / профиль", "Время ответа", "Тема", "Статус SLA"],
+    outsideWorkingHoursResponseTimes.map((response) => [
+      formatDateTime(response.responseAt),
+      responseAfterHoursOwnerLabel(response, employeeCategoryNames),
+      formatResponseDuration(response),
+      response.subject,
+      formatResponseStatusWithSchedule(response, report.workingHours),
+    ]),
+    [0, 2],
+  )}</div></section>
   <section><div class="section-head"><div><p class="section-kicker">ОТВЕТЫ</p><h2>Кто отвечает</h2><p>Сотрудники или почтовые профили с запросами, ответами и самым активным днём/часом.</p></div></div><div class="chart-grid"><div class="chart-block"><h3>Запросы по сотрудникам</h3><div class="bar-chart" role="img" aria-label="Запросы по сотрудникам">${responderChart}</div></div><div class="chart-block"><h3>Запросы по категориям</h3><div class="bar-chart" role="img" aria-label="Запросы по категориям">${categoryChart}</div></div></div><div class="table-scroll">${table(
     [
       options.responderColumnLabel ?? "Профиль",
@@ -382,7 +483,7 @@ export function createReportHTML(
       "В срок",
       "Доля в срок",
       "Просрочки",
-      "Отправлено",
+      options.responderMetricLabel ?? "Отправлено",
       "Пиковый день",
       "Пиковый час",
       "Последняя активность",
@@ -393,10 +494,7 @@ export function createReportHTML(
       formatNumber(responder.requests),
       formatNumber(responder.answered),
       formatPercent(
-        responderResponseShare(
-          responder.answered,
-          responderAnsweredTotal,
-        ),
+        responderResponseShare(responder.answered, responderAnsweredTotal),
       ),
       formatDuration(responder.responseTime.averageSeconds),
       formatDuration(responder.responseTime.minimumSeconds),
@@ -565,7 +663,34 @@ export function createReportHTML(
     ]),
     [0, 1, 2, 3, 4],
   )}</div></section>
-  <p class="note">Важно для интерпретации: активность — это измеряемый ориентир по синхронизированным локальным данным, а не учёт рабочего времени. Ответ считается подтверждённым, если почтовый сервер пометил письмо как отвеченное или найдено отправленное письмо, связанное с запросом по In-Reply-To или с той же цепочкой. Время ответа считается в рабочих минутах от получения письма до первого подтверждённого ответа по выбранному графику и отображается только при наличии времени отправки; ночь, выходные и часы вне графика не увеличивают отсчёт. Ответы, между получением и отправкой которых не было рабочего интервала, отмечены как «Вне рабочего времени» и не входят в среднее, SLA и рейтинги. Ответ после конца периода учитывается, если запрос пришёл в выбранный период. Одно письмо может иметь несколько меток, поэтому строки категорий не складываются. Отсутствующая история или несинхронизированный аккаунт делают отчёт неполным.</p>
+  <p class="note">Важно для интерпретации: активность — это измеряемый ориентир по синхронизированным локальным данным, а не учёт рабочего времени. Ответ считается подтверждённым, если почтовый сервер пометил письмо как отвеченное или найдено отправленное письмо, связанное с запросом по In-Reply-To или с той же цепочкой. Время ответа считается в рабочих минутах от получения письма до первого подтверждённого ответа по выбранному графику, если доступно время отправленного письма или сохранённая метка времени ответа сервера; для запроса без категории ночь, выходные и часы вне графика не увеличивают отсчёт, а если специалист назначил категорию вне графика, считается реальное время. Ответы без категории, между получением и отправкой которых не было рабочего интервала, отмечены как «Вне рабочего времени» и не входят в среднее, SLA и рейтинги. Ответ после конца периода учитывается, если запрос пришёл в выбранный период. Одно письмо может иметь несколько меток, поэтому строки категорий не складываются. Архив почты хранит текущую категорию, но не время её назначения; поэтому для категоризированного запроса, пришедшего вне графика, отсчёт начинается от времени получения. Отсутствующая история или несинхронизированный аккаунт делают отчёт неполным.</p>
+  <section><div class="section-head"><div><p class="section-kicker">РИТМ СОТРУДНИКОВ</p><h2>Кто и когда отвечает</h2><p>Рейтинг ответов вне графика и ритм каждой категории по дням недели и часам. Пустая ячейка означает отсутствие зафиксированного первого ответа, а не доказанное отсутствие сотрудника.</p></div></div><div class="chart-grid"><div class="chart-block"><h3>Кто отвечает чаще вне графика</h3><div class="bar-chart" role="img" aria-label="Ответы категорий вне рабочего времени">${categoryRhythmRanking}</div></div><div class="chart-block"><h3>${escapeHTML(rhythmFocusRow ? "Ритм: " + rhythmFocusRow.name : "Ритм категории")}</h3><div class="chart-scroll">${categoryRhythmFocusHeatmap}</div></div></div><div class="table-scroll">${table(
+    [
+      "Категория сотрудника",
+      "Ответы",
+      "Вне графика",
+      "Доля вне графика",
+      "Без подтверждённого ответа",
+      "Активные дни",
+      "Тихие дни",
+      "Тихие рабочие слоты",
+      "Пик",
+      "Тише всего",
+    ],
+    categoryRhythmRows.map((row) => [
+      row.name,
+      formatNumber(row.answered),
+      formatNumber(row.afterHours),
+      formatPercent(row.afterHoursRate),
+      formatNumber(row.unanswered),
+      formatNumber(row.activeDays),
+      formatNumber(row.quietWeekdays),
+      `${formatNumber(row.quietWorkingSlots)} / ${formatNumber(row.workingSlots)}`,
+      formatCategoryRhythmSlot(row.peakWeekday, row.peakHour),
+      formatCategoryRhythmSlot(row.quietSlotWeekday, row.quietSlotHour),
+    ]),
+    [1, 2, 3, 4, 5, 6, 7],
+  )}</div><p class="note">В тепловой карте показан лидер по ответам вне графика. Если одно письмо имеет несколько категорий, оно учитывается в каждой из них. «Без подтверждённого ответа» — входящие запросы категории, для которых не найден первый подтверждённый ответ.</p></section>
 </body>
 </html>`;
 }
@@ -598,14 +723,42 @@ function barChartRow(
   return `<div class="bar-row" title="${escapeHTML(`${label}: ${formatNumber(value)}`)}"><span class="bar-label">${escapeHTML(label)}</span><span class="bar-track"><i class="bar-fill ${fillClass}" style="width:${numberStyle(percentage)}%"></i></span><strong class="bar-value">${escapeHTML(formatNumber(value))}</strong><span class="bar-meta">${escapeHTML(meta)}</span></div>`;
 }
 
+function categoryRhythmHeatmap(row: CategoryRhythmRow): string {
+  const maximum = Math.max(1, ...row.activity);
+  const hours = Array.from(
+    { length: RHYTHM_HOURS },
+    (_, hour) => `<span>${hour % 4 == 0 ? formatHour(hour) : ""}</span>`,
+  ).join("");
+  const rows = WEEKDAY_LABELS.map((weekday, index) => {
+    const cells = Array.from({ length: RHYTHM_HOURS }, (_, hour) => {
+      const count = row.activity[index * RHYTHM_HOURS + hour] ?? 0;
+      const opacity = count ? Math.max(0.14, count / maximum) : 0;
+      return `<span class="heat-cell" style="--cell-opacity:${numberStyle(opacity)}" title="${escapeHTML(`${weekday} ${formatHour(hour)} — ${formatNumber(count)}`)}"></span>`;
+    }).join("");
+    return `<div class="heat-row"><span class="heat-day">${weekday}</span>${cells}</div>`;
+  }).join("");
+  return `<div class="heatmap rhythm-heatmap"><div class="heat-hours"><span></span>${hours}</div>${rows}</div>`;
+}
+
 function emptyChart(message: string): string {
   return `<p class="chart-empty">${escapeHTML(message)}</p>`;
+}
+
+function normalizeEmployeeCategoryNames(names: string[]): string[] {
+  return [
+    ...new Set(
+      names
+        .map((name) => name.trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function table(
   headers: string[],
   rows: unknown[][],
   numericColumns: number[],
+  rowClasses: string[] = [],
 ): string {
   const headerHTML = headers
     .map(
@@ -616,8 +769,8 @@ function table(
   const bodyHTML = rows.length
     ? rows
         .map(
-          (row) =>
-            `<tr>${row.map((value, index) => `<td${numericColumns.includes(index) ? ` class="numeric"` : ""}>${escapeHTML(value)}</td>`).join("")}</tr>`,
+          (row, index) =>
+            `<tr${rowClasses[index] ? ` class="${escapeHTML(rowClasses[index])}"` : ""}>${row.map((value, cellIndex) => `<td${numericColumns.includes(cellIndex) ? ` class="numeric"` : ""}>${escapeHTML(value)}</td>`).join("")}</tr>`,
         )
         .join("")
     : `<tr><td class="muted" colspan="${headers.length}">Нет данных за этот период.</td></tr>`;
@@ -700,6 +853,21 @@ function formatResponseDuration(
     : formatDuration(response.durationSeconds);
 }
 
+function responseAfterHoursOwnerLabel(
+  response: Pick<
+    MailResponseRow,
+    "accountName" | "responderAccountName" | "categoryNames"
+  >,
+  employeeCategoryNames: string[],
+): string {
+  const categoryNames = response.categoryNames.filter((name) =>
+    employeeCategoryNames.includes(name.trim()),
+  );
+  return categoryNames.length
+    ? categoryNames.join(", ")
+    : response.accountName;
+}
+
 function formatResponseStatus(
   response: Pick<MailResponseRow, "responseTimeStatus" | "withinTarget">,
 ): string {
@@ -707,6 +875,20 @@ function formatResponseStatus(
     return "Вне рабочего времени";
   }
   return response.withinTarget ? "В срок" : "Просрочка";
+}
+
+function formatResponseStatusWithSchedule(
+  response: Pick<
+    MailResponseRow,
+    "responseAt" | "responseTimeStatus" | "withinTarget"
+  >,
+  workingHours: ReportData["workingHours"],
+): string {
+  const status = formatResponseStatus(response);
+  return !isWithinWorkingHours(response.responseAt, workingHours) &&
+    response.responseTimeStatus != "outside-working-hours"
+    ? `${status} · Вне рабочего времени`
+    : status;
 }
 
 function formatBytes(bytes: number): string {
@@ -753,6 +935,15 @@ function timelineLabel(value: string): string {
 
 function weekdayLabel(weekday: number): string {
   return WEEKDAY_LABELS[weekday] ?? "—";
+}
+
+function formatCategoryRhythmSlot(
+  weekday: number | null,
+  hour: number | null,
+): string {
+  return weekday == null || hour == null
+    ? "—"
+    : `${weekdayLabel(weekday)} ${formatHour(hour)}`;
 }
 
 function formatHour(hour: number): string {

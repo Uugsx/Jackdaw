@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import {
   addWorkingSeconds,
   formatWorkingTime,
+  isWithinWorkingHours,
   parseWorkingTime,
   validateWorkingHoursSchedule,
   workingSecondsBetween,
@@ -57,6 +58,18 @@ test("считает только рабочие минуты с разным г
       exampleSchedule,
     ),
   ).toBe(10 * 60);
+});
+
+test("считает начало рабочего интервала рабочим, а конец и выходной — нет", () => {
+  expect(
+    isWithinWorkingHours(new Date(2026, 8, 7, 9, 30), exampleSchedule),
+  ).toBe(true);
+  expect(
+    isWithinWorkingHours(new Date(2026, 8, 7, 18, 0), exampleSchedule),
+  ).toBe(false);
+  expect(
+    isWithinWorkingHours(new Date(2026, 8, 6, 12, 0), exampleSchedule),
+  ).toBe(false);
 });
 
 test("переносит точку напоминания через конец дня и выходные", () => {

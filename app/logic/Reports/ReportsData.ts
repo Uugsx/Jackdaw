@@ -5,6 +5,7 @@ import { getDatabase as getFilesDatabase } from "../Files/SQL/SQLDatabase";
 import sql, { type Database } from "../../../lib/rs-sqlite";
 import {
   DEFAULT_WORKING_HOURS_SCHEDULE,
+  isWithinWorkingHours,
   normalizeWorkingHoursSchedule,
   workingSecondsBetween,
   type WorkingHoursSchedule,
@@ -96,12 +97,15 @@ export interface MailResponseRow {
   folderId: number;
   accountId: number;
   accountName: string;
+  /** Почтовый аккаунт, из папки которого найден первый связанный ответ. */
+  responderAccountId?: number | null;
+  responderAccountName?: string | null;
   subject: string;
   contactName: string;
   contactEmail: string;
   requestAt: Date;
   responseAt: Date;
-  /** null, если между письмом и ответом не было рабочего интервала. */
+  /** null, если нет рабочего интервала и запрос не был принят в работу категорией. */
   durationSeconds: number | null;
   withinTarget: boolean | null;
   responseTimeStatus: ResponseTimeStatus;
@@ -331,6 +335,38 @@ interface ReportBounds {
   endSeconds: number;
 }
 
+/**
+ * Ограничивает интервал календарного события выбранным периодом отчёта.
+ * Событие засчитывается только если после пересечения остаётся ненулевой
+ * интервал; это не даёт включать часы за пределами фильтра дат.
+ */
+export function clipReportEventInterval(
+  start: Date,
+  end: Date,
+  periodStart: Date,
+  periodEndExclusive: Date,
+): { start: Date; end: Date } | null {
+  if (
+    !Number.isFinite(start.getTime()) ||
+    !Number.isFinite(end.getTime()) ||
+    !Number.isFinite(periodStart.getTime()) ||
+    !Number.isFinite(periodEndExclusive.getTime()) ||
+    end <= start ||
+    periodEndExclusive <= periodStart
+  ) {
+    return null;
+  }
+  const clippedStart = new Date(
+    Math.max(start.getTime(), periodStart.getTime()),
+  );
+  const clippedEnd = new Date(
+    Math.min(end.getTime(), periodEndExclusive.getTime()),
+  );
+  return clippedEnd > clippedStart
+    ? { start: clippedStart, end: clippedEnd }
+    : null;
+}
+
 export interface RawMailTopicRow {
   subject: string;
   requests: number;
@@ -450,44 +486,44 @@ export async function loadReportMailAccounts(
       };
     })
     .filter((account): account is ReportMailAccountOption => account != null);
-  if (configuredAccounts.length > 0) {
+  const configuredById = new Map(
+    configuredAccounts.map((account) => [account.accountId, account]),
+  );
+  const accountIds = new Set(configuredById.keys());
+  try {
+    const db = database ?? (await getMailDatabase());
+    const rows = (await db.all(sql`
+      SELECT id AS accountId
+      FROM emailAccount
+      UNION
+      SELECT DISTINCT accountID AS accountId
+      FROM folder
+      WHERE accountID IS NOT NULL
+      ORDER BY accountId
+      `)) as any[];
+    for (const row of rows) {
+      const accountId = rowNumber(row, "accountId");
+      if (accountId > 0) {
+        accountIds.add(accountId);
+      }
+    }
+  } catch {
     return configuredAccounts.sort((a, b) => a.accountId - b.accountId);
-  }
-
-  const db = database ?? (await getMailDatabase());
-  const rows = (await db.all(sql`
-    SELECT id AS accountId
-    FROM emailAccount
-    UNION
-    SELECT DISTINCT accountID AS accountId
-    FROM folder
-    WHERE accountID IS NOT NULL
-    ORDER BY accountId
-    `)) as any[];
-  const accountIds = new Set<number>();
-  for (const row of rows) {
-    const accountId = rowNumber(row, "accountId");
-    if (accountId > 0) {
-      accountIds.add(accountId);
-    }
-  }
-  for (const account of appGlobal.emailAccounts) {
-    const accountId = Number(account.dbID);
-    if (Number.isInteger(accountId) && accountId > 0) {
-      accountIds.add(accountId);
-    }
   }
   return [...accountIds]
     .sort((a, b) => a - b)
-    .map((accountId) => ({
-      accountId,
-      accountName: findAccountName(
-        appGlobal.emailAccounts,
-        accountId,
-        "Почтовый аккаунт",
-      ),
-      email: findAccountEmail(appGlobal.emailAccounts, accountId),
-    }));
+    .map(
+      (accountId) =>
+        configuredById.get(accountId) ?? {
+          accountId,
+          accountName: findAccountName(
+            appGlobal.emailAccounts,
+            accountId,
+            "Почтовый аккаунт",
+          ),
+          email: findAccountEmail(appGlobal.emailAccounts, accountId),
+        },
+    );
 }
 
 /** Возвращает папки выбранного почтового аккаунта для уточнения области отчёта. */
@@ -939,7 +975,17 @@ async function loadMailReport(
         WHERE $${replyMessagePredicate}
           AND reply.dateSent >= e.dateReceived
           AND $${replyLinkPredicate}
-      ) AS responseAt
+      ) AS responseAt,
+      (
+        SELECT replyFolder.accountID
+        FROM email reply
+        JOIN folder replyFolder ON replyFolder.id = reply.folderID
+        WHERE $${replyMessagePredicate}
+          AND reply.dateSent >= e.dateReceived
+          AND $${replyLinkPredicate}
+        ORDER BY reply.dateSent, reply.id
+        LIMIT 1
+      ) AS responseAccountId
     FROM email e
     JOIN folder f ON f.id = e.folderID
     WHERE $${incomingMessagePredicate}
@@ -986,18 +1032,34 @@ async function loadMailReport(
       if (!requestAt || !responseAt) {
         return null;
       }
-      const durationSeconds = workingSecondsBetween(
-        requestAt,
-        responseAt,
-        workingHours,
-      );
-      if (!Number.isFinite(durationSeconds) || durationSeconds < 0) {
-        return null;
-      }
       const accountId = rowNumber(row, "accountId");
       const emailId = rowNumber(row, "emailId");
+      const categoryNames = categoryNamesByEmailId.get(emailId) ?? [];
+      // Категория означает принятие запроса в работу, как и в live SLA.
+      // Если запрос пришёл вне графика, после этого считаем реальное время.
+      const requestIsWithinWorkingHours = isWithinWorkingHours(
+        requestAt,
+        workingHours,
+      );
+      const isCategorizedOutsideWorkingHours =
+        !requestIsWithinWorkingHours &&
+        categoryNames.some((name) => name.trim().length > 0);
+      const responseDurationSeconds = isCategorizedOutsideWorkingHours
+        ? (responseAt.getTime() - requestAt.getTime()) / 1_000
+        : workingSecondsBetween(requestAt, responseAt, workingHours);
+      if (
+        !Number.isFinite(responseDurationSeconds) ||
+        responseDurationSeconds < 0
+      ) {
+        return null;
+      }
       const measuredDurationSeconds =
-        durationSeconds > 0 ? durationSeconds : null;
+        isCategorizedOutsideWorkingHours ||
+        requestIsWithinWorkingHours ||
+        responseDurationSeconds > 0
+          ? responseDurationSeconds
+          : null;
+      const responderAccountId = rowNumber(row, "responseAccountId");
       return {
         emailId,
         folderId: rowNumber(row, "folderId"),
@@ -1007,6 +1069,15 @@ async function loadMailReport(
           accountId,
           "Почтовый аккаунт",
         ),
+        responderAccountId: responderAccountId > 0 ? responderAccountId : null,
+        responderAccountName:
+          responderAccountId > 0
+            ? findAccountName(
+                appGlobal.emailAccounts,
+                responderAccountId,
+                "",
+              )
+            : null,
         subject: rowText(row, "subject", "(без темы)"),
         contactName: rowText(row, "contactName", ""),
         contactEmail: rowText(row, "contactEmail", ""),
@@ -1022,7 +1093,7 @@ async function loadMailReport(
           measuredDurationSeconds == null
             ? "outside-working-hours"
             : "measured",
-        categoryNames: categoryNamesByEmailId.get(emailId) ?? [],
+        categoryNames,
       };
     })
     .filter((row): row is MailResponseRow => row != null)
@@ -1400,8 +1471,23 @@ async function loadCalendarReport(
         continue;
       }
 
+      const interval = clipReportEventInterval(
+        start,
+        end,
+        bounds.start,
+        bounds.endExclusive,
+      );
+      const isInstantEvent = end.getTime() == start.getTime();
+      if (
+        !interval &&
+        (!isInstantEvent || start < bounds.start || start >= bounds.endExclusive)
+      ) {
+        continue;
+      }
       const durationHours =
-        Math.max(0, end.getTime() - start.getTime()) / 3_600_000;
+        interval == null
+          ? 0
+          : (interval.end.getTime() - interval.start.getTime()) / 3_600_000;
       row.events++;
       row.hours += durationHours;
       row.onlineMeetings += event.isOnline || !!event.onlineMeetingURL ? 1 : 0;
@@ -1411,9 +1497,10 @@ async function loadCalendarReport(
       onlineMeetings += event.isOnline || !!event.onlineMeetingURL ? 1 : 0;
       participants += event.participants.length;
 
-      const day = dateInputValue(start);
+      const intervalStart = interval?.start ?? start;
+      const day = dateInputValue(intervalStart);
       daily.set(day, (daily.get(day) ?? 0) + 1);
-      const cellKey = `${localWeekday(start)}:${start.getHours()}`;
+      const cellKey = `${localWeekday(intervalStart)}:${intervalStart.getHours()}`;
       activity.set(cellKey, (activity.get(cellKey) ?? 0) + 1);
 
       for (const participant of event.participants) {
