@@ -70,7 +70,6 @@ export class SQLEMail {
             ${email.outgoing ? 1 : 0}, ${contact?.emailAddress}, ${email.contact?.name},
             ${email.subject}, ${plaintext}, ${email.rawHTMLDangerous}
           )`);
-        // -- contactEmail, contactName, myEmail
         email.dbID = insert.lastInsertRowid;
       } else {
         // This might be an update with only metadata, so don't overwrite content
@@ -335,13 +334,13 @@ export class SQLEMail {
         pID, messageID, parentMsgID,
         size, dateSent, dateReceived,
         outgoing,
+        contactEmail, contactName,
         subject, plaintext, html,
         threadID, downloadComplete, json,
         isRead, isStarred, isReplied, isForwarded, isImportant, isDraft, isSpam
       FROM email
       WHERE id = ${dbID}
       `) as any;
-      // contactEmail, contactName, myEmail
       assert(row, `EMail DB ID ${dbID} not found`);
     }
     email.dbID = sanitize.integer(dbID);
@@ -364,6 +363,7 @@ export class SQLEMail {
     }
     await this.readWritableProps(email, row);
     await this.readRecipients(email, recipientRows);
+    this.applyStoredIncomingSender(email, row);
     await this.readAttachments(email, attachmentRows);
     await this.readTags(email, tagRows);
     email.contact = computeEMailContact(email);
@@ -404,7 +404,28 @@ export class SQLEMail {
         email.contact = contact;
       }
     }
+    this.applyStoredIncomingSender(email, row);
     await this.readTags(email);
+  }
+
+  /**
+   * В старых или частично синхронизированных письмах может отсутствовать
+   * связь с `From`, хотя в `email` сохранён входящий корреспондент.
+   * Используем эти данные только как запасной вариант и не заменяем
+   * полноценную связь с получателем.
+   */
+  private static applyStoredIncomingSender(email: EMail, row: any): void {
+    if (email.outgoing || email.from.emailAddress != kDummyPerson.emailAddress) {
+      return;
+    }
+    const emailAddress = sanitize.emailAddress(row.contactEmail, null);
+    if (!emailAddress || emailAddress == kDummyPerson.emailAddress) {
+      return;
+    }
+    email.from = findOrCreatePersonUID(
+      emailAddress,
+      sanitize.nonemptylabel(row.contactName, null),
+    );
   }
 
   static async readWritableProps(email: EMail, row?: any) {
@@ -449,6 +470,7 @@ export class SQLEMail {
     email.cc.clear();
     email.bcc.clear();
     email.replyTo = null;
+    let sender: PersonUID | null = null;
     for (let row of recipientRows) {
       try {
         let uid = findOrCreatePersonUID(
@@ -459,6 +481,11 @@ export class SQLEMail {
           continue;
         } else if (row.recipientType == 5) {
           email.replyTo = uid;
+          continue;
+        } else if (row.recipientType == 6) {
+          // Совместимость со старыми хранилищами, где Sender
+          // сохранялся отдельно от RFC-получателя From.
+          sender ??= uid;
           continue;
         }
         if (row.recipientType == 2) {
@@ -471,6 +498,9 @@ export class SQLEMail {
       } catch (ex) {
         email.folder.account.errorCallback(ex);
       }
+    }
+    if (email.from.emailAddress == kDummyPerson.emailAddress && sender) {
+      email.from = sender;
     }
   }
 
@@ -565,6 +595,7 @@ export class SQLEMail {
         id, pID, messageID, parentMsgID,
         size, dateSent, dateReceived,
         outgoing,
+        contactEmail, contactName,
         subject,
         threadID, downloadComplete, json,
         isRead, isStarred, isReplied, isForwarded, isImportant, isDraft, isSpam
@@ -612,6 +643,7 @@ export class SQLEMail {
       let email = folder.messages.find(email => email.dbID == row.id);
       if (email) {
         await SQLEMail.readWritableProps(email, row); // TODO needed?
+        this.applyStoredIncomingSender(email, row);
       } else {
         // Collapse duplicate rows for the same server item (sync races).
         if (row.pID != null && seenPIDs.has(row.pID)) {
@@ -710,6 +742,7 @@ export class SQLEMail {
             email.contact = contact;
           }
         }
+        this.applyStoredIncomingSender(email, row);
         if (isOutgoingFolder && recipients.length) {
           await this.readRecipients(email, recipients);
           email.contact = computeEMailContact(email);

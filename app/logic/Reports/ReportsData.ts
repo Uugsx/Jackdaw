@@ -105,9 +105,20 @@ export interface MailResponseRow {
   contactEmail: string;
   requestAt: Date;
   responseAt: Date;
-  /** null, если нет рабочего интервала и запрос не был принят в работу категорией. */
+  /**
+   * Фактическое календарное время от запроса до ответа. Показывается даже
+   * тогда, когда SLA для этой строки не оценивается.
+   */
+  actualDurationSeconds: number | null;
+  /**
+   * Рабочие секунды, использованные для проверки SLA. Равно null, если и
+   * запрос, и ответ пришли вне рабочего графика: такой ответ засчитывается,
+   * но надёжно оценить его по SLA нельзя.
+   */
   durationSeconds: number | null;
+  /** Null означает, что строка засчитана, но SLA для неё не оценивается. */
   withinTarget: boolean | null;
+  /** Ответ вне графика отдельно отмечается в деталях и сводках. */
   responseTimeStatus: ResponseTimeStatus;
   /** Все уникальные метки входящего запроса. Используются для общего ящика. */
   categoryNames: string[];
@@ -402,11 +413,20 @@ export function buildResponseTimeStats(
   rows: Array<{
     durationSeconds: number | null;
     responseTimeStatus?: ResponseTimeStatus;
+    withinTarget?: boolean | null;
   }>,
   targetMinutes: number,
 ): ResponseTimeStats {
+  // Сводка показывает только строки, для которых SLA действительно оценён.
+  // Ответ вне графика может остаться в этой сводке, если запрос был получен
+  // в рабочее время; строка с обоими моментами вне графика имеет null в
+  // withinTarget и исключается из расчёта.
   const durations = rows
-    .filter((row) => row.responseTimeStatus != "outside-working-hours")
+    .filter(
+      (row) =>
+        row.responseTimeStatus != "outside-working-hours" ||
+        row.withinTarget != null,
+    )
     .map((row) => row.durationSeconds)
     .filter(
       (duration): duration is number =>
@@ -1032,33 +1052,38 @@ async function loadMailReport(
       if (!requestAt || !responseAt) {
         return null;
       }
+      if (responseAt < requestAt) {
+        return null;
+      }
       const accountId = rowNumber(row, "accountId");
       const emailId = rowNumber(row, "emailId");
       const categoryNames = categoryNamesByEmailId.get(emailId) ?? [];
-      // Категория означает принятие запроса в работу, как и в live SLA.
-      // Если запрос пришёл вне графика, после этого считаем реальное время.
       const requestIsWithinWorkingHours = isWithinWorkingHours(
         requestAt,
         workingHours,
       );
-      const isCategorizedOutsideWorkingHours =
-        !requestIsWithinWorkingHours &&
-        categoryNames.some((name) => name.trim().length > 0);
-      const responseDurationSeconds = isCategorizedOutsideWorkingHours
-        ? (responseAt.getTime() - requestAt.getTime()) / 1_000
-        : workingSecondsBetween(requestAt, responseAt, workingHours);
+      const responseIsOutsideWorkingHours = !isWithinWorkingHours(
+        responseAt,
+        workingHours,
+      );
+      const actualDurationSeconds =
+        (responseAt.getTime() - requestAt.getTime()) / 1_000;
+      const responseDurationSeconds = responseSlaDurationSeconds(
+        requestAt,
+        responseAt,
+        requestIsWithinWorkingHours,
+        responseIsOutsideWorkingHours,
+        workingHours,
+      );
       if (
-        !Number.isFinite(responseDurationSeconds) ||
-        responseDurationSeconds < 0
+        !Number.isFinite(actualDurationSeconds) ||
+        actualDurationSeconds < 0 ||
+        (responseDurationSeconds != null &&
+          (!Number.isFinite(responseDurationSeconds) ||
+            responseDurationSeconds < 0))
       ) {
         return null;
       }
-      const measuredDurationSeconds =
-        isCategorizedOutsideWorkingHours ||
-        requestIsWithinWorkingHours ||
-        responseDurationSeconds > 0
-          ? responseDurationSeconds
-          : null;
       const responderAccountId = rowNumber(row, "responseAccountId");
       return {
         emailId,
@@ -1083,23 +1108,24 @@ async function loadMailReport(
         contactEmail: rowText(row, "contactEmail", ""),
         requestAt,
         responseAt,
-        durationSeconds: measuredDurationSeconds,
+        actualDurationSeconds,
+        durationSeconds: responseDurationSeconds,
         withinTarget:
-          measuredDurationSeconds == null
+          responseDurationSeconds == null
             ? null
-            : measuredDurationSeconds <=
+            : responseDurationSeconds <=
               normalizeResponseTargetMinutes(responseTargetMinutes) * 60,
-        responseTimeStatus:
-          measuredDurationSeconds == null
-            ? "outside-working-hours"
-            : "measured",
+        responseTimeStatus: responseIsOutsideWorkingHours
+          ? "outside-working-hours"
+          : "measured",
         categoryNames,
       };
     })
     .filter((row): row is MailResponseRow => row != null)
     .sort(
       (a, b) =>
-        (b.durationSeconds ?? -1) - (a.durationSeconds ?? -1) ||
+        (b.durationSeconds ?? b.actualDurationSeconds ?? -1) -
+          (a.durationSeconds ?? a.actualDurationSeconds ?? -1) ||
         b.requestAt.getTime() - a.requestAt.getTime() ||
         a.emailId - b.emailId,
     );
@@ -1959,6 +1985,25 @@ function providerResponseDate(row: any): Date | null {
   }
   const responseAt = new Date(milliseconds);
   return Number.isFinite(responseAt.getTime()) ? responseAt : null;
+}
+
+/**
+ * Считает рабочую длительность для SLA или возвращает null, если оценка
+ * недостоверна. Когда запрос и ответ оба вне рабочего графика, сотрудник
+ * всё равно получает засчитанный ответ и отметку о работе вне графика, но
+ * SLA не сравнивается с фактическим календарным временем.
+ */
+function responseSlaDurationSeconds(
+  requestAt: Date,
+  responseAt: Date,
+  requestIsWithinWorkingHours: boolean,
+  responseIsOutsideWorkingHours: boolean,
+  workingHours: WorkingHoursSchedule,
+): number | null {
+  if (!requestIsWithinWorkingHours && responseIsOutsideWorkingHours) {
+    return null;
+  }
+  return workingSecondsBetween(requestAt, responseAt, workingHours);
 }
 
 function normalizeMailAccountId(

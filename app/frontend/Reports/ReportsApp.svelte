@@ -256,9 +256,6 @@
         report.summary.responseTargetMinutes,
       )
     : emptyResponseTimeStats();
-  $: unmeasuredOutsideWorkingHoursResponseCount = visibleResponseTimes.filter(
-    (response) => response.responseTimeStatus == "outside-working-hours",
-  ).length;
   $: outsideWorkingHoursResponseTimes = visibleResponseTimes
     .filter(
       (response) =>
@@ -272,6 +269,18 @@
         b.responseAt.getTime() - a.responseAt.getTime() ||
         b.emailId - a.emailId,
     );
+  $: outsideWorkingHoursWithinTargetCount =
+    outsideWorkingHoursResponseTimes.filter(
+      (response) => response.withinTarget === true,
+    ).length;
+  $: outsideWorkingHoursOverTargetCount =
+    outsideWorkingHoursResponseTimes.filter(
+      (response) => response.withinTarget === false,
+    ).length;
+  $: outsideWorkingHoursNotEvaluatedCount =
+    outsideWorkingHoursResponseTimes.filter(
+      (response) => response.withinTarget == null,
+    ).length;
   $: categorizedOutsideWorkingHoursResponseCount =
     outsideWorkingHoursResponseTimes.filter(responseHasEmployeeCategory).length;
   $: visibleResponseTimeDays = report
@@ -746,17 +755,17 @@
       case "replied":
         return row.responseAt;
       case "responseTime":
-        return row.durationSeconds;
+        return row.durationSeconds ?? row.actualDurationSeconds;
       case "responder":
         return responseResponderLabel(row);
       case "topic":
         return row.subject;
       case "status":
-        return row.responseTimeStatus == "outside-working-hours"
-          ? 2
-          : row.withinTarget === true
-            ? 0
-            : 1;
+        return row.withinTarget === true
+          ? 0
+          : row.withinTarget === false
+            ? 1
+            : 2;
     }
   }
 
@@ -1449,6 +1458,8 @@
           ? "Подтверждённые ответы"
           : "Отправлено",
       employeeCategoryNames: currentEmployeeCategoryNames(),
+      rhythmCategoryNames,
+      rhythmSelectedCategoryName: effectiveRhythmCategoryName,
     };
   }
 
@@ -1512,9 +1523,15 @@
 
   function formatResponseDuration(response: {
     durationSeconds: number | null;
-    responseTimeStatus: ResponseTimeStatus;
+    actualDurationSeconds: number | null;
+    withinTarget: boolean | null;
   }): string {
-    return response.responseTimeStatus == "outside-working-hours"
+    if (response.withinTarget == null) {
+      return response.actualDurationSeconds == null
+        ? $t`Not evaluated`
+        : formatDuration(response.actualDurationSeconds);
+    }
+    return response.durationSeconds == null
       ? $t`Not evaluated`
       : formatDuration(response.durationSeconds);
   }
@@ -1523,10 +1540,13 @@
     responseTimeStatus: ResponseTimeStatus;
     withinTarget: boolean | null;
   }): string {
-    if (response.responseTimeStatus == "outside-working-hours") {
-      return $t`Outside working hours`;
+    if (response.withinTarget === true) {
+      return $t`On time`;
     }
-    return response.withinTarget ? $t`On time` : $t`Overdue`;
+    if (response.withinTarget === false) {
+      return $t`Overdue`;
+    }
+    return $t`Not evaluated`;
   }
 
   function isResponseOutsideWorkingHours(response: {
@@ -1900,7 +1920,7 @@
       {$t`The selected mailbox and folder limit mail metrics. When an account is selected, Inbox is used by default; choose All folders to include the full account history. Calendar, chat and files remain combined.`}
     </p>
     <p id="response-target-help" class="filter-scope-note response-target-note">
-      {$t`The target is applied in working minutes to the first verified reply. If a specialist assigns a category outside the schedule, that reply is measured in real elapsed minutes. Change it and build the report to recalculate SLA metrics.`}
+      {$t`The target applies to the first verified reply when the request or reply is within the working schedule. When both are outside it, the reply is counted but SLA is not evaluated. A category identifies the responsible employee but does not provide a reliable pickup timestamp. Change it and build the report to recalculate SLA metrics.`}
     </p>
 
     <fieldset class="report-filter-block working-hours-block">
@@ -1919,7 +1939,7 @@
         >
       </div>
       <p class="filter-help">
-        {$t`Only time inside the selected daily schedule counts toward response time. If a specialist assigns a category outside the schedule, that reply is measured in real elapsed time; otherwise nights and days off do not increase the SLA clock.`}
+        {$t`Working-calendar response metrics use the selected schedule. If both the request and the reply are outside it, the reply is counted, but SLA is not evaluated. The duration shown for that row is informational.`}
       </p>
       <div class="working-hours-list" aria-label={$t`Working calendar`}>
         {#each workingHours.days as day, index}
@@ -2668,9 +2688,9 @@
                       report.workingHours,
                     )}.
                   </p>
-                  {#if unmeasuredOutsideWorkingHoursResponseCount}
+                  {#if outsideWorkingHoursResponseTimes.length}
                     <p class="response-time-note">
-                      {$t`${unmeasuredOutsideWorkingHoursResponseCount} replies without a category have no measurable working interval and are excluded from SLA metrics.`}
+                      {$t`Replies sent outside the working schedule are counted. When both the request and the reply are outside it, SLA is not evaluated; the duration shown in the row is informational and excluded from SLA metrics.`}
                     </p>
                   {/if}
                 </div>
@@ -2681,7 +2701,7 @@
                     <strong
                       >{formatNumber(visibleResponseTimeStats.withinTarget)} /
                       {formatNumber(visibleResponseTimeStats.answered)}</strong
-                    ></span
+                    ><small>{$t`for replies with measured response time`}</small></span
                   >
                 </div>
               </div>
@@ -2747,6 +2767,18 @@
                     >{formatNumber(categorizedOutsideWorkingHoursResponseCount)}
                     {$t`with an employee category`}</small
                   >
+                  <small>
+                    {$t`Not evaluated`}: {formatNumber(
+                      outsideWorkingHoursNotEvaluatedCount,
+                    )}
+                  </small>
+                  <small>
+                    {$t`Within target`}: {formatNumber(
+                      outsideWorkingHoursWithinTargetCount,
+                    )} · {$t`Over target`}: {formatNumber(
+                      outsideWorkingHoursOverTargetCount,
+                    )}
+                  </small>
                 </article>
               </div>
 
@@ -3147,10 +3179,11 @@
                                     class:overdue={response.withinTarget ===
                                       false}
                                     class:outside-hours={response.responseTimeStatus ==
-                                      "outside-working-hours"}
+                                      "outside-working-hours" &&
+                                      response.withinTarget == null}
                                     >{formatResponseStatus(response)}</span
                                   >
-                                  {#if isResponseOutsideWorkingHours(response) && response.responseTimeStatus != "outside-working-hours"}
+                                  {#if isResponseOutsideWorkingHours(response)}
                                     <span class="outside-hours-marker"
                                       >{$t`Outside working hours`}</span
                                     >
@@ -3206,7 +3239,7 @@
                       </thead>
                       <tbody>
                         {#each outsideWorkingHoursResponseTimes as response}
-                          <tr>
+                          <tr class="outside-hours-row">
                             <td data-label={$t`Replied`}
                               >{formatDateTime(response.responseAt)}</td
                             >
@@ -3234,14 +3267,22 @@
                               </button>
                             </td>
                             <td data-label={$t`Status`}>
-                              <span
-                                class="status-pill"
-                                class:within={response.withinTarget === true}
-                                class:overdue={response.withinTarget === false}
-                                class:outside-hours={response.responseTimeStatus ==
-                                  "outside-working-hours"}
-                                >{formatResponseStatus(response)}</span
-                              >
+                              <div class="response-status-stack">
+                                <span
+                                  class="status-pill"
+                                  class:within={response.withinTarget === true}
+                                  class:overdue={response.withinTarget === false}
+                                  class:outside-hours={response.responseTimeStatus ==
+                                    "outside-working-hours" &&
+                                    response.withinTarget == null}
+                                  >{formatResponseStatus(response)}</span
+                                >
+                                {#if isResponseOutsideWorkingHours(response)}
+                                  <span class="outside-hours-marker"
+                                    >{$t`Outside working hours`}</span
+                                  >
+                                {/if}
+                              </div>
                             </td>
                           </tr>
                         {:else}
@@ -5004,8 +5045,8 @@
           {$t`Interpretation note:`}
           {$t`activity is a measurable proxy from synchronized local data, not a time tracker. A reply is counted when the mailbox marks the message as answered or a sent message links to the request or its thread. Response time is measured when a sent-message timestamp or the mailbox's stored answer timestamp is available. A missing history or unsynchronized account will make the report incomplete.`}
           {$t`Response time is measured from receipt to the first verified reply; replies sent after the report end are included when the request arrived inside the selected period.`}
-          {$t`Replies without a category and with no working interval are marked as outside working hours and excluded from SLA metrics; categorized requests taken outside the schedule are measured by real elapsed time.`}
-          {$t`The mail archive stores the current category, not when it was assigned; categorized after-hours requests are therefore measured from receipt time.`}
+          {$t`Replies sent outside the working schedule are counted. When both the request and the reply are outside it, SLA is not evaluated; the duration shown in the row is informational and excluded from SLA metrics.`}
+          {$t`The mail archive stores the current category, not when it was assigned, so the report cannot reconstruct the exact moment a request was taken into work.`}
         </p>
       </div>
     </div>

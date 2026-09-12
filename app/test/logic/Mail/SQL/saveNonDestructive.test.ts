@@ -11,7 +11,9 @@ import sql from "../../../../../lib/rs-sqlite";
 let folder: Folder;
 
 beforeAll(async () => {
-  ({ folder } = await setupTestFolder());
+  ({ folder } = await setupTestFolder({
+    getFilesDir: async () => "/tmp/jackdaw-mail-test",
+  }));
 });
 
 function newFullEMail(): EMail {
@@ -94,4 +96,51 @@ test("A new email marked complete still requires a body", async () => {
   let email = newTestEMail(folder, "missing-body@example.com");
   email.downloadComplete = true;
   await expect(SQLEMail.save(email)).rejects.toThrow("An email without body is not complete");
+});
+
+test("Recovers an incoming sender from denormalized contact metadata", async () => {
+  let db = await getDatabase();
+  let email = newTestEMail(folder, "missing-from-relation@example.com");
+  await SQLEMail.save(email);
+  await db.run(sql`
+    DELETE FROM emailPersonRel
+    WHERE emailID = ${email.dbID} AND recipientType = 1
+  `);
+  await db.run(sql`
+    UPDATE email
+    SET outgoing = 0,
+        contactEmail = ${"recovered@example.com"},
+        contactName = ${"Recovered sender"}
+    WHERE id = ${email.dbID}
+  `);
+
+  let reloaded = folder.newEMail();
+  await SQLEMail.read(email.dbID as number, reloaded);
+
+  expect(reloaded.from.emailAddress).toBe("recovered@example.com");
+  expect(reloaded.from.name).toBe("Recovered sender");
+  expect(reloaded.contact.emailAddress).toBe("recovered@example.com");
+
+  let listEmail = folder.newEMail();
+  listEmail.dbID = email.dbID;
+  folder.messages.add(listEmail);
+  await SQLEMail.readAllMainProperties(folder);
+
+  expect(listEmail.from.emailAddress).toBe("recovered@example.com");
+});
+
+test("Uses the MIME Sender header when From is absent", async () => {
+  let email = folder.newEMail();
+  email.mime = new TextEncoder().encode([
+    "Sender: sender-header@example.com",
+    "To: user@example.com",
+    "Subject: Sender header fallback",
+    "Date: Tue, 14 Jul 2026 10:00:00 +0300",
+    "",
+    "Body",
+  ].join("\r\n"));
+
+  await email.parseMIME();
+
+  expect(email.from.emailAddress).toBe("sender-header@example.com");
 });

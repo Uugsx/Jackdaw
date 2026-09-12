@@ -434,10 +434,15 @@ export class EMail extends Message {
     this.subject ??= sanitize.string(mail.subject, this.subject ?? "");
     this.sent ??= sanitize.date(mail.date, this.sent ?? new Date());
     if (!this.from || this.from.emailAddress == kDummyPerson.emailAddress) {
-      this.from = mail.from?.address
+      // Некоторые провайдеры передают только Sender, если RFC-заголовок From
+      // отсутствует. Сначала используем From, затем Sender, и только потом
+      // показываем фиктивного отправителя.
+      const parsedSender = mail.from?.address ? mail.from : mail.sender;
+      const senderAddress = sanitize.emailAddress(parsedSender?.address, null);
+      this.from = senderAddress
         ? findOrCreatePersonUID(
-            sanitize.emailAddress(mail.from.address, null),
-            sanitize.nonemptylabel(mail.from.name, null))
+            senderAddress,
+            sanitize.nonemptylabel(parsedSender?.name, null))
         : kDummyPerson;
     }
     setPersons(this.to, mail.to);
@@ -602,7 +607,24 @@ export class EMail extends Message {
           await this.storage.readMessage(this);
           await this.folder.account.contentStorage.first.read(this);
           if (this.mime) {
+            const hadUnknownSender =
+              this.from.emailAddress == kDummyPerson.emailAddress;
             await this.parseMIME();
+            if (
+              hadUnknownSender &&
+              this.dbID &&
+              this.from.emailAddress != kDummyPerson.emailAddress
+            ) {
+              try {
+                // Сохраняем отправителя, восстановленного из локального MIME,
+                // чтобы следующий список писем снова не показывал unknown@invalid.
+                await this.saveMetadataLocally();
+              } catch (ex) {
+                // Ошибка сохранения не должна заставлять повторно скачивать
+                // уже успешно прочитанный локальный MIME.
+                this.folder.account.errorCallback(ex);
+              }
+            }
             return;
           }
         } catch (ex) {

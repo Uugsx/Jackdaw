@@ -116,6 +116,7 @@ function fixture(): ReportData {
           contactEmail: "requester@example.com",
           requestAt: new Date("2026-09-09T09:00:00Z"),
           responseAt: new Date("2026-09-09T10:00:00Z"),
+          actualDurationSeconds: 3_600,
           durationSeconds: 3_600,
           withinTarget: false,
           responseTimeStatus: "measured",
@@ -129,12 +130,13 @@ function fixture(): ReportData {
           subject: "Письмо вне графика",
           contactName: "Requester",
           contactEmail: "requester@example.com",
-          requestAt: new Date("2026-09-12T12:00:00Z"),
-          responseAt: new Date("2026-09-12T12:05:00Z"),
+          requestAt: new Date(2026, 8, 11, 17, 55),
+          responseAt: new Date(2026, 8, 12, 12, 5),
           responderAccountName: "Personal profile",
+          actualDurationSeconds: 65_400,
           durationSeconds: 300,
           withinTarget: true,
-          responseTimeStatus: "measured",
+          responseTimeStatus: "outside-working-hours",
           categoryNames: ["Никита Левченко"],
         },
         {
@@ -145,8 +147,9 @@ function fixture(): ReportData {
           subject: "Без категории",
           contactName: "Requester",
           contactEmail: "requester@example.com",
-          requestAt: new Date("2026-09-12T12:10:00Z"),
-          responseAt: new Date("2026-09-12T12:15:00Z"),
+          requestAt: new Date(2026, 8, 12, 12, 10),
+          responseAt: new Date(2026, 8, 12, 12, 41),
+          actualDurationSeconds: 31 * 60,
           durationSeconds: null,
           withinTarget: null,
           responseTimeStatus: "outside-working-hours",
@@ -234,6 +237,7 @@ test("escapes report values in standalone HTML", () => {
   expect(html).toContain("Запросы по категориям");
   expect(html).toContain("Ответы по дням и SLA");
   expect(html).toContain("Ответы вне рабочего времени");
+  expect(html).toContain("Ответы вне рабочего времени без оценки SLA");
   expect(html).toContain("Ответы вне рабочего времени с категорией сотрудника");
   expect(html).toContain("Кто отвечал вне графика");
   expect(html).toContain("Кто отвечает чаще вне графика");
@@ -241,8 +245,10 @@ test("escapes report values in standalone HTML", () => {
   expect(html).toContain(
     "Первые подтверждённые ответы, отправленные вне выбранного графика.",
   );
-  expect(html).toContain("Не оценивается");
   expect(html).toContain("В срок · Вне рабочего времени");
+  expect(html).toContain("Не оценивается · Вне рабочего времени");
+  expect(html).toContain("31 мин");
+  expect(html).toContain("1 в срок · 0 просрочек");
   expect(html).toContain('<tr class="outside-hours-row">');
   expect(html).toContain("Main profile");
   expect(html).not.toContain("Personal profile");
@@ -275,6 +281,49 @@ test("includes selected mailbox scope in exports", () => {
 
   expect(html).toContain("integrators — integrators@example.com");
   expect(html).toContain("папка: Входящие");
+});
+
+test("exports a selectable rhythm heatmap for every visible employee", () => {
+  const report = fixture();
+  report.mail.categories = [
+    ...report.mail.categories,
+    {
+      ...report.mail.categories[0],
+      name: "Елена Силантьева",
+      incoming: 1,
+      answered: 1,
+    },
+  ];
+  report.mail.responseTimes = [
+    ...report.mail.responseTimes,
+    {
+      ...report.mail.responseTimes[0],
+      emailId: 14,
+      subject: "Ответ другого сотрудника",
+      responseAt: new Date("2026-09-09T11:00:00Z"),
+      categoryNames: ["Елена Силантьева"],
+    },
+  ];
+
+  const html = createReportHTML(report, {
+    rhythmCategoryNames: ["Никита Левченко", "Елена Силантьева"],
+    rhythmSelectedCategoryName: "Елена Силантьева",
+  });
+  const rhythmPosition = html.indexOf("РИТМ СОТРУДНИКОВ");
+  const requestSourcesPosition = html.indexOf("ИСТОЧНИКИ ЗАПРОСОВ");
+
+  expect(html).toContain('<select id="report-rhythm-select"');
+  expect(html).toContain(">Никита Левченко</option>");
+  expect(html).toContain(">Елена Силантьева</option>");
+  expect(html).toMatch(
+    /<option value="report-rhythm-panel-\d+" selected>Елена Силантьева<\/option>/,
+  );
+  expect(
+    html.match(/data-rhythm-panel="report-rhythm-panel-/g) ?? [],
+  ).toHaveLength(2);
+  expect(html).toContain('select.addEventListener("change"');
+  expect(rhythmPosition).toBeGreaterThanOrEqual(0);
+  expect(requestSourcesPosition).toBeGreaterThan(rhythmPosition);
 });
 
 test("keeps the category responder metric semantically labeled", () => {
