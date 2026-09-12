@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jackdaw Mail — Почта, Календарь, Контакты и Живой контроль SLA для Exchange / OWA</title>
+  <meta name="description" content="Быстрый desktop-клиент для Exchange, OWA, EWS и IMAP с живым контролем SLA, интерактивными отчётами, учётом рабочего календаря и Local-first архитектурой.">
+  <link rel="canonical" href="https://jackdaw.app">
+  
+  <!-- Open Graph / Social -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://jackdaw.app/">
+  <meta property="og:title" content="Jackdaw Mail — Почта, Календарь и Живой контроль SLA для Exchange / OWA">
+  <meta property="og:description" content="Быстрый desktop-клиент для Exchange, OWA, EWS и IMAP с живым контролем SLA, интерактивными отчётами и Local-first архитектурой.">
+  <meta property="og:image" content="https://jackdaw.app/assets/icon-jackdaw-github.png">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Jackdaw Mail — Почтовый клиент для Exchange и OWA">
+  <meta name="twitter:description" content="Интерактивные отчёты, живой контроль SLA, синхронизация OWA Shared Mailboxes и локальная приватность.">
+  <meta name="twitter:image" content="https://jackdaw.app/assets/icon-jackdaw-github.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+  <link rel="apple-touch-icon" href="assets/icon-jackdaw-github.png">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Site Navigation -->
+  <header class="header">
+    <div class="container header-inner">
+      <a href="#" class="brand">
+        <img src="assets/icon-jackdaw-github.png" alt="Jackdaw Logo" class="brand-icon">
+        <span>Jackdaw Mail</span>
+        <span class="brand-badge">v0.9.38</span>
+      </a>
+
+      <nav class="nav" aria-label="Основная навигация">
+        <a href="#features" class="nav-link">Возможности</a>
+        <a href="#showcase" class="nav-link">SLA и отчёты</a>
+        <a href="#comparison" class="nav-link">Сравнение</a>
+        <a href="#architecture" class="nav-link">Архитектура</a>
+        <a href="#downloads" class="nav-link">Скачать</a>
+        <a href="#faq" class="nav-link">FAQ</a>
+      </nav>
+
+      <div class="header-actions">
+        <button id="theme-toggle" class="theme-toggle" aria-label="Переключить тему">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <a href="https://github.com/Uugsx/jackdaw-mail" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" title="GitHub Repository">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+        <a href="#downloads" class="btn btn-primary">Скачать</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="container">
+        <div class="kicker">
+          <span class="kicker-dot"></span>
+          Новый уровень продуктивности Exchange & OWA
+        </div>
+
+        <h1 class="hero-title">
+          Desktop-клиент для Exchange и OWA с живым контролем SLA
+        </h1>
+
+        <p class="hero-subtitle">
+          Быстрая работа с корпоративной почтой, мгновенная синхронизация общих ящиков (Shared Mailboxes), интерактивные отчёты скорости ответа и рабочий календарь без облачных посредников.
+        </p>
+
+        <div class="hero-cta-group">
+          <a href="https://github.com/Uugsx/jackdaw-mail/releases/latest" id="hero-download-btn" class="btn btn-primary btn-lg">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Скачать Jackdaw Mail
+          </a>
+          <a href="#showcase" class="btn btn-secondary btn-lg">
+            Посмотреть возможности
+          </a>
+        </div>
+
+        <div class="platform-indicator">
+          <span id="detected-os-label">macOS, Windows, Linux</span>
+          <span>·</span>
+          <span>Лицензия EUPL-1.2</span>
+          <span>·</span>
+          <span>Local-first безопасность</span>
+        </div>
+
+        <!-- Metric / Spec Highlights -->
+        <div class="specs-bar">
+          <div class="spec-card">
+            <div class="spec-label">Приватность</div>
+            <div class="spec-value">Local-First</div>
+            <div class="spec-desc">Пароли и переписка хранятся локально, без сторонних облачных прокси.</div>
+          </div>
+          <div class="spec-card">
+            <div class="spec-label">Контроль SLA</div>
+            <div class="spec-value">Рабочий график</div>
+            <div class="spec-desc">Точный подсчёт минут ответа без учёта ночных часов и выходных.</div>
+          </div>
+          <div class="spec-card">
+            <div class="spec-label">Интеграция</div>
+            <div class="spec-value">OWA & Shared</div>
+            <div class="spec-desc">Полноценная синхронизация общих ящиков, категорий и уведомлений.</div>
+          </div>
+          <div class="spec-card">
+            <div class="spec-label">Производительность</div>
+            <div class="spec-value">Svelte + Native</div>
+            <div class="spec-desc">Мгновенный отклик интерфейса, клавиатурная навигация и низкий расход RAM.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive Showcase Section -->
+    <section id="showcase" class="showcase">
+      <div class="container">
+        <div class="showcase-frame">
+          <div class="showcase-header">
+            <div class="window-dots" aria-hidden="true">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+
+            <div class="showcase-tabs" role="tablist" aria-label="Сценарии интерфейса">
+              <button class="showcase-tab active" role="tab" aria-selected="true" data-target="tab-reports">
+                Интерактивные отчёты
+              </button>
+              <button class="showcase-tab" role="tab" aria-selected="false" data-target="tab-sla">
+                Живой контроль SLA
+              </button>
+              <button class="showcase-tab" role="tab" aria-selected="false" data-target="tab-calendar">
+                Рабочий календарь
+              </button>
+              <button class="showcase-tab" role="tab" aria-selected="false" data-target="tab-shared">
+                Shared Mailboxes OWA
+              </button>
+            </div>
+          </div>
+
+          <div class="showcase-content">
+            <!-- Panel 1: Reports -->
+            <div id="tab-reports" class="showcase-panel active">
+              <img src="assets/reports-demo.svg" alt="Демонстрация отчётов активности и SLA в Jackdaw Mail" class="showcase-img">
+              <div class="showcase-meta">
+                <div>
+                  <strong>Аналитический дашборд:</strong> динамика писем, тепловая карта нагрузки по часам и расчёт среднего времени ответа с учётом рабочего графика.
+                </div>
+                <div>Экспорт в автономный HTML</div>
+              </div>
+            </div>
+
+            <!-- Panel 2: Live SLA -->
+            <div id="tab-sla" class="showcase-panel">
+              <img src="assets/sla-control-demo.svg" alt="Демонстрация живого контроля SLA в боковой панели" class="showcase-img">
+              <div class="showcase-meta">
+                <div>
+                  <strong>Боковая панель живой очереди:</strong> персональные таймеры в рабочих минутах, индикаторы дедлайнов и кастомные напоминания.
+                </div>
+                <div>Автоматическое обновление</div>
+              </div>
+            </div>
+
+            <!-- Panel 3: Working Calendar -->
+            <div id="tab-calendar" class="showcase-panel">
+              <div style="background: var(--bg-subtle); border-radius: var(--radius-md); padding: 36px; border: 1px solid var(--border);">
+                <div style="max-width: 640px; margin: 0 auto; text-align: left;">
+                  <h3 style="font-size: 22px; font-weight: 750; margin-bottom: 12px; color: var(--text-primary);">Индивидуальный график рабочих смен</h3>
+                  <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 24px;">
+                    В отличие от примитивных почтовых систем, считающих календарное астрономическое время, Jackdaw Mail точно знает рабочие часы вашей команды по каждому дню недели:
+                  </p>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; font-size: 13px;">
+                    <div style="background: var(--bg-surface); border: 1px solid var(--border); padding: 14px; border-radius: 8px;">
+                      <div style="font-weight: 700; color: var(--text-primary);">Пн – Чт</div>
+                      <div style="color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums;">09:00 – 18:00</div>
+                      <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">9 рабочих часов</div>
+                    </div>
+                    <div style="background: var(--bg-surface); border: 1px solid var(--border); padding: 14px; border-radius: 8px;">
+                      <div style="font-weight: 700; color: var(--text-primary);">Пятница</div>
+                      <div style="color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums;">09:00 – 16:45</div>
+                      <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Короткий день</div>
+                    </div>
+                    <div style="background: var(--bg-surface); border: 1px solid var(--border); padding: 14px; border-radius: 8px;">
+                      <div style="font-weight: 700; color: var(--text-primary);">Сб – Вс</div>
+                      <div style="color: var(--sage); font-weight: 600;">Выходные</div>
+                      <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Таймер на паузе</div>
+                    </div>
+                  </div>
+                  <div style="margin-top: 24px; padding: 14px 18px; background: var(--bg-surface); border-radius: 8px; border-left: 3px solid var(--sage); font-size: 13px; color: var(--text-secondary);">
+                    <strong>Справедливый SLA:</strong> Письмо, пришедшее в пятницу в 17:50, не уйдёт в «просроченные» за субботу и воскресенье. Отсчёт продолжится строго в понедельник в 09:00.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel 4: Shared Mailboxes -->
+            <div id="tab-shared" class="showcase-panel">
+              <div style="background: var(--bg-subtle); border-radius: var(--radius-md); padding: 36px; border: 1px solid var(--border);">
+                <div style="max-width: 640px; margin: 0 auto; text-align: left;">
+                  <h3 style="font-size: 22px; font-weight: 750; margin-bottom: 12px; color: var(--text-primary);">Настоящие OWA Shared Mailboxes</h3>
+                  <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px;">
+                    Работайте с общими ящиками поддержки, бухгалтерии или продаж без задержек и дублирования:
+                  </p>
+                  <ul style="display: flex; flex-direction: column; gap: 12px; font-size: 14px; color: var(--text-secondary); list-style: none;">
+                    <li style="display: flex; gap: 10px; align-items: flex-start;">
+                      <span style="color: var(--accent); font-weight: 800;">✓</span>
+                      <div><strong>Серверные категории OWA:</strong> назначение цветовой категории синхронизируется между всеми операторами мгновенно.</div>
+                    </li>
+                    <li style="display: flex; gap: 10px; align-items: flex-start;">
+                      <span style="color: var(--accent); font-weight: 800;">✓</span>
+                      <div><strong>Безопасное удаление:</strong> встроенный undo и корректное перемещение в корзину ящика.</div>
+                    </li>
+                    <li style="display: flex; gap: 10px; align-items: flex-start;">
+                      <span style="color: var(--accent); font-weight: 800;">✓</span>
+                      <div><strong>Фоновая дельта-синхронизация:</strong> только изменённые цепочки сообщений, минимальный сетевой трафик.</div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Key Features Grid -->
+    <section id="features" class="section">
+      <div class="container">
+        <div class="section-head">
+          <div class="kicker">Возможности</div>
+          <h2 class="section-title">Создан для ответственной переписки</h2>
+          <p class="section-desc">
+            Все инструменты, необходимые специалистам технической поддержки, аккаунт-менеджерам и командам корпоративного сервиса.
+          </p>
+        </div>
+
+        <div class="features-grid">
+          <div class="feature-item">
+            <div class="feature-icon-wrapper">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <h3 class="feature-title">Живая очередь SLA</h3>
+            <div class="feature-body">
+              Визуальный контроль неотвеченных входящих в боковой панели. Цветовая индикация дедлайнов и оставшегося времени.
+              <ul>
+                <li>Индивидуальный норматив в рабочих минутах</li>
+                <li>Напоминания до наступления дедлайна</li>
+                <li>Исключение рассылок и писем в копии</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-icon-wrapper">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            </div>
+            <h3 class="feature-title">Интерактивная аналитика</h3>
+            <div class="feature-body">
+              Полноценный встроенный дашборд для оценки скорости и ритма работы сотрудников без выгрузки данных на сторонние сервисы.
+              <ul>
+                <li>Тепловая карта загрузки по часам</li>
+                <li>Процент вовремя обработанных обращений</li>
+                <li>Сортировка и фильтрация по категориям</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-icon-wrapper">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <h3 class="feature-title">Рабочий календарь</h3>
+            <div class="feature-body">
+              Точный алгоритм вычисления SLA: учитываются только фактические рабочие часы по каждому дню недели.
+              <ul>
+                <li>Настройка начала и конца дня для каждого дня</li>
+                <li>Исключение нерабочего времени и выходных</li>
+                <li>Справедливые показатели скорости ответа</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-icon-wrapper">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            </div>
+            <h3 class="feature-title">Синхронизация OWA & EWS</h3>
+            <div class="feature-body">
+              Нативная поддержка протоколов Microsoft Exchange: от личных профилей до сложных корпоративных Shared Mailboxes.
+              <ul>
+                <li>Мгновенная смена категорий и тегов</li>
+                <li>Дерево папок с дельта-синхронизацией</li>
+                <li>Поддержка IMAP, JMAP, CalDAV и CardDAV</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-icon-wrapper">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            </div>
+            <h3 class="feature-title">Автономный HTML-экспорт</h3>
+            <div class="feature-body">
+              Сохраняйте детальные отчёты в виде самодостаточного HTML-файла для отправки руководству или клиентам.
+              <ul>
+                <li>Все графики и таблицы встроены в один файл</li>
+                <li>Открывается в любом браузере офлайн</li>
+                <li>Никаких внешних ссылок и утечек данных</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-icon-wrapper">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <h3 class="feature-title">Local-First безопасность</h3>
+            <div class="feature-body">
+              Прямое подключение к вашему почтовому серверу. Ни одно письмо или пароль не проходит через облако Jackdaw.
+              <ul>
+                <li>Открытый исходный код (EUPL-1.2)</li>
+                <li>Локальная база данных SQLite</li>
+                <li>Полное соответствие требованиям 152-ФЗ и GDPR</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Comparison Table Section -->
+    <section id="comparison" class="section">
+      <div class="container">
+        <div class="section-head">
+          <div class="kicker">Сравнение решений</div>
+          <h2 class="section-title">Честное сопоставление возможностей</h2>
+          <p class="section-desc">
+            Почему команды, работающие по стандартам SLA и корпоративным регламентам, выбирают Jackdaw Mail.
+          </p>
+        </div>
+
+        <div class="comparison-table-wrapper">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th style="width: 34%;">Функциональность</th>
+                <th class="highlight-col" style="width: 24%;">Jackdaw Mail</th>
+                <th style="width: 21%;">Классический Outlook</th>
+                <th style="width: 21%;">Веб-клиент OWA</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Живой таймер SLA в рабочих минутах</td>
+                <td class="highlight-col"><span class="badge-yes">✓ Встроен в боковую панель</span></td>
+                <td><span class="badge-no">✕ Отсутствует</span></td>
+                <td><span class="badge-no">✕ Отсутствует</span></td>
+              </tr>
+              <tr>
+                <td>Расчёт SLA с учётом рабочего графика по дням недели</td>
+                <td class="highlight-col"><span class="badge-yes">✓ Автоматически</span></td>
+                <td><span class="badge-no">✕ Нет</span></td>
+                <td><span class="badge-no">✕ Нет</span></td>
+              </tr>
+              <tr>
+                <td>Интерактивный дашборд и тепловая карта</td>
+                <td class="highlight-col"><span class="badge-yes">✓ Встроено</span></td>
+                <td><span class="badge-no">✕ Требует сторонних надстроек</span></td>
+                <td><span class="badge-no">✕ Нет</span></td>
+              </tr>
+              <tr>
+                <td>Синхронизация OWA Shared Mailboxes</td>
+                <td class="highlight-col"><span class="badge-yes">✓ Нативная, с категориями</span></td>
+                <td>Частичная (бывают задержки)</td>
+                <td>✓ Нативная</td>
+              </tr>
+              <tr>
+                <td>Экспорт отчёта в автономный HTML</td>
+                <td class="highlight-col"><span class="badge-yes">✓ В 1 клик</span></td>
+                <td><span class="badge-no">✕ Нет</span></td>
+                <td><span class="badge-no">✕ Нет</span></td>
+              </tr>
+              <tr>
+                <td>Архитектура хранения данных</td>
+                <td class="highlight-col"><strong>Local-First (на устройстве)</strong></td>
+                <td>Local-First</td>
+                <td>Только облако</td>
+              </tr>
+              <tr>
+                <td>Лицензия и открытость кода</td>
+                <td class="highlight-col"><span class="badge-yes">EUPL-1.2 Open Source</span></td>
+                <td><span class="badge-no">Proprietary</span></td>
+                <td><span class="badge-no">Proprietary</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture & Privacy Section -->
+    <section id="architecture" class="section">
+      <div class="container">
+        <div class="section-head">
+          <div class="kicker">Архитектура и безопасность</div>
+          <h2 class="section-title">Никаких облачных посредников</h2>
+          <p class="section-desc">
+            В отличие от современных «умных» почтовых клиентов, мы не читаем ваши письма на сторонних серверах.
+          </p>
+        </div>
+
+        <div class="arch-grid">
+          <div class="arch-card">
+            <h3 style="font-size: 20px; font-weight: 750; margin-bottom: 16px; color: var(--text-primary);">
+              Прямой защищённый контур
+            </h3>
+            <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px;">
+              Jackdaw Mail подключается напрямую к вашему корпоративному серверу Microsoft Exchange (OWA/EWS), IMAP или CalDAV.
+            </p>
+            <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
+              Все расчёты SLA, парсинг заголовков сообщений, построение графиков и хранение категорий происходят исключительно на вашем компьютере с помощью легковесной встроенной базы данных.
+            </p>
+          </div>
+
+          <div class="arch-flow">
+            <div><span class="tag">[Ваш компьютер]</span> Jackdaw Mail Client</div>
+            <div style="padding-left: 20px; color: var(--text-muted);">│</div>
+            <div style="padding-left: 20px;">├── <span class="safe">Прямой TLS/HTTPS канал</span> ──────────► <span class="tag">[Корпоративный Exchange / OWA]</span></div>
+            <div style="padding-left: 20px; color: var(--text-muted);">│</div>
+            <div style="padding-left: 20px;">└── <span class="safe">Локальная БД SQLite</span> (зашифрованный кэш на диске)</div>
+            <div style="margin-top: 16px; border-top: 1px dashed var(--border); padding-top: 14px; color: var(--text-muted);">
+              ✕ Никаких сторонних API-шлюзов<br>
+              ✕ Никакого доступа к содержимому писем<br>
+              ✓ Полная автономность и конфиденциальность
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Downloads Section -->
+    <section id="downloads" class="download-section container">
+      <div style="text-align: center; max-width: 600px; margin: 0 auto;">
+        <div class="kicker">Загрузки</div>
+        <h2 class="section-title">Установите Jackdaw Mail</h2>
+        <p class="section-desc">
+          Доступно для macOS, Windows и Linux. Бесплатные базовые возможности и прозрачное Pro-лицензирование.
+        </p>
+      </div>
+
+      <div class="download-grid">
+        <!-- macOS -->
+        <div id="card-macos" class="download-card">
+          <div>
+            <div class="os-head">
+              <span class="os-name">macOS</span>
+              <span class="os-badge">Рекомендуется</span>
+            </div>
+            <div style="margin: 12px 0 6px; font-weight: 600; font-size: 14px; color: var(--text-primary);">
+              Apple Silicon & Intel
+            </div>
+            <div class="os-details">
+              macOS 12 Monterey и новее. Готовый `.dmg` с поддержкой автоматического OTA-обновления.
+            </div>
+          </div>
+          <a href="https://github.com/Uugsx/jackdaw-mail/releases/latest" class="btn btn-primary">
+            Скачать DMG
+          </a>
+        </div>
+
+        <!-- Windows -->
+        <div id="card-windows" class="download-card">
+          <div>
+            <div class="os-head">
+              <span class="os-name">Windows</span>
+              <span class="os-badge">x64</span>
+            </div>
+            <div style="margin: 12px 0 6px; font-weight: 600; font-size: 14px; color: var(--text-primary);">
+              Windows 10 / 11
+            </div>
+            <div class="os-details">
+              Стандартный инсталлятор `.exe` со встроенным механизмом фонового обновления.
+            </div>
+          </div>
+          <a href="https://github.com/Uugsx/jackdaw-mail/releases/latest" class="btn btn-secondary">
+            Скачать EXE
+          </a>
+        </div>
+
+        <!-- Linux -->
+        <div id="card-linux" class="download-card">
+          <div>
+            <div class="os-head">
+              <span class="os-name">Linux</span>
+              <span class="os-badge">Universal</span>
+            </div>
+            <div style="margin: 12px 0 6px; font-weight: 600; font-size: 14px; color: var(--text-primary);">
+              AppImage / DEB
+            </div>
+            <div class="os-details">
+              Подходит для большинства дистрибутивов (Ubuntu, Debian, Fedora, Arch).
+            </div>
+          </div>
+          <a href="https://github.com/Uugsx/jackdaw-mail/releases/latest" class="btn btn-secondary">
+            Скачать пакеты
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq" class="section">
+      <div class="container">
+        <div class="section-head">
+          <div class="kicker">Вопросы и ответы</div>
+          <h2 class="section-title">Часто задаваемые вопросы</h2>
+        </div>
+
+        <div class="faq-list">
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span>Как именно рассчитывается норматив SLA и время первого ответа?</span>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </summary>
+            <div class="faq-answer">
+              Время считается от момента поступления входящего письма до первого подтверждённого ответа сотрудника (найденного на сервере или в связанной переписке). В расчёт попадают строго минуты из настроенного рабочего календаря: нерабочее время, перерывы и выходные дни не увеличивают время реакции.
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span>Поддерживаются ли корпоративные общие ящики (Shared Mailboxes)?</span>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </summary>
+            <div class="faq-answer">
+              Да, поддержка OWA Shared Mailboxes является одной из ключевых фич Jackdaw Mail. Приложение синхронизирует папки общего ящика, серверные категории и уведомления так же быстро и нативно, как и персональную почту.
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span>Где хранятся мои пароли и переписка?</span>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </summary>
+            <div class="faq-answer">
+              Исключительно на вашем локальном компьютере. Пароли хранятся в защищённом системном хранилище ОС (Keychain на macOS, Credential Manager на Windows), а кэш писем — в локальной базе данных. Данные никогда не передаются на сторонние серверы.
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span>Что входит в базовую бесплатную версию, а что в Pro?</span>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </summary>
+            <div class="faq-answer">
+              Базовая версия включает полноценный почтовый клиент, календарь, адресную книгу и поддержку OWA. Модуль Jackdaw Mail Pro расширяет клиент интерактивными SLA-отчётами, живой очередью контроля в боковой панели, гибким рабочим графиком по дням недели и экспортом отчётов в автономный HTML.
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              <span>Как работает автообновление (OTA)?</span>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </summary>
+            <div class="faq-answer">
+              Jackdaw Mail проверяет появление новых релизов на GitHub Releases. При выходе обновления приложение скачивает его в фоне и предлагает обновиться в один клик с сохранением всех настроек.
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div>
+          <div class="brand">
+            <img src="assets/icon-jackdaw-github.png" alt="Jackdaw Logo" class="brand-icon">
+            <span>Jackdaw Mail</span>
+          </div>
+          <p class="footer-brand-desc">
+            Специализированный desktop-клиент для Exchange, OWA и EWS с живым контролем SLA и локальной приватностью.
+          </p>
+        </div>
+
+        <div class="footer-links-group">
+          <div class="footer-col">
+            <div class="footer-col-title">Продукт</div>
+            <a href="#features" class="footer-link">Возможности</a>
+            <a href="#showcase" class="footer-link">SLA и отчёты</a>
+            <a href="#downloads" class="footer-link">Загрузки</a>
+            <a href="https://github.com/Uugsx/jackdaw-mail/releases" class="footer-link" target="_blank" rel="noopener">История версий</a>
+          </div>
+
+          <div class="footer-col">
+            <div class="footer-col-title">Разработка</div>
+            <a href="https://github.com/Uugsx/jackdaw-mail" class="footer-link" target="_blank" rel="noopener">GitHub Репозиторий</a>
+            <a href="https://github.com/Uugsx/jackdaw-mail/issues" class="footer-link" target="_blank" rel="noopener">Сообщить об ошибке</a>
+            <a href="https://github.com/Uugsx/jackdaw-mail/blob/main/LICENSE" class="footer-link" target="_blank" rel="noopener">Лицензия EUPL-1.2</a>
+            <a href="https://github.com/Uugsx" class="footer-link" target="_blank" rel="noopener">Автор @Uugsx</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>© 2026 Jackdaw Mail. Открытый исходный код под лицензией EUPL-1.2.</div>
+        <div>Сайт: <a href="https://jackdaw.app" style="color: var(--accent);">jackdaw.app</a></div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
